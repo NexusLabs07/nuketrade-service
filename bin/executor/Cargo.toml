@@ -8,5 +8,7 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-[lints]
-workspace = true
+[dependencies]
+hyperliquid = { path = "../../crates/hyperliquid" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

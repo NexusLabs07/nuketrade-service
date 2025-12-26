@@ -8,6 +8,7 @@ overflow-checks = true
 
 
 [workspace.package]
+version = "0.1.0"
 authors = ["VaibhavArora19"]
 edition = "2024"
 rust-version = "1.88"
@@ -15,5 +16,5 @@ license = "MIT or Apache-2.0"
 publish = false
 
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "bin/executor"]
 resolver = "3"
