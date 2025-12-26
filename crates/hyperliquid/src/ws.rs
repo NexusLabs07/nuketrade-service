@@ -3,7 +3,7 @@ use serde_json::json;
 use tokio_tungstenite::connect_async;
 
 use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
-use core::funding::{Dex, FundingSnapshot};
+use core::{funding::{Dex, FundingSnapshot}, token_list::TOKEN_LIST};
 
 pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
 
@@ -12,15 +12,17 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
 
     let (mut write, mut read) = ws_stream.split();
 
-    let sub = json!({
-        "method": "subscribe",
-        "subscription": {
-            "type": "activeAssetCtx",
-            "coin": "ETH"
-        }
-    });
-
-    write.send(sub.to_string().into()).await?;
+    for i in 0..TOKEN_LIST.len() {
+        let sub = json!({
+            "method": "subscribe",
+            "subscription": {
+                "type": "activeAssetCtx",
+                "coin": TOKEN_LIST[i]
+            }
+        });
+        
+        write.send(sub.to_string().into()).await?;
+    }
 
     while let Some(msg) = read.next().await {
         let msg = msg?;
@@ -48,7 +50,7 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
 
-        log::info!("{:?}", snapshot);
+        log::info!("snapshot {:?}", snapshot);
     }
 
     Ok(())
