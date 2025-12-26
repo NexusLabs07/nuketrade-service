@@ -40,14 +40,10 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
         let funding_hr: f64 = parsed.data.ctx.funding.parse()?;
         let mark_px: f64 = parsed.data.ctx.mark_px.parse()?;
 
-        // APY = funding hr * 24 * 365 * 100
-        let apy = funding_hr * 24.0 * 365.0 * 100.0;
-
         let snapshot = FundingSnapshot {
             dex: Dex::Hyperliquid,
             coin: parsed.data.coin.to_string(),
             funding_hr,
-            apy,
             mark_price: mark_px,
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
