@@ -10,5 +10,7 @@ publish.workspace = true
 
 [dependencies]
 hyperliquid = { path = "../../crates/hyperliquid" }
-tokio = { version = "1", features = ["full"] }
-anyhow = "1"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+tracing-subscriber = { workspace = true }

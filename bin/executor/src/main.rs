@@ -1,6 +1,10 @@
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    println!("Funding arb engine starting....");
+
+    tracing_subscriber::fmt::init();
+
+    log::info!("Engine starting....");
+
     hyperliquid::start_hl_funding_feed().await?;
 
     Ok(())

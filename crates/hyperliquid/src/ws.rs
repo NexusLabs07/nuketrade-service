@@ -2,13 +2,13 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio_tungstenite::connect_async;
 
-use crate::types::ActiveAssetCtxMsg;
+use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
 use core::funding::{Dex, FundingSnapshot};
 
 pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
-    let url = "wss://api.hyperliquid.xyz/ws";
-    let (ws_stream, _) = connect_async(url).await?;
-    println!("Connected to Hyperliquid WS");
+
+    let (ws_stream, _) = connect_async(HYPERLIQUID_WS_URL).await?;
+    log::info!("Connected to Hyperliquid WS");
 
     let (mut write, mut read) = ws_stream.split();
 
@@ -32,7 +32,7 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
         let parsed: ActiveAssetCtxMsg = match serde_json::from_str(msg.to_text()?) {
             Ok(parsed) => parsed,
             Err(e) => {
-                println!("Error parsing message: {}", e);
+                log::error!("Error parsing message: {}", e);
                 continue;
             }
         };
@@ -48,7 +48,7 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
 
-        println!("{:?}", snapshot);
+        log::info!("{:?}", snapshot);
     }
 
     Ok(())
