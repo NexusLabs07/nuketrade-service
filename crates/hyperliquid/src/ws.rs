@@ -3,10 +3,12 @@ use serde_json::json;
 use tokio_tungstenite::connect_async;
 
 use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
-use core::{funding::{Dex, FundingSnapshot}, token_list::TOKEN_LIST};
+use core::{
+    funding::{Dex, FundingSnapshot},
+    token_list::TOKEN_LIST,
+};
 
 pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
-
     let (ws_stream, _) = connect_async(HYPERLIQUID_WS_URL).await?;
     log::info!("Connected to Hyperliquid WS");
 
@@ -20,7 +22,7 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
                 "coin": TOKEN_LIST[i]
             }
         });
-        
+
         write.send(sub.to_string().into()).await?;
     }
 

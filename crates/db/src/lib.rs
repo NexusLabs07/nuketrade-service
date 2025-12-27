@@ -10,13 +10,12 @@ use sqlx::PgPool;
 mod embedded {
     use refinery::embed_migrations;
     embed_migrations!("./migrations");
-}   
-
+}
 
 pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
-    
+
     let db_host = env::var("DB_HOST")?;
     let db_port = env::var("DB_PORT")?;
     let db_user = env::var("DB_USER")?;
@@ -25,7 +24,11 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
 
     log::info!(
         "db_host: {:?}, db_post {:?}, db_user {:?}, db_pass {:?}, db_name {:?}",
-        db_host, db_pass, db_user, db_pass, db_name
+        db_host,
+        db_pass,
+        db_user,
+        db_pass,
+        db_name
     );
 
     let mut conf = refinery::config::Config::new(ConfigDbType::Postgres)
@@ -35,7 +38,6 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
         .set_db_port(&db_port)
         .set_db_name(&db_name);
 
-
     // Apply embedded migrations using sqlx pool
     let _ = embedded::migrations::runner().run(&mut conf)?;
 
@@ -43,7 +45,6 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
-
 
 pub async fn connect_db(db_url: &str) -> Result<PgPool, Error> {
     tracing_subscriber::fmt::init();
@@ -57,7 +58,6 @@ pub async fn connect_db(db_url: &str) -> Result<PgPool, Error> {
             return Err(Error::msg("Error connecting to DB"));
         }
     };
-
 
     Ok(db)
 }

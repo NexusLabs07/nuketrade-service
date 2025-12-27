@@ -18,7 +18,7 @@ pub async fn insert_funding_rate(db_conn: &PgPool, funding_rate: FundingRate) {
         .bind(funding_rate.updated_at)
         .execute(db_conn)
         .await
-        {
-            log::error!("Error inserting funding rate. Failed with error: {:?}", err);
-        }
+    {
+        log::error!("Error inserting funding rate. Failed with error: {:?}", err);
+    }
 }
