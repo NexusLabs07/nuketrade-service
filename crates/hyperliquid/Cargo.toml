@@ -15,6 +15,9 @@ tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 anyhow = { workspace = true }
 core = { path = "../core" }
+db = { path = "../db" }
 chrono = { workspace = true }
 log = { workspace = true }
 tracing-subscriber = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }

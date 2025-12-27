@@ -604,13 +604,16 @@ dependencies = [
  "anyhow",
  "chrono",
  "core",
+ "db",
  "futures-util",
  "log",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tokio-tungstenite",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

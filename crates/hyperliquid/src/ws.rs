@@ -1,14 +1,19 @@
+use db::{crud::insert_funding_rate, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
+use sqlx::PgPool;
 use tokio_tungstenite::connect_async;
+use uuid::Uuid;
 
 use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
 use core::{
     funding::{Dex, FundingSnapshot},
     token_list::TOKEN_LIST,
 };
+use std::sync::Arc;
 
-pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
+//TODO: Store this into DB every half hour atleast as HL updates the funding rate every hour
+pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) -> anyhow::Result<()> {
     let (ws_stream, _) = connect_async(HYPERLIQUID_WS_URL).await?;
     log::info!("Connected to Hyperliquid WS");
 
@@ -50,6 +55,24 @@ pub async fn start_hl_funding_feed() -> anyhow::Result<()> {
             funding_hr,
             mark_price: mark_px,
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
+        };
+
+        let funding_rate = FundingRate {
+            id: Uuid::new_v4(),
+            platform: "hyperliquid".to_string(),
+            symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
+            rate: funding_hr,
+            timestamp: chrono::Utc::now(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        if let Err(err) = insert_funding_rate(db_conn.clone(), funding_rate).await {
+            //TODO: Add retry logic and fail eventually
+            log::warn!(
+                "Failed to insert funding rate. Failed with error: {:?}",
+                err
+            );
         };
 
         log::info!("snapshot {:?}", snapshot);

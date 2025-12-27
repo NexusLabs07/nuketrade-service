@@ -1,7 +1,7 @@
 pub mod crud;
 pub mod types;
 
-use std::env;
+use std::{env, sync::Arc};
 
 use anyhow::Error;
 use refinery::config::ConfigDbType;
@@ -14,7 +14,6 @@ mod embedded {
 
 pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     dotenv::dotenv().ok();
-    tracing_subscriber::fmt::init();
 
     let db_host = env::var("DB_HOST")?;
     let db_port = env::var("DB_PORT")?;
@@ -46,9 +45,7 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn connect_db(db_url: &str) -> Result<PgPool, Error> {
-    tracing_subscriber::fmt::init();
-
+pub async fn connect_db(db_url: &str) -> Result<Arc<PgPool>, Error> {
     log::info!("Connecting to DB...");
 
     let db = match sqlx::postgres::PgPool::connect(db_url).await {
@@ -59,5 +56,5 @@ pub async fn connect_db(db_url: &str) -> Result<PgPool, Error> {
         }
     };
 
-    Ok(db)
+    Ok(Arc::new(db))
 }

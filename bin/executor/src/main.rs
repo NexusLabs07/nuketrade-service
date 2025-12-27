@@ -1,3 +1,4 @@
+use anyhow::Context;
 use db::connect_db;
 use executor::config::Config;
 
@@ -6,19 +7,36 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    let config = Config::get_config();
+    let config = match Config::from_env() {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            log::error!(
+                "Error loading config from env. Failed with error: {:?}",
+                err
+            );
+            std::process::exit(1);
+        }
+    };
 
     //wrap these in a single function that runs the node
     log::info!("Engine starting....");
 
     log::info!("Running DB migrations....");
-    db::run_db_migrations()?;
+
+    tokio::task::spawn_blocking(|| {
+        if let Err(err) = db::run_db_migrations() {
+            log::error!("Error running DB migrations. Failed with error: {:?}", err);
+            std::process::exit(1);
+        };
+    });
 
     log::info!("Connecting to DB....");
-    let db = connect_db(config.db_url.as_str()).await?;
+    let db = connect_db(config.db_url.as_str())
+        .await
+        .context("Failed to connect with DB")?;
 
     log::info!("Starting Hyperliquid funding feed....");
-    hyperliquid::start_hl_funding_feed().await?;
+    hyperliquid::start_hl_funding_feed(db).await?;
 
     Ok(())
 }
