@@ -1,0 +1,11 @@
+use sqlx::types::chrono;
+
+pub struct FundingRate {
+    pub id: uuid::Uuid,
+    pub platform: String,
+    pub symbol: String,
+    pub rate: f64,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}

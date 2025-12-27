@@ -20,8 +20,10 @@ members = ["crates/*", "bin/*"]
 resolver = "3"
 
 [workspace.dependencies]
+uuid = { version = "1.13.1", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
+thiserror = "2.0.17"
 serde_json = "1"
 tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
 futures-util = "0.3"
@@ -30,3 +32,10 @@ core = { path = "../core" }
 chrono = "0.4"
 log = { version = "0.4.28", features = ["kv_serde"]}
 tracing-subscriber = "0.3.22"
+refinery = { version = "0.8.16", features = ["postgres"] }
+dotenv = "0.15.0"
+sqlx = { version = "0.6", features = [
+	"postgres",
+	"runtime-tokio-rustls",
+     "macros", "chrono", "uuid"
+] }

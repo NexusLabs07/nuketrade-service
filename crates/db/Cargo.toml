@@ -1,0 +1,17 @@
+[package]
+name = "db"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+refinery = { workspace = true }
+sqlx = { workspace = true }
+dotenv = { workspace = true }
+log = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
