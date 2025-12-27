@@ -1,7 +1,20 @@
+use core::fmt;
+
 #[derive(Debug, Clone)]
 pub enum Dex {
     Hyperliquid,
     Lighter,
+}
+
+impl fmt::Display for Dex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Dex::Hyperliquid => "hyperliquid",
+            Dex::Lighter => "lighter",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Debug, Clone)]

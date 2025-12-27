@@ -59,7 +59,7 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) -> anyhow::Result<()> {
 
         let funding_rate = FundingRate {
             id: Uuid::new_v4(),
-            platform: "hyperliquid".to_string(),
+            platform: Dex::Hyperliquid.to_string(),
             symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
             rate: funding_hr,
             timestamp: chrono::Utc::now(),
