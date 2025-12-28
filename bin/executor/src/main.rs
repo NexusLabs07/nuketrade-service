@@ -21,8 +21,6 @@ async fn main() -> anyhow::Result<()> {
     //wrap these in a single function that runs the node
     log::info!("Engine starting....");
 
-    log::info!("Running DB migrations....");
-
     tokio::task::spawn_blocking(|| {
         if let Err(err) = db::run_db_migrations() {
             log::error!("Error running DB migrations. Failed with error: {:?}", err);
@@ -36,7 +34,11 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to connect with DB")?;
 
     log::info!("Starting Hyperliquid funding feed....");
-    hyperliquid::start_hl_funding_feed(db).await?;
 
+    log::info!("Running DB migrations....");
+
+    // tokio::spawn(async move {
+    hyperliquid::start_hl_funding_feed(db).await;
+    // });
     Ok(())
 }
