@@ -1,14 +1,6 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod types;
+mod ws;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use ws::start_lighter_funding_feed;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub const LIGHTER_WS_URL: &'static str = "wss://mainnet.zklighter.elliot.ai/stream";

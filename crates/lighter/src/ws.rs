@@ -5,44 +5,37 @@ use sqlx::PgPool;
 use tokio_tungstenite::connect_async;
 use uuid::Uuid;
 
-use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
+use crate::{LIGHTER_WS_URL, types::MarketStatsMsg};
 use core::{
     funding::{Dex, FundingSnapshot},
     token_list::TOKEN_LIST,
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
-pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
+pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
     loop {
-        let (ws_stream, _) = match connect_async(HYPERLIQUID_WS_URL).await {
+        let (ws_stream, _) = match connect_async(LIGHTER_WS_URL).await {
             Ok((ws_stream, resp)) => (ws_stream, resp),
             Err(e) => {
-                log::error!("Error connecting to Hyperliquid WS: {}", e);
-                //Waits for 1 minute before retrying
-                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                //TODO: Add retry limit
+                log::error!("Error connecting to Lighter WS: {}", e);
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 continue;
             }
         };
 
-        log::info!("Connected to Hyperliquid WS");
+        log::info!("Connected to Lighter WS");
 
         let (mut write, mut read) = ws_stream.split();
 
-        for i in 0..TOKEN_LIST.len() {
-            let sub = json!({
-                "method": "subscribe",
-                "subscription": {
-                    "type": "activeAssetCtx",
-                    "coin": TOKEN_LIST[i]
-                }
-            });
+        let sub = json!({
+            "type": "subscribe",
+            "channel": "market_stats/all"
+        });
 
-            match write.send(sub.to_string().into()).await {
-                Ok(_) => log::info!("Subscribed to {}", TOKEN_LIST[i]),
-                Err(e) => log::error!("Error subscribing to {}: {}", TOKEN_LIST[i], e),
-            };
-        }
+        match write.send(sub.to_string().into()).await {
+            Ok(_) => log::info!("Subscribed to market stats"),
+            Err(e) => log::error!("Error subscribing to market stats: {}", e),
+        };
 
         while let Some(msg) = read.next().await {
             if let Err(err) = msg {
@@ -64,7 +57,7 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
                 }
             };
 
-            let parsed: ActiveAssetCtxMsg = match serde_json::from_str(msg) {
+            let parsed: MarketStatsMsg = match serde_json::from_str(msg) {
                 Ok(parsed) => parsed,
                 Err(e) => {
                     log::error!("Error parsing message: {}", e);
@@ -72,28 +65,30 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
                 }
             };
 
-            let coin = parsed.data.coin.to_string();
+            let market_id = parsed.market_stats.market_id.to_string();
 
-            let funding_hr: f64 = match parsed.data.ctx.funding.parse() {
+            let funding_8h: f64 = match parsed.market_stats.funding_rate.parse() {
                 Ok(val) => val,
                 Err(_) => {
-                    log::warn!("Failed to parse funding rate for {}", coin);
+                    log::warn!("Failed to parse funding rate");
                     continue;
                 }
             };
 
-            let mark_px: f64 = match parsed.data.ctx.mark_px.parse() {
+            // Lighter funding rate is 8h, so we need to convert to hourly
+            let funding_hr: f64 = funding_8h / 8.0;
+
+            let mark_px = match parsed.market_stats.mark_price.parse() {
                 Ok(val) => val,
                 Err(_) => {
-                    //TODO: Is mark_px necessary?
-                    log::warn!("Failed to parse mark price for {}", coin);
+                    log::warn!("Failed to parse market price for {}", market_id);
                     continue;
                 }
             };
 
             let snapshot = FundingSnapshot {
-                dex: Dex::Hyperliquid,
-                coin: parsed.data.coin.to_string(),
+                dex: Dex::Lighter,
+                coin: String::from("TEST"),
                 funding_hr,
                 mark_price: mark_px,
                 timestamp_ms: chrono::Utc::now().timestamp_millis(),
@@ -101,16 +96,15 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
 
             let funding_rate = FundingRate {
                 id: Uuid::new_v4(),
-                platform: Dex::Hyperliquid.to_string(),
-                symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
+                platform: Dex::Lighter.to_string(),
+                symbol: String::from("TEST"), // TODO: Need to create a mapping for Lighter market_id -> coin
                 rate: funding_hr,
-                timestamp: chrono::Utc::now(),
                 created_at: chrono::Utc::now(),
+                timestamp: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             };
 
             if let Err(err) = insert_funding_rate(db_conn.clone(), funding_rate).await {
-                //TODO: Add retry logic and fail eventually
                 log::warn!(
                     "Failed to insert funding rate. Failed with error: {:?}",
                     err

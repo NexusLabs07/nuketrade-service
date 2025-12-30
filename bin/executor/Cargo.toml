@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 db = { path = "../../crates/db" }
 hyperliquid = { path = "../../crates/hyperliquid" }
+lighter = { path = "../../crates/lighter" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }

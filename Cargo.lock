@@ -365,6 +365,7 @@ dependencies = [
  "db",
  "dotenv",
  "hyperliquid",
+ "lighter",
  "log",
  "thiserror 2.0.17",
  "tokio",
@@ -814,11 +815,19 @@ dependencies = [
 name = "lighter"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "chrono",
+ "core",
+ "db",
  "futures-util",
+ "log",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tokio-tungstenite",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
