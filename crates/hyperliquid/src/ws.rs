@@ -10,7 +10,7 @@ use core::{
     funding::{Dex, FundingSnapshot},
     token_list::TOKEN_LIST,
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
     loop {
@@ -44,6 +44,8 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
             };
         }
 
+        let mut tokens_processed = HashSet::new();
+
         while let Some(msg) = read.next().await {
             if let Err(err) = msg {
                 log::error!("Error receiving message: {}", err);
@@ -74,6 +76,10 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
 
             let coin = parsed.data.coin.to_string();
 
+            if tokens_processed.contains(&coin) {
+                continue;
+            }
+
             let funding_hr: f64 = match parsed.data.ctx.funding.parse() {
                 Ok(val) => val,
                 Err(_) => {
@@ -85,7 +91,6 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
             let mark_px: f64 = match parsed.data.ctx.mark_px.parse() {
                 Ok(val) => val,
                 Err(_) => {
-                    //TODO: Is mark_px necessary?
                     log::warn!("Failed to parse mark price for {}", coin);
                     continue;
                 }
@@ -104,6 +109,7 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
                 platform: Dex::Hyperliquid.to_string(),
                 symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
                 rate: funding_hr,
+                mark_px: mark_px,
                 timestamp: chrono::Utc::now(),
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
@@ -117,7 +123,26 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
                 );
             };
 
+            tokens_processed.insert(snapshot.coin.clone());
+
             log::info!("snapshot {:?}", snapshot);
+
+            if tokens_processed.len() == TOKEN_LIST.len() {
+                log::info!("All Hyperliquid tokens processed, closing WS connection");
+
+                //this breaks the read loop
+                break;
+            }
         }
+
+        drop(read);
+        drop(write);
+
+        log::info!("Sleeping for 5 seconds");
+
+        //Sleeps for 30 minutes before reconnecting
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        log::info!("Resuming funding collection");
     }
 }

@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use tokio_tungstenite::connect_async;
 use uuid::Uuid;
 
-use crate::{LIGHTER_WS_URL, types::MarketStatsMsg};
+use crate::{LIGHTER_WS_URL, helpers::markets, types::MarketStatsMsg};
 use core::{
     funding::{Dex, FundingSnapshot},
     token_list::TOKEN_LIST,
@@ -14,6 +14,7 @@ use std::{collections::HashSet, sync::Arc};
 
 pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
     loop {
+        //TODO: Is it a good idea to break the connection off every 5 seconds and connect again?
         let (ws_stream, _) = match connect_async(LIGHTER_WS_URL).await {
             Ok((ws_stream, resp)) => (ws_stream, resp),
             Err(e) => {
@@ -27,15 +28,27 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
 
         let (mut write, mut read) = ws_stream.split();
 
-        let sub = json!({
-            "type": "subscribe",
-            "channel": "market_stats/all"
-        });
+        for i in 0..TOKEN_LIST.len() {
+            let lighter_market = markets::MARKETS
+                .iter()
+                .find(|&x| x.symbol.eq(TOKEN_LIST[i]));
 
-        match write.send(sub.to_string().into()).await {
-            Ok(_) => log::info!("Subscribed to market stats"),
-            Err(e) => log::error!("Error subscribing to market stats: {}", e),
-        };
+            if lighter_market.is_none() {
+                continue;
+            }
+
+            let sub = json!({
+                "type": "subscribe",
+                "channel": format!("{}{}", "market_stats/", lighter_market.unwrap().symbol)
+            });
+
+            match write.send(sub.to_string().into()).await {
+                Ok(_) => log::info!("Subscribed to market stats"),
+                Err(e) => log::error!("Error subscribing to market stats: {}", e),
+            };
+        }
+
+        let mut tokens_processed = HashSet::new();
 
         while let Some(msg) = read.next().await {
             if let Err(err) = msg {
@@ -65,7 +78,7 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
                 }
             };
 
-            let market_id = parsed.market_stats.market_id.to_string();
+            let market_id = parsed.market_stats.market_id;
 
             let funding_8h: f64 = match parsed.market_stats.funding_rate.parse() {
                 Ok(val) => val,
@@ -78,6 +91,21 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
             // Lighter funding rate is 8h, so we need to convert to hourly
             let funding_hr: f64 = funding_8h / 8.0;
 
+            let market_info = markets::MARKETS
+                .iter()
+                .find(|&x| x.market_index == market_id);
+
+            if market_info.is_none() {
+                log::warn!("No token symbol found for market id: {}", market_id);
+                continue;
+            }
+
+            let token_symbol = market_info.unwrap().symbol.to_string();
+
+            if tokens_processed.contains(&token_symbol) {
+                continue;
+            }
+
             let mark_px = match parsed.market_stats.mark_price.parse() {
                 Ok(val) => val,
                 Err(_) => {
@@ -88,7 +116,7 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
 
             let snapshot = FundingSnapshot {
                 dex: Dex::Lighter,
-                coin: String::from("TEST"),
+                coin: token_symbol.clone(),
                 funding_hr,
                 mark_price: mark_px,
                 timestamp_ms: chrono::Utc::now().timestamp_millis(),
@@ -97,8 +125,9 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
             let funding_rate = FundingRate {
                 id: Uuid::new_v4(),
                 platform: Dex::Lighter.to_string(),
-                symbol: String::from("TEST"), // TODO: Need to create a mapping for Lighter market_id -> coin
+                symbol: token_symbol.clone(),
                 rate: funding_hr,
+                mark_px: mark_px,
                 created_at: chrono::Utc::now(),
                 timestamp: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
@@ -111,7 +140,24 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
                 );
             };
 
+            tokens_processed.insert(token_symbol.clone());
+
             log::info!("snapshot {:?}", snapshot);
+
+            if tokens_processed.len() == TOKEN_LIST.len() {
+                log::info!("All lighter tokens processed, closing WS connection");
+
+                //this breaks the read loop
+                break;
+            }
         }
+
+        drop(read);
+        drop(write);
+
+        log::info!("Sleeping for 5 seconds");
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        log::info!("Resuming funding collection");
     }
 }

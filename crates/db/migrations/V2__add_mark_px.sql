@@ -1,0 +1,2 @@
+ALTER TABLE funding_rate
+    ADD COLUMN IF NOT EXISTS mark_px FLOAT NOT NULL;

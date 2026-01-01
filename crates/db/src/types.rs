@@ -5,6 +5,7 @@ pub struct FundingRate {
     pub platform: String,
     pub symbol: String,
     pub rate: f64,
+    pub mark_px: f64,
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

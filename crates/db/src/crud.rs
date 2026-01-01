@@ -9,8 +9,8 @@ pub async fn insert_funding_rate(
     funding_rate: FundingRate,
 ) -> Result<(), anyhow::Error> {
     let query = r#"
-        INSERT INTO funding_rate (id, platform, symbol, rate, timestamp, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px, timestamp, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     "#;
 
     sqlx::query(query)
@@ -18,6 +18,7 @@ pub async fn insert_funding_rate(
         .bind(funding_rate.platform)
         .bind(funding_rate.symbol)
         .bind(funding_rate.rate)
+        .bind(funding_rate.mark_px)
         .bind(funding_rate.timestamp)
         .bind(funding_rate.created_at)
         .bind(funding_rate.updated_at)
