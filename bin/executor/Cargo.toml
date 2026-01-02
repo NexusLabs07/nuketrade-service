@@ -18,3 +18,4 @@ log = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenv = { workspace = true }
 thiserror = { workspace = true }
+server = { path = "../../crates/server" }

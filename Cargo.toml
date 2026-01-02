@@ -34,6 +34,7 @@ log = { version = "0.4.28", features = ["kv_serde"]}
 tracing-subscriber = "0.3.22"
 refinery = { version = "0.8.16", features = ["postgres"] }
 dotenv = "0.15.0"
+axum = "0.8.8"
 sqlx = { version = "0.6", features = [
 	"postgres",
 	"runtime-tokio-rustls",

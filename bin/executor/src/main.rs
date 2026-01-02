@@ -1,6 +1,7 @@
 use anyhow::Context;
 use db::connect_db;
 use executor::config::Config;
+use server::run_server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
     //wrap these in a single function that runs the node
     log::info!("Engine starting....");
 
+    log::info!("Running DB migrations....");
     tokio::task::spawn_blocking(|| {
         if let Err(err) = db::run_db_migrations() {
             log::error!("Error running DB migrations. Failed with error: {:?}", err);
@@ -34,17 +36,18 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to connect with DB")?;
 
     log::info!("Starting Hyperliquid funding feed....");
-
-    log::info!("Running DB migrations....");
-
     let db_clone_1 = db.clone();
     tokio::spawn(async move {
         hyperliquid::start_hl_funding_feed(db_clone_1.clone()).await; // @Vaibhav - is db.clone() correct?
     });
 
+    log::info!("Starting Lighter funding feed....");
     let db_clone_2 = db.clone();
-    // tokio::spawn(async move {
-    lighter::start_lighter_funding_feed(db_clone_2.clone()).await;
-    // });
+    tokio::spawn(async move {
+        lighter::start_lighter_funding_feed(db_clone_2.clone()).await;
+    });
+
+    run_server().await;
+
     Ok(())
 }

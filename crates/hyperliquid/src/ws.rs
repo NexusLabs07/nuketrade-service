@@ -105,7 +105,7 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>) {
             symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
             rate: funding_hr,
             mark_px: mark_px,
-            timestamp: chrono::Utc::now(),
+            timestamp: chrono::Utc::now(), //TODO: this is the timestamp received from ws
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
