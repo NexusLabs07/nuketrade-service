@@ -37,9 +37,14 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Running DB migrations....");
 
+    let db_clone_1 = db.clone();
+    tokio::spawn(async move {
+        hyperliquid::start_hl_funding_feed(db_clone_1.clone()).await; // @Vaibhav - is db.clone() correct?
+    });
+
+    let db_clone_2 = db.clone();
     // tokio::spawn(async move {
-    hyperliquid::start_hl_funding_feed(db.clone()).await; // @Vaibhav - is db.clone() correct?
-    lighter::start_lighter_funding_feed(db.clone()).await;
+    lighter::start_lighter_funding_feed(db_clone_2.clone()).await;
     // });
     Ok(())
 }
