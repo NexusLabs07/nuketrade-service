@@ -1,4 +1,8 @@
+use core::types::PlatformsFundingRate;
+use std::sync::Arc;
+
 use anyhow::Context;
+use arc_swap::ArcSwap;
 use db::connect_db;
 use executor::config::Config;
 use server::run_server;
@@ -35,19 +39,30 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to connect with DB")?;
 
+    let platforms_funding_rate = Arc::new(ArcSwap::from_pointee(PlatformsFundingRate {
+        hyperliquid: None,
+        lighter: None,
+    }));
+
     log::info!("Starting Hyperliquid funding feed....");
     let db_clone_1 = db.clone();
+    let platforms_funding_rate_clone = platforms_funding_rate.clone();
     tokio::spawn(async move {
-        hyperliquid::start_hl_funding_feed(db_clone_1.clone()).await; // @Vaibhav - is db.clone() correct?
+        hyperliquid::start_hl_funding_feed(
+            db_clone_1.clone(),
+            platforms_funding_rate_clone.clone(),
+        )
+        .await;
     });
 
     log::info!("Starting Lighter funding feed....");
-    let db_clone_2 = db.clone();
+    let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
     tokio::spawn(async move {
-        lighter::start_lighter_funding_feed(db_clone_2.clone()).await;
+        lighter::start_lighter_funding_feed(db.clone(), platfroms_funding_rate_clone_2.clone())
+            .await;
     });
 
-    run_server().await;
+    run_server(platforms_funding_rate).await;
 
     Ok(())
 }

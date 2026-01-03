@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use db::{crud::insert_funding_rate, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
@@ -9,10 +10,14 @@ use crate::{LIGHTER_WS_URL, helpers::markets, types::MarketStatsMsg};
 use core::{
     funding::{Dex, FundingSnapshot},
     token_list::TOKEN_LIST,
+    types::PlatformsFundingRate,
 };
 use std::{sync::Arc, time::Instant};
 
-pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
+pub async fn start_lighter_funding_feed(
+    db_conn: Arc<PgPool>,
+    platforms_funding_rate: Arc<ArcSwap<PlatformsFundingRate>>,
+) {
     let (ws_stream, _) = match connect_async(LIGHTER_WS_URL).await {
         Ok((ws_stream, resp)) => (ws_stream, resp),
         Err(e) => {
@@ -127,6 +132,18 @@ pub async fn start_lighter_funding_feed(db_conn: Arc<PgPool>) {
             timestamp: chrono::Utc::now(), //TODO: timestamp from ws
             updated_at: chrono::Utc::now(),
         };
+
+        //write the data into the state every 5-6 seconds
+        if timer.elapsed().as_secs() % 5 == 0 || timer.elapsed().as_secs() % 5 == 1 {
+            let pl_fr = (*platforms_funding_rate.load()).clone();
+
+            let new_pl_fr = PlatformsFundingRate {
+                hyperliquid: pl_fr.hyperliquid,
+                lighter: Some(funding_hr),
+            };
+
+            platforms_funding_rate.store(Arc::new(new_pl_fr));
+        }
 
         if timer.elapsed().as_secs() >= 60 * 30 {
             if let Err(err) = insert_funding_rate(db_conn.clone(), funding_rate).await {

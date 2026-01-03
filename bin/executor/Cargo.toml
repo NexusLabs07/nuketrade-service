@@ -12,6 +12,7 @@ publish.workspace = true
 db = { path = "../../crates/db" }
 hyperliquid = { path = "../../crates/hyperliquid" }
 lighter = { path = "../../crates/lighter" }
+core = { path = "../../crates/core" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
@@ -19,3 +20,4 @@ tracing-subscriber = { workspace = true }
 dotenv = { workspace = true }
 thiserror = { workspace = true }
 server = { path = "../../crates/server" }
+arc-swap = { workspace = true }
