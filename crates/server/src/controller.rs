@@ -9,6 +9,6 @@ pub async fn root() -> &'static str {
 }
 
 pub async fn get_funding_rate(State(state): State<AppState>) -> Json<PlatformsFundingRate> {
-    let snapshot = state.platforms_funding_rate.load();
-    Json(snapshot.as_ref().clone())
+    let snapshot = state.platforms_funding_rate.read().await;
+    Json(snapshot.clone())
 }

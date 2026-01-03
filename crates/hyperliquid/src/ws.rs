@@ -1,8 +1,8 @@
-use arc_swap::ArcSwap;
 use db::{crud::insert_funding_rate, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use sqlx::PgPool;
+use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async;
 use uuid::Uuid;
 
@@ -16,7 +16,7 @@ use std::{sync::Arc, time::Instant};
 
 pub async fn start_hl_funding_feed(
     db_conn: Arc<PgPool>,
-    platforms_funding_rate: Arc<ArcSwap<PlatformsFundingRate>>,
+    platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
 ) {
     let (ws_stream, _) = match connect_async(HYPERLIQUID_WS_URL).await {
         Ok((ws_stream, resp)) => (ws_stream, resp),
@@ -117,14 +117,9 @@ pub async fn start_hl_funding_feed(
 
         //write the data into the state every 5-6 seconds
         if timer.elapsed().as_secs() % 5 == 0 || timer.elapsed().as_secs() % 5 == 1 {
-            let pl_fr = (*platforms_funding_rate.load()).clone();
+            let mut state = platforms_funding_rate.write().await;
 
-            let new_pl_fr = PlatformsFundingRate {
-                hyperliquid: Some(funding_hr),
-                lighter: pl_fr.lighter,
-            };
-
-            platforms_funding_rate.store(Arc::new(new_pl_fr));
+            state.hyperliquid.insert(snapshot.coin.clone(), funding_hr);
         }
 
         if timer.elapsed().as_secs() >= 60 * 30 {

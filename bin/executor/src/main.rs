@@ -1,11 +1,11 @@
 use core::types::PlatformsFundingRate;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
-use arc_swap::ArcSwap;
 use db::connect_db;
 use executor::config::Config;
 use server::run_server;
+use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,9 +39,9 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to connect with DB")?;
 
-    let platforms_funding_rate = Arc::new(ArcSwap::from_pointee(PlatformsFundingRate {
-        hyperliquid: None,
-        lighter: None,
+    let platforms_funding_rate = Arc::new(RwLock::new(PlatformsFundingRate {
+        hyperliquid: HashMap::new(),
+        lighter: HashMap::new(),
     }));
 
     log::info!("Starting Hyperliquid funding feed....");

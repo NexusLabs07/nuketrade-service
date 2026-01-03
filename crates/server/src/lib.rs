@@ -1,8 +1,8 @@
 use core::types::PlatformsFundingRate;
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use axum::{Router, routing::get};
+use tokio::sync::RwLock;
 
 use crate::{
     controller::{get_funding_rate, root},
@@ -12,7 +12,7 @@ use crate::{
 pub mod controller;
 pub mod types;
 
-pub async fn run_server(platforms_funding_rate: Arc<ArcSwap<PlatformsFundingRate>>) {
+pub async fn run_server(platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>) {
     let app_state = AppState {
         platforms_funding_rate,
     };
