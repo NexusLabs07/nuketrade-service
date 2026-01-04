@@ -20,7 +20,7 @@ members = ["crates/*", "bin/*"]
 resolver = "3"
 
 [workspace.dependencies]
-uuid = { version = "1.13.1", features = ["v4"] }
+uuid = { version = "1.13.1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2.0.17"
@@ -40,3 +40,4 @@ sqlx = { version = "0.6", features = [
 	"runtime-tokio-rustls",
      "macros", "chrono", "uuid"
 ] }
+nanoid = "0.4.0"
