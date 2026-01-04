@@ -111,8 +111,6 @@ pub async fn start_hl_funding_feed(
             rate: funding_hr,
             mark_px: mark_px,
             timestamp: chrono::Utc::now(), //TODO: this is the timestamp received from ws
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
         };
 
         //write the data into the state every 5-6 seconds

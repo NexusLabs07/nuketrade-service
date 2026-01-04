@@ -128,9 +128,7 @@ pub async fn start_lighter_funding_feed(
             symbol: token_symbol.clone(),
             rate: funding_hr,
             mark_px: mark_px,
-            created_at: chrono::Utc::now(),
             timestamp: chrono::Utc::now(), //TODO: timestamp from ws
-            updated_at: chrono::Utc::now(),
         };
 
         //write the data into the state every 5-6 seconds
