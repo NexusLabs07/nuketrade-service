@@ -70,7 +70,7 @@ pub async fn insert_points(
 ) -> Result<uuid::Uuid, anyhow::Error> {
     let query = r#"
         INSERT INTO points(id, user_id, total_points)
-        VALUES($1, #2, $3)
+        VALUES($1, $2, $3)
     "#;
 
     sqlx::query(query)
