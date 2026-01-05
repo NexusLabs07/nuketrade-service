@@ -2,22 +2,22 @@ use db::{crud::insert_funding_rate, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
-use tokio_tungstenite::connect_async;
+use tokio::{
+    sync::RwLock,
+    time::{Instant, interval},
+};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 use uuid::Uuid;
 
 use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
-use core::{
-    funding::{Dex, FundingSnapshot},
-    token_list::TOKEN_LIST,
-    types::PlatformsFundingRate,
-};
-use std::{sync::Arc, time::Instant};
+use core::{funding::Dex, token_list::TOKEN_LIST, types::PlatformsFundingRate};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub async fn start_hl_funding_feed(
     db_conn: Arc<PgPool>,
     platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
 ) {
+    log::info!("Here");
     let (ws_stream, _) = match connect_async(HYPERLIQUID_WS_URL).await {
         Ok((ws_stream, resp)) => (ws_stream, resp),
         Err(e) => {
@@ -29,9 +29,13 @@ pub async fn start_hl_funding_feed(
         }
     };
 
-    let mut timer = Instant::now();
-
     log::info!("Connected to Hyperliquid WS");
+
+    let mut db_tick = interval(Duration::from_secs(30 * 60));
+    let mut state_tick = interval(Duration::from_secs(5));
+
+    let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
+    let mut last_update = Instant::now();
 
     let (mut write, mut read) = ws_stream.split();
 
@@ -50,89 +54,107 @@ pub async fn start_hl_funding_feed(
         };
     }
 
-    while let Some(msg) = read.next().await {
-        if let Err(err) = msg {
-            log::error!("Error receiving message: {}", err);
-            continue;
+    loop {
+        tokio::select! {
+            Some(msg_res) = read.next() => {
+                match msg_res {
+                    Ok(msg) => {
+                        let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
+                        if let Some((symbol, funding, mark_px)) = new_snapshot {
+
+                            log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
+                            last_update = Instant::now();
+                            last_snapshot.insert(symbol, (funding, mark_px));
+                        }
+                        if !keep_alive {
+                            //TODO: Failed crash program here
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Hyperliquid WS read error: {}", e);
+                    }
+                }
+            },
+            _ = state_tick.tick() => {
+                let mut state = platforms_funding_rate.write().await;
+                for(symbol, (funding, _)) in last_snapshot.iter() {
+                    state.hyperliquid.insert(symbol.clone(), *funding);
+                }
+            },
+            _ = db_tick.tick() => {
+                    if last_update.elapsed() > Duration::from_secs(60) {
+                        log::warn!("Skipping DB write: Hyperliquid data is stale");
+                        continue;
+                    }
+
+
+                for (symbol, (funding, mark_px)) in last_snapshot.iter() {
+                    let funding_rate = FundingRate {
+                        id: Uuid::new_v4(),
+                        platform: Dex::Hyperliquid.to_string(),
+                        symbol: symbol.clone(),
+                        rate: *funding,
+                        mark_px: *mark_px,
+                        timestamp: chrono::Utc::now(),
+                    };
+
+                    let db = db_conn.clone();
+
+                    //TODO: insert in one db call, now for every token one call is made
+                    tokio::spawn(async move {
+                        //TODO: insert into DB from platforms_funding_rate and not last_snapshot
+                        if let Err(e) = insert_funding_rate(db, funding_rate).await {
+                            log::warn!("DB insert failed: {:?}", e);
+                        }
+                    });
+                }
+            }
         };
+    }
+}
 
-        let msg = msg.unwrap();
-
-        if !msg.is_text() {
-            continue;
+async fn handle_ws_message(
+    msg: Message,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        Message,
+    >,
+) -> (bool, Option<(String, f64, f64)>) {
+    match msg {
+        Message::Ping(p) => {
+            write.send(Message::Pong(p)).await.ok();
+            (true, None)
         }
 
-        let msg = match msg.to_text() {
-            Ok(text) => text,
-            Err(e) => {
-                log::error!("Error converting message to text: {}", e);
-                continue;
-            }
-        };
-
-        let parsed: ActiveAssetCtxMsg = match serde_json::from_str(msg) {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                log::error!("Error parsing message: {}", e);
-                continue;
-            }
-        };
-
-        let coin = parsed.data.coin.to_string();
-
-        let funding_hr: f64 = match parsed.data.ctx.funding.parse() {
-            Ok(val) => val,
-            Err(_) => {
-                log::warn!("Failed to parse funding rate for {}", coin);
-                continue;
-            }
-        };
-
-        let mark_px: f64 = match parsed.data.ctx.mark_px.parse() {
-            Ok(val) => val,
-            Err(_) => {
-                log::warn!("Failed to parse mark price for {}", coin);
-                continue;
-            }
-        };
-
-        let snapshot = FundingSnapshot {
-            dex: Dex::Hyperliquid,
-            coin: parsed.data.coin.to_string(),
-            funding_hr,
-            mark_price: mark_px,
-            timestamp_ms: chrono::Utc::now().timestamp_millis(),
-        };
-
-        let funding_rate = FundingRate {
-            id: Uuid::new_v4(),
-            platform: Dex::Hyperliquid.to_string(),
-            symbol: snapshot.coin.clone(), //TODO: This needs to be normalised for different exchanges
-            rate: funding_hr,
-            mark_px: mark_px,
-            timestamp: chrono::Utc::now(), //TODO: this is the timestamp received from ws
-        };
-
-        //write the data into the state every 5-6 seconds
-        if timer.elapsed().as_secs() % 5 == 0 || timer.elapsed().as_secs() % 5 == 1 {
-            let mut state = platforms_funding_rate.write().await;
-
-            state.hyperliquid.insert(snapshot.coin.clone(), funding_hr);
+        Message::Close(frame) => {
+            log::warn!("Hyperliquid WS closed: {:?}", frame);
+            (false, None)
         }
 
-        if timer.elapsed().as_secs() >= 60 * 30 {
-            if let Err(err) = insert_funding_rate(db_conn.clone(), funding_rate).await {
-                //TODO: Add retry logic and fail eventually
-                log::warn!(
-                    "Failed to insert funding rate. Failed with error: {:?}",
-                    err
-                );
+        Message::Text(text) => {
+            let parsed: ActiveAssetCtxMsg = match serde_json::from_str(text.as_str()) {
+                Ok(v) => v,
+                Err(_) => return (true, None),
             };
 
-            //reset timer
-            timer = Instant::now();
+            let coin = parsed.data.coin.to_string();
+
+            let funding_hr: f64 = match parsed.data.ctx.funding.parse() {
+                Ok(v) => v,
+                Err(_) => return (true, None),
+            };
+
+            let mark_px: f64 = match parsed.data.ctx.mark_px.parse() {
+                Ok(v) => v,
+                Err(_) => return (true, None),
+            };
+
+            (true, Some((coin, funding_hr, mark_px)))
         }
 
-        log::info!("snapshot {:?}", snapshot);
+        _ => (true, None),
     }
 }
