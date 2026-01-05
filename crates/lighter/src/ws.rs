@@ -45,7 +45,7 @@ pub async fn start_lighter_funding_feed(
 
         let sub = json!({
             "type": "subscribe",
-            "channel": format!("{}{}", "market_stats/", lighter_market.unwrap().symbol)
+            "channel": format!("{}{}", "market_stats/", lighter_market.unwrap().market_index)
         });
 
         match write.send(sub.to_string().into()).await {

@@ -4,6 +4,8 @@ use serde::Deserialize;
 pub struct MarketStatsMsg {
     pub channel: String,
     pub market_stats: MarketStats,
+    #[serde(rename = "type")]
+    pub lighter_type: String,
 }
 
 #[derive(Debug, Deserialize)]
