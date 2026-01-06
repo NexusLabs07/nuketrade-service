@@ -1,4 +1,4 @@
-use db::{crud::insert_funding_rate, types::FundingRate};
+use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use sqlx::PgPool;
@@ -67,8 +67,8 @@ pub async fn start_hl_funding_feed(
                             last_snapshot.insert(symbol, (funding, mark_px));
                         }
                         if !keep_alive {
-                            //TODO: Failed crash program here
-                            break;
+                            log::warn!("Connection failed with Hyperliquid WS. Crashing program...");
+                            std::process::exit(1);
                         }
                     },
                     Err(e) => {
@@ -88,6 +88,8 @@ pub async fn start_hl_funding_feed(
                         continue;
                     }
 
+                let mut funding_rate_vec = Vec::new();
+
 
                 for (symbol, (funding, mark_px)) in last_snapshot.iter() {
                     let funding_rate = FundingRate {
@@ -99,16 +101,16 @@ pub async fn start_hl_funding_feed(
                         timestamp: chrono::Utc::now(),
                     };
 
-                    let db = db_conn.clone();
+                    funding_rate_vec.push(funding_rate);
 
-                    //TODO: insert in one db call, now for every token one call is made
-                    tokio::spawn(async move {
-                        //TODO: insert into DB from platforms_funding_rate and not last_snapshot
-                        if let Err(e) = insert_funding_rate(db, funding_rate).await {
-                            log::warn!("DB insert failed: {:?}", e);
-                        }
-                    });
                 }
+
+                let db = db_conn.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
+                            log::warn!("DB insert failed: {:?}", e);
+                    }
+                });
             }
         };
     }

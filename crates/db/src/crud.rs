@@ -26,6 +26,40 @@ pub async fn insert_funding_rate(
     Ok(funding_rate.id)
 }
 
+pub async fn insert_funding_rates(
+    db_conn: Arc<PgPool>,
+    funding_rates: Vec<FundingRate>,
+) -> Result<usize, anyhow::Error> {
+    if funding_rates.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = db_conn.begin().await?;
+
+    let query = r#"
+        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6)
+    "#;
+
+    let mut count = 0;
+    for funding_rate in funding_rates {
+        sqlx::query(query)
+            .bind(funding_rate.id)
+            .bind(funding_rate.platform)
+            .bind(funding_rate.symbol)
+            .bind(funding_rate.rate)
+            .bind(funding_rate.mark_px)
+            .bind(funding_rate.timestamp)
+            .execute(&mut *tx)
+            .await?;
+        count += 1;
+    }
+
+    tx.commit().await?;
+
+    Ok(count)
+}
+
 pub async fn insert_wallet(
     db_conn: Arc<PgPool>,
     wallet: Wallet,

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
 use validator::ValidationErrors;
@@ -25,7 +25,10 @@ impl IntoResponse for AppError {
                             format!(
                                 "{}: {}",
                                 field,
-                                error.message.clone().unwrap_or_else(|| "Invalid value".into())
+                                error
+                                    .message
+                                    .clone()
+                                    .unwrap_or_else(|| "Invalid value".into())
                             )
                         })
                     })
