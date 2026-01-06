@@ -20,13 +20,29 @@ pub async fn start_lighter_funding_feed(
     db_conn: Arc<PgPool>,
     platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
 ) {
-    let (ws_stream, _) = match connect_async(LIGHTER_WS_URL).await {
-        Ok((ws_stream, resp)) => (ws_stream, resp),
-        Err(e) => {
-            log::error!("Error connecting to Lighter WS: {}", e);
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            // TODO: Add retry limit
-            return;
+    const MAX_RETRIES: u32 = 3;
+    let mut retry_count = 0;
+
+    let ws_stream = loop {
+        match connect_async(LIGHTER_WS_URL).await {
+            Ok((ws_stream, _)) => break ws_stream,
+            Err(e) => {
+                retry_count += 1;
+                log::error!(
+                    "Error connecting to Lighter WS (attempt {}/{}): {}",
+                    retry_count,
+                    MAX_RETRIES,
+                    e
+                );
+
+                if retry_count >= MAX_RETRIES {
+                    log::error!("Max retries reached. Exiting Lighter feed.");
+                    return;
+                }
+
+                log::info!("Retrying in 5 seconds...");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
         }
     };
 

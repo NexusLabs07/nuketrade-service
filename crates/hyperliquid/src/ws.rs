@@ -17,15 +17,29 @@ pub async fn start_hl_funding_feed(
     db_conn: Arc<PgPool>,
     platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
 ) {
-    log::info!("Here");
-    let (ws_stream, _) = match connect_async(HYPERLIQUID_WS_URL).await {
-        Ok((ws_stream, resp)) => (ws_stream, resp),
-        Err(e) => {
-            log::error!("Error connecting to Hyperliquid WS: {}", e);
-            //Waits for 1 minute before retrying
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            //TODO: Add retry limit
-            return;
+    const MAX_RETRIES: u32 = 3;
+    let mut retry_count = 0;
+
+    let ws_stream = loop {
+        match connect_async(HYPERLIQUID_WS_URL).await {
+            Ok((ws_stream, _)) => break ws_stream,
+            Err(e) => {
+                retry_count += 1;
+                log::error!(
+                    "Error connecting to Hyperliquid WS (attempt {}/{}): {}",
+                    retry_count,
+                    MAX_RETRIES,
+                    e
+                );
+
+                if retry_count >= MAX_RETRIES {
+                    log::error!("Max retries reached. Exiting Hyperliquid feed.");
+                    return;
+                }
+
+                log::info!("Retrying in 60 seconds...");
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
         }
     };
 
