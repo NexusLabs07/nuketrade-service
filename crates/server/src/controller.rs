@@ -6,8 +6,12 @@ use db::{
     types::{Points, User, Wallet},
 };
 use sqlx::types::chrono;
+use validator::Validate;
 
-use crate::types::{AppState, CreateUserPayload};
+use crate::{
+    error::AppError,
+    types::{AppState, CreateUserPayload, SuccessResponse},
+};
 
 pub async fn root() -> &'static str {
     "Perpetual Aggregator Server is running."
@@ -18,25 +22,28 @@ pub async fn get_funding_rate(State(state): State<AppState>) -> Json<PlatformsFu
     Json(snapshot.clone())
 }
 
-//TODO: add check for turnkey_evm_address to be "" for now
+//TODO: fix validation after product is live
 pub async fn add_to_waitlist(
     State(state): State<AppState>,
     Json(payload): Json<CreateUserPayload>,
-) -> &'static str {
+) -> Result<Json<SuccessResponse>, AppError> {
+    // Validate the payload
+    payload.validate()?;
+
     let timestamp = chrono::Utc::now();
 
     let wallet = Wallet {
         id: uuid::Uuid::new_v4(),
-        turnkey_evm_address: payload.turnkey_evm_address,
+        turnkey_evm_address: None,
         created_at: timestamp,
         updated_at: timestamp,
     };
 
-    let wallet_id = insert_wallet(state.db.clone(), wallet).await.unwrap(); //TODO: handle failure
+    let wallet_id = insert_wallet(state.db.clone(), wallet).await?;
 
     let user = User {
         id: uuid::Uuid::new_v4(),
-        email: payload.email,
+        email: Some(payload.email),
         connected_evm_address: payload.connected_evm_address,
         connected_solana_address: payload.connected_solana_address,
         referral_code: nanoid::nanoid!(),
@@ -46,7 +53,7 @@ pub async fn add_to_waitlist(
         updated_at: timestamp,
     };
 
-    let user_id = insert_user(state.db.clone(), user).await.unwrap(); //TODO: handle unwrap
+    let user_id = insert_user(state.db.clone(), user).await?;
 
     let points = Points {
         id: uuid::Uuid::new_v4(),
@@ -56,7 +63,10 @@ pub async fn add_to_waitlist(
         updated_at: timestamp,
     };
 
-    insert_points(state.db, points).await.unwrap(); //TODO: handle unwrap
+    insert_points(state.db, points).await?;
 
-    "Ok"
+    Ok(Json(SuccessResponse {
+        message: "Successfully added to waitlist".to_string(),
+        user_id: Some(user_id),
+    }))
 }

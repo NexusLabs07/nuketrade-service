@@ -36,7 +36,7 @@ pub struct User {
 #[derive(Debug, Clone)]
 pub struct Wallet {
     pub id: uuid::Uuid,
-    pub turnkey_evm_address: String,
+    pub turnkey_evm_address: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS wallets (
     id uuid PRIMARY KEY,
-    turnkey_evm_address VARCHAR(42) UNIQUE NOT NULL,
+    turnkey_evm_address VARCHAR(42) UNIQUE,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now()
 );

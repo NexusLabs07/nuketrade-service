@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub mod controller;
+pub mod error;
 pub mod types;
 
 pub async fn run_server(

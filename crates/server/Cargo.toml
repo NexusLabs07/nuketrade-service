@@ -17,3 +17,6 @@ uuid = { workspace = true }
 db = { path = "../db" }
 sqlx = { workspace = true }
 nanoid = { workspace = true }
+validator = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
