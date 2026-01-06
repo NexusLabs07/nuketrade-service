@@ -1797,6 +1797,7 @@ dependencies = [
  "axum",
  "core",
  "db",
+ "log",
  "nanoid",
  "serde",
  "serde_json",

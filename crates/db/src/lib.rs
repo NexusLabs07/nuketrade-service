@@ -46,8 +46,6 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
 }
 
 pub async fn connect_db(db_url: &str) -> Result<Arc<PgPool>, Error> {
-    log::info!("Connecting to DB...");
-
     let db = match sqlx::postgres::PgPool::connect(db_url).await {
         Ok(connection) => connection,
         Err(err) => {

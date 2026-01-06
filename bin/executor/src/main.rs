@@ -32,7 +32,9 @@ async fn main() -> anyhow::Result<()> {
             log::error!("Error running DB migrations. Failed with error: {:?}", err);
             std::process::exit(1);
         };
-    });
+    })
+    .await
+    .expect("Blocking task panicked");
 
     log::info!("Connecting to DB....");
     let db = connect_db(config.db_url.as_str())
@@ -44,27 +46,27 @@ async fn main() -> anyhow::Result<()> {
         lighter: HashMap::new(),
     }));
 
-    log::info!("Starting Hyperliquid funding feed....");
-    let db_clone_1 = db.clone();
-    let platforms_funding_rate_clone = platforms_funding_rate.clone();
-    tokio::spawn(async move {
-        hyperliquid::start_hl_funding_feed(
-            db_clone_1.clone(),
-            platforms_funding_rate_clone.clone(),
-        )
-        .await;
-    });
+    // log::info!("Starting Hyperliquid funding feed....");
+    // let db_clone_1 = db.clone();
+    // let platforms_funding_rate_clone = platforms_funding_rate.clone();
+    // tokio::spawn(async move {
+    //     hyperliquid::start_hl_funding_feed(
+    //         db_clone_1.clone(),
+    //         platforms_funding_rate_clone.clone(),
+    //     )
+    //     .await;
+    // });
 
-    log::info!("Starting Lighter funding feed....");
-    let db_clone_2 = db.clone();
-    let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
-    tokio::spawn(async move {
-        lighter::start_lighter_funding_feed(
-            db_clone_2.clone(),
-            platfroms_funding_rate_clone_2.clone(),
-        )
-        .await;
-    });
+    // log::info!("Starting Lighter funding feed....");
+    // let db_clone_2 = db.clone();
+    // let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
+    // tokio::spawn(async move {
+    //     lighter::start_lighter_funding_feed(
+    //         db_clone_2.clone(),
+    //         platfroms_funding_rate_clone_2.clone(),
+    //     )
+    //     .await;
+    // });
 
     run_server(db, platforms_funding_rate).await;
 
