@@ -22,7 +22,7 @@ pub struct CreateUserPayload {
 
     pub connected_solana_address: Option<String>,
 
-    pub referred_by: Option<uuid::Uuid>,
+    pub referred_by: Option<String>,
 
     pub turnkey_evm_address: Option<String>,
 }
@@ -77,4 +77,5 @@ fn validate_solana_address(address: &str) -> Result<(), validator::ValidationErr
 pub struct SuccessResponse {
     pub message: String,
     pub user_id: Option<uuid::Uuid>,
+    pub user_referral_code: String,
 }

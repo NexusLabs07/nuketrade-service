@@ -27,7 +27,7 @@ pub struct User {
     pub connected_evm_address: Option<String>,
     pub connected_solana_address: Option<String>,
     pub referral_code: String,
-    pub referred_by: Option<uuid::Uuid>,
+    pub referred_by: Option<String>,
     pub wallet_id: uuid::Uuid,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

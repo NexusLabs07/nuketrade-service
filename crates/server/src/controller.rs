@@ -40,13 +40,14 @@ pub async fn add_to_waitlist(
     };
 
     let wallet_id = insert_wallet(state.db.clone(), wallet).await?;
+    let user_referral_code = payload.email.split("@").next().unwrap().to_string();
 
     let user = User {
         id: uuid::Uuid::new_v4(),
         email: Some(payload.email),
         connected_evm_address: payload.connected_evm_address,
         connected_solana_address: payload.connected_solana_address,
-        referral_code: nanoid::nanoid!(),
+        referral_code: user_referral_code.clone(),
         referred_by: payload.referred_by,
         wallet_id,
         created_at: timestamp,
@@ -68,5 +69,6 @@ pub async fn add_to_waitlist(
     Ok(Json(SuccessResponse {
         message: "Successfully added to waitlist".to_string(),
         user_id: Some(user_id),
+        user_referral_code: user_referral_code.clone(),
     }))
 }
