@@ -89,3 +89,8 @@ pub struct TotalUsersSuccessResponse {
 pub struct TotalPointsSuccessResponse {
     pub total_points: i32,
 }
+
+#[derive(Serialize)]
+pub struct UserPositionSuccessResponse {
+    pub position: i64,
+}

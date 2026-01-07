@@ -244,3 +244,41 @@ pub async fn insert_funding_rates(
 
     Ok(count)
 }
+
+pub async fn get_referral_count_from_referral_code(
+    db_conn: Arc<PgPool>,
+    referral_code: String,
+) -> Result<i32, anyhow::Error> {
+    let query = r#"
+        SELECT COUNT(*) FROM users WHERE referred_by = (
+            SELECT id FROM users WHERE referral_code = $1
+        )
+    "#;
+
+    let row: (i32,) = sqlx::query_as(query)
+        .bind(&referral_code)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(row.0)
+}
+
+pub async fn get_user_position(
+    db_conn: Arc<PgPool>,
+    user_id: uuid::Uuid,
+) -> Result<i64, anyhow::Error> {
+    let query = r#"
+        SELECT position FROM (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) as position
+            FROM users
+        ) ranked
+        WHERE id = $1
+    "#;
+
+    let row: (i64,) = sqlx::query_as(query)
+        .bind(user_id)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(row.0)
+}

@@ -109,3 +109,21 @@ pub async fn get_total_points(
 
     Ok(Json(TotalPointsSuccessResponse { total_points }))
 }
+
+pub async fn get_referral_count(
+    State(state): State<AppState>,
+    Path(referral_code): Path<String>,
+) -> Result<Json<i32>, AppError> {
+    let count = db::crud::get_referral_count_from_referral_code(state.db, referral_code).await?;
+
+    Ok(Json(count))
+}
+
+pub async fn get_user_position(
+    State(state): State<AppState>,
+    Path(user_id): Path<uuid::Uuid>,
+) -> Result<Json<crate::types::UserPositionSuccessResponse>, AppError> {
+    let position = db::crud::get_user_position(state.db, user_id).await?;
+
+    Ok(Json(crate::types::UserPositionSuccessResponse { position }))
+}

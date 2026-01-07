@@ -5,11 +5,15 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use db::crud::get_referral_count_from_referral_code;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 
 use crate::{
-    controller::{add_to_waitlist, get_funding_rate, get_total_points, get_total_users, root},
+    controller::{
+        add_to_waitlist, get_funding_rate, get_referral_count, get_total_points, get_total_users,
+        get_user_position, root,
+    },
     types::AppState,
 };
 
@@ -32,6 +36,8 @@ pub async fn run_server(
         .route("/add-to-waitlist", post(add_to_waitlist))
         .route("/total-users", get(get_total_users))
         .route("/total-points/{user_id}", get(get_total_points))
+        .route("/referral-count/{referral_code}", get(get_referral_count))
+        .route("/user-position/{user_id}", get(get_user_position))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
