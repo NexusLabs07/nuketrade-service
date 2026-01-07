@@ -74,8 +74,18 @@ fn validate_solana_address(address: &str) -> Result<(), validator::ValidationErr
 }
 
 #[derive(Serialize)]
-pub struct SuccessResponse {
+pub struct WaitlistSuccessResponse {
     pub message: String,
     pub user_id: Option<uuid::Uuid>,
     pub user_referral_code: String,
+}
+
+#[derive(Serialize)]
+pub struct TotalUsersSuccessResponse {
+    pub total_users: i64,
+}
+
+#[derive(Serialize)]
+pub struct TotalPointsSuccessResponse {
+    pub total_points: i32,
 }

@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use tokio::sync::RwLock;
 
 use crate::{
-    controller::{add_to_waitlist, get_funding_rate, root},
+    controller::{add_to_waitlist, get_funding_rate, get_total_points, get_total_users, root},
     types::AppState,
 };
 
@@ -30,6 +30,8 @@ pub async fn run_server(
         .route("/", get(root))
         .route("/funding-rate", get(get_funding_rate))
         .route("/add-to-waitlist", post(add_to_waitlist))
+        .route("/total-users", get(get_total_users))
+        .route("/total-points/{user_id}", get(get_total_points))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
