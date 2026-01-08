@@ -250,7 +250,7 @@ pub async fn get_referral_count_from_referral_code(
     referral_code: String,
 ) -> Result<i32, anyhow::Error> {
     let query = r#"
-        SELECT COUNT(*) FROM users WHERE referred_by = (
+        SELECT COUNT(*)::INT4 FROM users WHERE referred_by = (
             SELECT id FROM users WHERE referral_code = $1
         )
     "#;
