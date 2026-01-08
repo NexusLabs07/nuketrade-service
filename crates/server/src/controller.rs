@@ -52,7 +52,7 @@ pub async fn add_to_waitlist(
 
     let points_to_add = if referred_by_user.is_some() { 125 } else { 100 };
 
-    let user_referral_code = payload.email.split("@").next().unwrap().to_string();
+    let user_referral_code = nanoid::nanoid!();
 
     let wallet = Wallet {
         id: uuid::Uuid::new_v4(),
@@ -89,7 +89,7 @@ pub async fn add_to_waitlist(
     Ok(Json(WaitlistSuccessResponse {
         message: "Successfully added to waitlist".to_string(),
         user_id: Some(user_id),
-        user_referral_code: user_referral_code.clone(),
+        user_referral_code,
     }))
 }
 
