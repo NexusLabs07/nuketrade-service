@@ -5,7 +5,6 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use db::crud::get_referral_count_from_referral_code;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 
