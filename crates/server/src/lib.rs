@@ -1,4 +1,5 @@
 use core::types::PlatformsFundingRate;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
@@ -9,10 +10,8 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use governor::{Quota, RateLimiter};
 use sqlx::PgPool;
-use std::net::SocketAddr;
-use std::num::NonZeroU32;
+use std::net::{IpAddr, SocketAddr};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
@@ -28,31 +27,56 @@ pub mod controller;
 pub mod error;
 pub mod types;
 
-// Rate limiting middleware
-async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
-    // Create a rate limiter that allows 3 requests per second per IP
-    static LIMITER: once_cell::sync::Lazy<
-        RateLimiter<
-            SocketAddr,
-            governor::state::keyed::DefaultKeyedStateStore<SocketAddr>,
-            governor::clock::DefaultClock,
-        >,
-    > = once_cell::sync::Lazy::new(|| {
-        let quota = Quota::per_second(NonZeroU32::new(3).unwrap());
-        RateLimiter::keyed(quota)
-    });
+// Helper function to extract real client IP from headers (for proxy/Railway support)
+fn get_client_ip(request: &Request<Body>) -> IpAddr {
+    // Try X-Forwarded-For header first (most common)
+    if let Some(forwarded_for) = request.headers().get("x-forwarded-for") {
+        if let Ok(forwarded_str) = forwarded_for.to_str() {
+            // X-Forwarded-For can contain multiple IPs, take the first one (original client)
+            if let Some(first_ip) = forwarded_str.split(',').next() {
+                if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
+                    return ip;
+                }
+            }
+        }
+    }
 
-    // Get the client IP from the connection info
-    let client_ip = request
+    // Try X-Real-IP header as fallback
+    if let Some(real_ip) = request.headers().get("x-real-ip") {
+        if let Ok(real_ip_str) = real_ip.to_str() {
+            if let Ok(ip) = real_ip_str.parse::<IpAddr>() {
+                return ip;
+            }
+        }
+    }
+
+    // Fallback to connection info if headers are not present
+    request
         .extensions()
         .get::<axum::extract::ConnectInfo<SocketAddr>>()
-        .map(|ci| ci.0)
-        .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 0)));
+        .map(|ci| ci.0.ip())
+        .unwrap_or_else(|| IpAddr::from([0, 0, 0, 0]))
+}
 
-    // Check rate limit
-    if LIMITER.check_key(&client_ip).is_err() {
+// Rate limiting middleware - allows only 5 requests per IP total
+async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
+    // Track request count per IP address
+    static IP_COUNTER: once_cell::sync::Lazy<RwLock<HashMap<IpAddr, u32>>> =
+        once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
+
+    // Get the real client IP (handles proxy/Railway forwarded headers)
+    let client_ip = get_client_ip(&request);
+
+    // Check and update request count
+    let mut counter = IP_COUNTER.write().await;
+    let count = counter.entry(client_ip).or_insert(0);
+
+    if *count >= 5 {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
+
+    *count += 1;
+    drop(counter); // Release the lock before proceeding
 
     Ok(next.run(request).await)
 }
