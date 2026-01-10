@@ -4,7 +4,6 @@
  * This module contains functions for generating Hyperliquid transaction signatures
  * and interfaces to various wallet implementations.
  */
-
 use ethers::core::types::{Signature as EthSignature, U256};
 use ethers::signers::{LocalWallet, Signer};
 use ethers::utils::keccak256;
@@ -28,7 +27,9 @@ pub enum SigningError {
 impl std::fmt::Display for SigningError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SigningError::UnsupportedWallet => write!(f, "Unsupported wallet for signing typed data"),
+            SigningError::UnsupportedWallet => {
+                write!(f, "Unsupported wallet for signing typed data")
+            }
             SigningError::NoAccounts => write!(f, "No Ethereum accounts available"),
             SigningError::SigningFailed(msg) => write!(f, "Failed to sign: {}", msg),
             SigningError::InvalidSignature => write!(f, "Invalid signature format"),
@@ -171,10 +172,7 @@ pub fn create_l1_action_hash(
 }
 
 /// Helper to encode EIP-712 typed data hash
-fn encode_eip712_message(
-    domain_separator: [u8; 32],
-    struct_hash: [u8; 32],
-) -> [u8; 32] {
+fn encode_eip712_message(domain_separator: [u8; 32], struct_hash: [u8; 32]) -> [u8; 32] {
     let mut message = Vec::with_capacity(2 + 32 + 32);
     message.push(0x19);
     message.push(0x01);
@@ -190,7 +188,9 @@ fn create_domain_separator(
     chain_id: u64,
     verifying_contract: &str,
 ) -> [u8; 32] {
-    let domain_type_hash = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    let domain_type_hash = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    );
     let name_hash = keccak256(name.as_bytes());
     let version_hash = keccak256(version.as_bytes());
 
@@ -274,8 +274,8 @@ pub async fn sign_cancel_action(
     vault_address: Option<&str>,
 ) -> Result<Signature, SigningError> {
     // Create hash without BigInt conversion
-    let msgpack_bytes = rmp_serde::to_vec(action)
-        .map_err(|e| SigningError::SerializationError(e.to_string()))?;
+    let msgpack_bytes =
+        rmp_serde::to_vec(action).map_err(|e| SigningError::SerializationError(e.to_string()))?;
 
     let additional_bytes_length = if vault_address.is_some() { 29 } else { 9 };
     let mut data = vec![0u8; msgpack_bytes.len() + additional_bytes_length];
@@ -329,7 +329,9 @@ fn create_usd_class_transfer_struct_hash(
     to_perp: bool,
     nonce: u64,
 ) -> [u8; 32] {
-    let type_hash = keccak256("HyperliquidTransaction:UsdClassTransfer(string hyperliquidChain,string amount,bool toPerp,uint64 nonce)");
+    let type_hash = keccak256(
+        "HyperliquidTransaction:UsdClassTransfer(string hyperliquidChain,string amount,bool toPerp,uint64 nonce)",
+    );
     let chain_hash = keccak256(hyperliquid_chain.as_bytes());
     let amount_hash = keccak256(amount.as_bytes());
 
@@ -370,7 +372,8 @@ pub async fn sign_transfer_action(
     );
 
     // Create struct hash
-    let struct_hash = create_usd_class_transfer_struct_hash(hyperliquid_chain, amount, to_perp, nonce);
+    let struct_hash =
+        create_usd_class_transfer_struct_hash(hyperliquid_chain, amount, to_perp, nonce);
 
     // Create EIP-712 message hash
     let message_hash = encode_eip712_message(domain_separator, struct_hash);
@@ -403,7 +406,8 @@ pub async fn sign_transfer_action_testnet(
     );
 
     // Create struct hash
-    let struct_hash = create_usd_class_transfer_struct_hash(hyperliquid_chain, amount, to_perp, nonce);
+    let struct_hash =
+        create_usd_class_transfer_struct_hash(hyperliquid_chain, amount, to_perp, nonce);
 
     // Create EIP-712 message hash
     let message_hash = encode_eip712_message(domain_separator, struct_hash);
@@ -619,11 +623,7 @@ pub fn create_mainnet_spot_transfer_typed_data(
 }
 
 /// Create typed data for withdrawals
-pub fn create_withdraw_typed_data(
-    destination: &str,
-    amount: &str,
-    time: u64,
-) -> serde_json::Value {
+pub fn create_withdraw_typed_data(destination: &str, amount: &str, time: u64) -> serde_json::Value {
     serde_json::json!({
         "types": {
             "HyperliquidTransaction:Withdraw": [

@@ -126,8 +126,8 @@ pub struct MarketPrice {
 }
 
 pub struct HyperliquidMarketPrice {
-    client: reqwest::Client,
-    base_url: String,
+    pub client: reqwest::Client,
+    pub base_url: String,
 }
 
 impl HyperliquidMarketPrice {
