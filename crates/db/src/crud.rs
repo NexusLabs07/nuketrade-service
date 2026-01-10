@@ -263,6 +263,20 @@ pub async fn get_referral_count_from_referral_code(
     Ok(row.0)
 }
 
+pub async fn get_referral_count_from_user_id(
+    db_conn: Arc<PgPool>,
+    user_id: uuid::Uuid,
+) -> Result<i32, anyhow::Error> {
+    let query = "SELECT COUNT(*)::INT4 FROM users WHERE referred_by = $1";
+
+    let row: (i32,) = sqlx::query_as(query)
+        .bind(user_id)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(row.0)
+}
+
 pub async fn get_user_position(
     db_conn: Arc<PgPool>,
     user_id: uuid::Uuid,

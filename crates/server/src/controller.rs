@@ -5,7 +5,10 @@ use axum::{
     extract::{Path, State},
 };
 use db::{
-    crud::{get_user_from_referral_code, insert_user_with_wallet_and_points},
+    crud::{
+        get_referral_count_from_user_id, get_user_from_referral_code,
+        insert_user_with_wallet_and_points,
+    },
     types::{Points, User, Wallet},
 };
 use sqlx::types::chrono;
@@ -62,9 +65,18 @@ pub async fn add_to_waitlist(
     ];
 
     if let Some(ref_id) = referred_by_user_id {
+        // Check if user is blocked
         if blocked_user_ids.contains(&ref_id) {
             return Err(AppError::InternalServerError(String::from(
                 "Too many requests",
+            )));
+        }
+
+        // Check referral limit (max 25 users per referral)
+        let referral_count = get_referral_count_from_user_id(state.db.clone(), ref_id).await?;
+        if referral_count >= 25 {
+            return Err(AppError::InternalServerError(String::from(
+                "Referral limit reached",
             )));
         }
     }
