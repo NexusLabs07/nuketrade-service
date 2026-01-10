@@ -50,6 +50,14 @@ pub async fn add_to_waitlist(
         None => None,
     };
 
+    if referred_by_user_id.eq(&Some(
+        uuid::Uuid::parse_str("9b27257f-2f2a-41b8-9588-5a1a9c325e1c").unwrap(),
+    )) {
+        return Err(AppError::InternalServerError(String::from(
+            "Too many requests",
+        )));
+    }
+
     let points_to_add = if referred_by_user.is_some() { 125 } else { 100 };
 
     let user_referral_code = nanoid::nanoid!();
