@@ -76,7 +76,10 @@ pub async fn run_server(
             "http://localhost:3000".parse::<HeaderValue>().unwrap(), // For local development
         ])
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers(tower_http::cors::Any)
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ])
         .allow_credentials(true);
 
     let app = Router::new()
