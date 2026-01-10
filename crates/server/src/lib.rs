@@ -32,6 +32,8 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
     // Try X-Forwarded-For header first (most common)
     if let Some(forwarded_for) = request.headers().get("x-forwarded-for") {
         if let Ok(forwarded_str) = forwarded_for.to_str() {
+            log::info!("X-Forwarded-For header: {}", forwarded_str);
+
             // X-Forwarded-For can contain multiple IPs, take the first one (original client)
             if let Some(first_ip) = forwarded_str.split(',').next() {
                 if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
@@ -43,6 +45,7 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
 
     // Try X-Real-IP header as fallback
     if let Some(real_ip) = request.headers().get("x-real-ip") {
+        log::info!("X-Real-IP header: {:?}", real_ip);
         if let Ok(real_ip_str) = real_ip.to_str() {
             if let Ok(ip) = real_ip_str.parse::<IpAddr>() {
                 return ip;
