@@ -21,3 +21,7 @@ validator = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+governor = { workspace = true }
+once_cell = { workspace = true }
