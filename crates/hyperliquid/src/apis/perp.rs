@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::{
     HyperliquidMarketPrice, MarketPrice, TickAndLotSize, apis::market_slippage,
-    utils::signing::create_mainnet_exchange_typed_data,
+    perp_ticker_to_index, spot_ticker_to_index, utils::signing::create_mainnet_exchange_typed_data,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +18,14 @@ pub struct PerpOrderRequest {
     pub is_market: bool,
     pub vault_address: Option<String>,
     pub is_long: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelOrderRequest {
+    pub asset_ticker: String,
+    pub order_id: String,
+    pub is_perp: bool,
+    pub vault_address: Option<String>,
 }
 
 pub async fn create_perp_position_typed_data(order_request: PerpOrderRequest) -> Result<Value> {
@@ -103,11 +111,7 @@ pub async fn create_perp_position_typed_data(order_request: PerpOrderRequest) ->
         .unwrap()
         .as_secs();
 
-    let typed_data = create_mainnet_exchange_typed_data(
-        &action,
-        nonce,
-        vault_address.as_ref().map(|s| s.as_str()),
-    )?;
+    let typed_data = create_mainnet_exchange_typed_data(&action, nonce, vault_address.as_deref())?;
 
     Ok(serde_json::json!({
         "typedData": typed_data,
@@ -185,11 +189,7 @@ pub async fn close_perp_position_typed_data(order_request: PerpOrderRequest) -> 
         .unwrap()
         .as_millis() as u64;
 
-    let typed_data = create_mainnet_exchange_typed_data(
-        &action,
-        nonce,
-        vault_address.as_ref().map(|s| s.as_str()),
-    )?;
+    let typed_data = create_mainnet_exchange_typed_data(&action, nonce, vault_address.as_deref())?;
 
     Ok(serde_json::json!({
         "action": action,
@@ -210,4 +210,71 @@ pub async fn close_all_perp_position_typed_data(
     }
 
     Ok(close_position_typed_data_array)
+}
+
+pub async fn cancel_order_typed_data(request: CancelOrderRequest) -> Result<Value> {
+    let CancelOrderRequest {
+        asset_ticker,
+        order_id,
+        is_perp,
+        vault_address,
+    } = request;
+
+    //TODO: throw error if spot
+    // Get asset index based on market type
+    let index = if !is_perp {
+        // Spot asset
+        let spot_index = spot_ticker_to_index(&asset_ticker, None)
+            .await
+            .map_err(|_| {
+                anyhow::Error::msg(format!(
+                    "Could not find asset index for ticker: {}",
+                    asset_ticker
+                ))
+            })?;
+        spot_index as i64
+    } else {
+        // Perp asset
+        let perp_index = perp_ticker_to_index(&asset_ticker).await.map_err(|_| {
+            anyhow::Error::msg(format!(
+                "Could not find asset index for ticker: {}",
+                asset_ticker
+            ))
+        })?;
+        perp_index as i64
+    };
+
+    // Parse order_id to u64
+    let order_id_num: u64 = order_id
+        .parse()
+        .map_err(|_| anyhow::Error::msg("Invalid order_id format"))?;
+
+    // Create cancel action
+    let action = serde_json::json!({
+        "type": "cancel",
+        "cancels": [
+            {
+                "a": index,
+                "o": order_id_num,
+            }
+        ],
+    });
+
+    // Get current timestamp in milliseconds
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+    // Create typed data using the utility function
+    let typed_data = create_mainnet_exchange_typed_data(&action, nonce, vault_address.as_deref())?;
+
+    let market_helper = HyperliquidMarketPrice::new();
+
+    Ok(serde_json::json!({
+        "typedData": typed_data,
+        "action": action,
+        "nonce": nonce,
+        "endpoint": format!("{}/{}", market_helper.base_url, "exchange")
+    }))
 }
