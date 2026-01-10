@@ -50,12 +50,23 @@ pub async fn add_to_waitlist(
         None => None,
     };
 
-    if referred_by_user_id.eq(&Some(
+    // Blocked user IDs
+    let blocked_user_ids = vec![
         uuid::Uuid::parse_str("9b27257f-2f2a-41b8-9588-5a1a9c325e1c").unwrap(),
-    )) {
-        return Err(AppError::InternalServerError(String::from(
-            "Too many requests",
-        )));
+        uuid::Uuid::parse_str("7d97d1f5-e5dd-4bbd-8031-929ee7c1fb10").unwrap(),
+        uuid::Uuid::parse_str("c378cda4-78ec-4e73-a3f7-894e14dd4094").unwrap(),
+        uuid::Uuid::parse_str("63ea1430-523a-430e-8292-e30902f3e2ac").unwrap(),
+        uuid::Uuid::parse_str("5c99748c-f0f5-476a-be77-07acab299e39").unwrap(),
+        uuid::Uuid::parse_str("ffb2e96c-557a-4ff2-9d91-b3fda52f07f6").unwrap(),
+        uuid::Uuid::parse_str("f74b601d-effd-40c4-9994-fc5f1cf7cde4").unwrap(),
+    ];
+
+    if let Some(ref_id) = referred_by_user_id {
+        if blocked_user_ids.contains(&ref_id) {
+            return Err(AppError::InternalServerError(String::from(
+                "Too many requests",
+            )));
+        }
     }
 
     let points_to_add = if referred_by_user.is_some() { 125 } else { 100 };
