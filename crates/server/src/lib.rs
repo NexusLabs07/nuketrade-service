@@ -1,4 +1,5 @@
 use core::types::PlatformsFundingRate;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
@@ -9,10 +10,8 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use governor::{Quota, RateLimiter};
 use sqlx::PgPool;
-use std::net::SocketAddr;
-use std::num::NonZeroU32;
+use std::net::{IpAddr, SocketAddr};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
@@ -28,31 +27,69 @@ pub mod controller;
 pub mod error;
 pub mod types;
 
-// Rate limiting middleware
-async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
-    // Create a rate limiter that allows 3 requests per second per IP
-    static LIMITER: once_cell::sync::Lazy<
-        RateLimiter<
-            SocketAddr,
-            governor::state::keyed::DefaultKeyedStateStore<SocketAddr>,
-            governor::clock::DefaultClock,
-        >,
-    > = once_cell::sync::Lazy::new(|| {
-        let quota = Quota::per_second(NonZeroU32::new(3).unwrap());
-        RateLimiter::keyed(quota)
-    });
+// Helper function to extract real client IP from headers (for proxy/Railway support)
+fn get_client_ip(request: &Request<Body>) -> IpAddr {
+    // Try X-Forwarded-For header first (most common)
+    if let Some(forwarded_for) = request.headers().get("x-forwarded-for") {
+        if let Ok(forwarded_str) = forwarded_for.to_str() {
+            log::info!("X-Forwarded-For header: {}", forwarded_str);
 
-    // Get the client IP from the connection info
-    let client_ip = request
+            // X-Forwarded-For can contain multiple IPs, take the first one (original client)
+            if let Some(first_ip) = forwarded_str.split(',').next() {
+                if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
+                    return ip;
+                }
+            }
+        }
+    }
+
+    // Try X-Real-IP header as fallback
+    if let Some(real_ip) = request.headers().get("x-real-ip") {
+        log::info!("X-Real-IP header: {:?}", real_ip);
+        if let Ok(real_ip_str) = real_ip.to_str() {
+            if let Ok(ip) = real_ip_str.parse::<IpAddr>() {
+                return ip;
+            }
+        }
+    }
+
+    // Fallback to connection info if headers are not present
+    request
         .extensions()
         .get::<axum::extract::ConnectInfo<SocketAddr>>()
-        .map(|ci| ci.0)
-        .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 0)));
+        .map(|ci| ci.0.ip())
+        .unwrap_or_else(|| IpAddr::from([0, 0, 0, 0]))
+}
 
-    // Check rate limit
-    if LIMITER.check_key(&client_ip).is_err() {
+// Rate limiting middleware - allows 50 requests per second per IP
+async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
+    use std::time::{Duration, Instant};
+
+    // Track request timestamps per IP address
+    static IP_REQUESTS: once_cell::sync::Lazy<RwLock<HashMap<IpAddr, Vec<Instant>>>> =
+        once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
+
+    // Get the real client IP (handles proxy/Railway forwarded headers)
+    let client_ip = get_client_ip(&request);
+
+    let now = Instant::now();
+    let one_second_ago = now - Duration::from_secs(1);
+
+    // Check and update request timestamps
+    let mut requests = IP_REQUESTS.write().await;
+    let timestamps = requests.entry(client_ip).or_insert_with(Vec::new);
+
+    // Remove timestamps older than 1 second
+    timestamps.retain(|&timestamp| timestamp > one_second_ago);
+
+    // Check if limit exceeded
+    if timestamps.len() >= 20 {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
+
+    // Add current request timestamp
+    timestamps.push(now);
+    drop(requests); // Release the lock before proceeding
 
     Ok(next.run(request).await)
 }
@@ -85,7 +122,7 @@ pub async fn run_server(
     let app = Router::new()
         .route("/", get(root))
         .route("/funding-rate", get(get_funding_rate))
-        .route("/add-to-waitlist", post(add_to_waitlist))
+        // .route("/add-to-waitlist", post(add_to_waitlist))
         .route("/total-users", get(get_total_users))
         .route("/total-points/{user_id}", get(get_total_points))
         .route("/referral-count/{referral_code}", get(get_referral_count))
