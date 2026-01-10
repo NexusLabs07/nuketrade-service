@@ -58,25 +58,35 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
         .unwrap_or_else(|| IpAddr::from([0, 0, 0, 0]))
 }
 
-// Rate limiting middleware - allows only 5 requests per IP total
+// Rate limiting middleware - allows 50 requests per second per IP
 async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
-    // Track request count per IP address
-    static IP_COUNTER: once_cell::sync::Lazy<RwLock<HashMap<IpAddr, u32>>> =
+    use std::time::{Duration, Instant};
+
+    // Track request timestamps per IP address
+    static IP_REQUESTS: once_cell::sync::Lazy<RwLock<HashMap<IpAddr, Vec<Instant>>>> =
         once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
 
     // Get the real client IP (handles proxy/Railway forwarded headers)
     let client_ip = get_client_ip(&request);
 
-    // Check and update request count
-    let mut counter = IP_COUNTER.write().await;
-    let count = counter.entry(client_ip).or_insert(0);
+    let now = Instant::now();
+    let one_second_ago = now - Duration::from_secs(1);
 
-    if *count >= 5 {
+    // Check and update request timestamps
+    let mut requests = IP_REQUESTS.write().await;
+    let timestamps = requests.entry(client_ip).or_insert_with(Vec::new);
+
+    // Remove timestamps older than 1 second
+    timestamps.retain(|&timestamp| timestamp > one_second_ago);
+
+    // Check if limit exceeded
+    if timestamps.len() >= 20 {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
-    *count += 1;
-    drop(counter); // Release the lock before proceeding
+    // Add current request timestamp
+    timestamps.push(now);
+    drop(requests); // Release the lock before proceeding
 
     Ok(next.run(request).await)
 }
@@ -109,7 +119,7 @@ pub async fn run_server(
     let app = Router::new()
         .route("/", get(root))
         .route("/funding-rate", get(get_funding_rate))
-        .route("/add-to-waitlist", post(add_to_waitlist))
+        // .route("/add-to-waitlist", post(add_to_waitlist))
         .route("/total-users", get(get_total_users))
         .route("/total-points/{user_id}", get(get_total_points))
         .route("/referral-count/{referral_code}", get(get_referral_count))
