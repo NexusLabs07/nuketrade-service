@@ -126,6 +126,7 @@ pub async fn run_server(
     let app = Router::new()
         .route("/", get(root))
         .nest("/user", routes::user::routes())
+        .nest("/hyperliquid", routes::hyperliquid::routes())
         .route("/funding-rate", get(get_funding_rate))
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))

@@ -3817,6 +3817,7 @@ dependencies = [
  "core",
  "db",
  "governor",
+ "hyperliquid",
  "log",
  "nanoid",
  "once_cell",
