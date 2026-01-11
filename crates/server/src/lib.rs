@@ -6,7 +6,7 @@ use axum::{
     Router,
     body::Body,
     http::{HeaderValue, Method, Request, StatusCode},
-    middleware::{self, Next},
+    middleware as axum__middleware,
     response::Response,
     routing::{get, post},
 };
@@ -15,17 +15,18 @@ use std::net::{IpAddr, SocketAddr};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-use crate::{
-    controller::{
-        add_to_waitlist, get_funding_rate, get_referral_count, get_total_points, get_total_users,
-        get_user_position, root,
-    },
-    types::AppState,
-};
+use crate::controller::{get_funding_rate, root};
 
 pub mod controller;
 pub mod error;
-pub mod types;
+pub mod middleware;
+pub mod routes;
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub db: Arc<PgPool>,
+    pub platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
+}
 
 // Helper function to extract real client IP from headers (for proxy/Railway support)
 fn get_client_ip(request: &Request<Body>) -> IpAddr {
@@ -62,7 +63,10 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
 }
 
 // Rate limiting middleware - allows 50 requests per second per IP
-async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
+async fn rate_limit_middleware(
+    request: Request<Body>,
+    next: axum__middleware::Next,
+) -> Result<Response, StatusCode> {
     use std::time::{Duration, Instant};
 
     // Track request timestamps per IP address
@@ -121,14 +125,10 @@ pub async fn run_server(
 
     let app = Router::new()
         .route("/", get(root))
+        .nest("/user", routes::user::routes())
         .route("/funding-rate", get(get_funding_rate))
-        // .route("/add-to-waitlist", post(add_to_waitlist))
-        .route("/total-users", get(get_total_users))
-        .route("/total-points/{user_id}", get(get_total_points))
-        .route("/referral-count/{referral_code}", get(get_referral_count))
-        .route("/user-position/{user_id}", get(get_user_position))
         .layer(cors)
-        .layer(middleware::from_fn(rate_limit_middleware))
+        .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
