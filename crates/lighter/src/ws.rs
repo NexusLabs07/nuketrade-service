@@ -6,7 +6,10 @@ use tokio::{
     sync::RwLock,
     time::{Instant, interval},
 };
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async_with_config,
+    tungstenite::{Message, protocol::WebSocketConfig},
+};
 use uuid::Uuid;
 
 use crate::{LIGHTER_WS_URL, helpers::markets, types::MarketStatsMsg};
@@ -20,8 +23,10 @@ pub async fn start_lighter_funding_feed(
     const MAX_RETRIES: u32 = 3;
     let mut retry_count = 0;
 
+    let ws_config = WebSocketConfig::default();
+
     let ws_stream = loop {
-        match connect_async(LIGHTER_WS_URL).await {
+        match connect_async_with_config(LIGHTER_WS_URL, Some(ws_config.clone()), true).await {
             Ok((ws_stream, _)) => break ws_stream,
             Err(e) => {
                 retry_count += 1;
@@ -143,10 +148,19 @@ async fn handle_ws_message(
         Message,
     >,
 ) -> (bool, Option<(String, f64, f64)>) {
+    log::debug!("Received WS message: {:?}", msg);
+
     match msg {
-        //TODO: Handle constant pongs
         Message::Ping(p) => {
-            write.send(Message::Pong(p)).await.ok();
+            log::info!("Received ping from server, sending pong");
+            if let Err(e) = write.send(Message::Pong(p)).await {
+                log::error!("Failed to send pong: {}", e);
+            }
+            (true, None)
+        }
+
+        Message::Pong(_) => {
+            log::info!("Received pong from server");
             (true, None)
         }
 
@@ -156,6 +170,14 @@ async fn handle_ws_message(
         }
 
         Message::Text(text) => {
+            // Check if it's a text-based ping
+            if text.contains("ping") {
+                log::info!("Received text ping, sending text pong.");
+                if let Err(e) = write.send(Message::Text(r#"{"type":"pong"}"#.into())).await {
+                    log::error!("Failed to send text pong: {}", e);
+                }
+                return (true, None);
+            }
             let parsed: MarketStatsMsg = match serde_json::from_str(text.as_str()) {
                 Ok(v) => v,
                 Err(_) => return (true, None),

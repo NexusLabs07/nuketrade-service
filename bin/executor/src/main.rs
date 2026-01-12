@@ -57,16 +57,16 @@ async fn main() -> anyhow::Result<()> {
     //     .await;
     // });
 
-    // log::info!("Starting Lighter funding feed....");
-    // let db_clone_2 = db.clone();
-    // let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
-    // tokio::spawn(async move {
-    //     lighter::start_lighter_funding_feed(
-    //         db_clone_2.clone(),
-    //         platfroms_funding_rate_clone_2.clone(),
-    //     )
-    //     .await;
-    // });
+    log::info!("Starting Lighter funding feed....");
+    let db_clone_2 = db.clone();
+    let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
+    tokio::spawn(async move {
+        lighter::start_lighter_funding_feed(
+            db_clone_2.clone(),
+            platfroms_funding_rate_clone_2.clone(),
+        )
+        .await;
+    });
 
     run_server(db, platforms_funding_rate).await;
 
