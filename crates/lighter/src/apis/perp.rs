@@ -60,3 +60,13 @@ pub async fn create_perp_order(create_order_req: CreateOrderTxReq) -> Result<L2C
 
     Ok(result)
 }
+
+pub async fn cancel_perp_order() {}
+
+pub async fn close_perp_order() {}
+
+pub async fn modify_perp_order() {}
+
+pub async fn cancel_all_perp_orders() {}
+
+pub async fn update_leverage() {}

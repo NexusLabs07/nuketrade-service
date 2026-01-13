@@ -22,3 +22,5 @@ tracing-subscriber = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
+base64 = { workspace = true }
+serde_with = { version = "3.16.1", features = ["base64"] }

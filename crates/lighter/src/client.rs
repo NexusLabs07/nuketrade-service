@@ -1,11 +1,12 @@
-use std::{any, time::Duration};
+use std::time::Duration;
 
 use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as};
 
 use crate::{
-    LIGHTER_HTTP_URL, ORDER_TYPE_MARKET,
+    ORDER_TYPE_MARKET,
     constants::{
         MAX_ACCOUNT_INDEX, MAX_API_KEY_INDEX, MAX_MARKET_INDEX, MIN_ACCOUNT_INDEX, MIN_NONCE,
         MIN_ORDER_PRICE, TIME_IN_FORCE_IMMEDIATE_OR_CANCEL, TX_TYPE_L2_CREATE_ORDER,
@@ -106,18 +107,65 @@ pub struct OrderInfo {
     pub order_expiry: i64,
 }
 
-/// L2 Create Order Transaction Info
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L2CreateOrderTxInfo {
+    #[serde(rename = "AccountIndex")]
     pub account_index: i64,
+    #[serde(rename = "ApiKeyIndex")]
     pub api_key_index: u8,
-    pub order_info: OrderInfo,
+    // Flatten order_info fields to top level with PascalCase
+    #[serde(rename = "MarketIndex")]
+    pub market_index: u8,
+    #[serde(rename = "ClientOrderIndex")]
+    pub client_order_index: i64,
+    #[serde(rename = "BaseAmount")]
+    pub base_amount: i64,
+    #[serde(rename = "Price")]
+    pub price: u32,
+    #[serde(rename = "IsAsk")]
+    pub is_ask: u8,
+    #[serde(rename = "Type")]
+    pub order_type: u8,
+    #[serde(rename = "TimeInForce")]
+    pub time_in_force: u8,
+    #[serde(rename = "ReduceOnly")]
+    pub reduce_only: u8,
+    #[serde(rename = "TriggerPrice")]
+    pub trigger_price: u32,
+    #[serde(rename = "OrderExpiry")]
+    pub order_expiry: i64,
+    #[serde(rename = "ExpiredAt")]
     pub expired_at: i64,
+    #[serde(rename = "Nonce")]
     pub nonce: i64,
+    #[serde(rename = "Sig")]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde_as(as = "Option<Base64>")]
+    #[serde(default)]
     pub sig: Option<Vec<u8>>,
     #[serde(skip)]
     pub signed_hash: Option<String>,
+
+    // Keep original order_info for internal use (not serialized)
+    #[serde(skip)]
+    #[serde(default = "default_order_info")]
+    pub order_info: OrderInfo,
+}
+
+fn default_order_info() -> OrderInfo {
+    OrderInfo {
+        market_index: 0,
+        client_order_index: 0,
+        base_amount: 0,
+        price: 0,
+        is_ask: 0,
+        order_type: 0,
+        time_in_force: 0,
+        reduce_only: 0,
+        trigger_price: 0,
+        order_expiry: 0,
+    }
 }
 
 /// Trait that all transaction types must implement
@@ -340,6 +388,16 @@ impl LighterClient {
         let tx_info = L2CreateOrderTxInfo {
             account_index: opts.from_account_index.unwrap(),
             api_key_index: opts.api_key_index.unwrap(),
+            market_index: order_info.market_index,
+            client_order_index: order_info.client_order_index,
+            base_amount: order_info.base_amount,
+            price: order_info.price,
+            is_ask: order_info.is_ask,
+            order_type: order_info.order_type,
+            time_in_force: order_info.time_in_force,
+            reduce_only: order_info.reduce_only,
+            trigger_price: order_info.trigger_price,
+            order_expiry: order_info.order_expiry,
             expired_at: opts.expired_at,
             nonce: opts.nonce.unwrap(),
             sig: None,
