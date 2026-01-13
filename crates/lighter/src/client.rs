@@ -9,7 +9,8 @@ use crate::{
     ORDER_TYPE_MARKET,
     constants::{
         MAX_ACCOUNT_INDEX, MAX_API_KEY_INDEX, MAX_MARKET_INDEX, MIN_ACCOUNT_INDEX, MIN_NONCE,
-        MIN_ORDER_PRICE, TIME_IN_FORCE_IMMEDIATE_OR_CANCEL, TX_TYPE_L2_CREATE_ORDER,
+        MIN_ORDER_PRICE, ORDER_TYPE_LIMIT, TIME_IN_FORCE_GOOD_TILL_TIME,
+        TIME_IN_FORCE_IMMEDIATE_OR_CANCEL, TX_TYPE_L2_CREATE_ORDER,
     },
 };
 
@@ -344,7 +345,7 @@ impl LighterClient {
         market_index: u8,
         client_order_index: i64,
         base_amount: i64,
-        price: i32,
+        price: u32,
         is_ask: u8,
         reduce_only: bool,
         opts: Option<TransactOpts>,
@@ -360,6 +361,34 @@ impl LighterClient {
             reduce_only: if reduce_only { 1 } else { 0 },
             trigger_price: 0,
             order_expiry: 0,
+        };
+
+        self.create_order(req, opts).await
+    }
+
+    pub async fn create_limit_order(
+        &self,
+        market_index: u8,
+        client_order_index: i64,
+        base_amount: i64,
+        price: u32,
+        is_ask: u8,
+        reduce_only: bool,
+        opts: Option<TransactOpts>,
+    ) -> Result<L2CreateOrderTxInfo> {
+        let default_expiry = chrono::Utc::now().timestamp_millis() + (28 * 24 * 60 * 60 * 1000);
+
+        let req = CreateOrderTxReq {
+            market_index,
+            client_order_index,
+            base_amount,
+            price,
+            is_ask,
+            order_type: ORDER_TYPE_LIMIT,
+            time_in_force: TIME_IN_FORCE_GOOD_TILL_TIME,
+            reduce_only: if reduce_only { 1 } else { 0 },
+            trigger_price: 0,
+            order_expiry: default_expiry,
         };
 
         self.create_order(req, opts).await
