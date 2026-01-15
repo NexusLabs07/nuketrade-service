@@ -376,7 +376,7 @@ impl LighterClient {
         reduce_only: bool,
         opts: Option<TransactOpts>,
     ) -> Result<L2CreateOrderTxInfo> {
-        let default_expiry = chrono::Utc::now().timestamp_millis() + (28 * 24 * 60 * 60 * 1000);
+        let default_expiry = chrono::Utc::now().timestamp_millis() + (28 * 24 * 60 * 60 * 1000); //28 days
 
         let req = CreateOrderTxReq {
             market_index,

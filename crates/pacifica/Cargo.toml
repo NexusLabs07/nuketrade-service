@@ -1,0 +1,22 @@
+[package]
+name = "pacifica"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tokio-tungstenite = { workspace = true }
+uuid = { workspace = true }
+serde_with = { version = "3.16.1", features = ["base64"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+core = { path = "../core" }
+db = { path = "../db" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+futures-util = { workspace = true }
+log = { workspace = true }
+chrono = { workspace = true }
