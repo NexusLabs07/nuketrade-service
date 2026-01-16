@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     LIGHTER_HTTP_URL,
     client::{L2CreateOrderTxInfo, LighterClient},
-    constants::{MAINNET_CHAIN_ID, ORDER_TYPE_LIMIT, TIME_IN_FORCE_GOOD_TILL_TIME},
+    constants::MAINNET_CHAIN_ID,
 };
 
 /// Create Order Transaction Request

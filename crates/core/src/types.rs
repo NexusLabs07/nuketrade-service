@@ -6,4 +6,5 @@ use serde::{Deserialize, Serialize};
 pub struct PlatformsFundingRate {
     pub hyperliquid: HashMap<String, f64>,
     pub lighter: HashMap<String, f64>,
+    pub pacifica: HashMap<String, f64>,
 }

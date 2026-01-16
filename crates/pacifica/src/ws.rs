@@ -37,7 +37,7 @@ pub struct PriceData {
     pub yesterday_price: String,
 }
 
-pub async fn start_lighter_funding_feed(
+pub async fn start_pacifica_funding_feed(
     db_conn: Arc<PgPool>,
     platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
 ) {
@@ -52,14 +52,14 @@ pub async fn start_lighter_funding_feed(
             Err(e) => {
                 retry_count += 1;
                 log::error!(
-                    "Error connecting to Lighter WS (attempt {}/{}): {}",
+                    "Error connecting to Pacifica WS (attempt {}/{}): {}",
                     retry_count,
                     MAX_RETRIES,
                     e
                 );
 
                 if retry_count >= MAX_RETRIES {
-                    log::error!("Max retries reached. Exiting Lighter feed.");
+                    log::error!("Max retries reached. Exiting Pacifica feed.");
                     return;
                 }
 
@@ -69,9 +69,9 @@ pub async fn start_lighter_funding_feed(
         }
     };
 
-    log::info!("Connected to Lighter WS");
+    log::info!("Connected to Pacifica WS");
 
-    let mut db_tick = interval(Duration::from_secs(30 * 60));
+    let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
     let mut state_tick = interval(Duration::from_secs(5));
 
     let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
@@ -105,24 +105,24 @@ pub async fn start_lighter_funding_feed(
                                 }
                             }
                             if !keep_alive {
-                                log::warn!("Connection failed with Lighter WS. Crashing program...");
+                                log::warn!("Connection failed with Pacifica WS. Crashing program...");
                                 std::process::exit(1);
                             }
                         },
                         Err(e) => {
-                            log::error!("Lighter WS read error: {}", e);
+                            log::error!("Pacifica WS read error: {}", e);
                         }
                     }
                 },
                 _ = state_tick.tick() => {
                     let mut state = platforms_funding_rate.write().await;
                     for (symbol, (funding, _)) in last_snapshot.iter() {
-                        state.lighter.insert(symbol.clone(), *funding);
+                        state.pacifica.insert(symbol.clone(), *funding);
                     }
                 },
                 _ = db_tick.tick() => {
                     if last_update.elapsed() > Duration::from_secs(60) {
-                        log::warn!("Skipping DB write: Lighter data is stale");
+                        log::warn!("Skipping DB write: Pacifica data is stale");
                         continue;
                     }
 
@@ -131,7 +131,7 @@ pub async fn start_lighter_funding_feed(
                 for (symbol, (funding, mark_px)) in last_snapshot.iter() {
                     let funding_rate = FundingRate {
                         id: Uuid::new_v4(),
-                        platform: Dex::Lighter.to_string(),
+                        platform: Dex::Pacifica.to_string(),
                         symbol: symbol.clone(),
                         rate: *funding,
                         mark_px: *mark_px,
@@ -180,7 +180,7 @@ async fn handle_ws_message(
         }
 
         Message::Close(frame) => {
-            log::warn!("Lighter WS closed: {:?}", frame);
+            log::warn!("Pacifica WS closed: {:?}", frame);
             (false, None)
         }
 

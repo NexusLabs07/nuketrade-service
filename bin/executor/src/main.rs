@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let platforms_funding_rate = Arc::new(RwLock::new(PlatformsFundingRate {
         hyperliquid: HashMap::new(),
         lighter: HashMap::new(),
+        pacifica: HashMap::new(),
     }));
 
     // log::info!("Starting Hyperliquid funding feed....");
