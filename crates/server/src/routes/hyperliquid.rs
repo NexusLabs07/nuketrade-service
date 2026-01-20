@@ -1,16 +1,12 @@
-use axum::routing::post;
+use axum::routing::get;
 
 use crate::{
     AppState,
-    controller::hyperliquid::{
-        cancel_perp_order, close_all_perp_position, close_perp_position, create_perp_position,
-    },
+    controller::hyperliquid::{get_perp_metadata, get_spot_metadata},
 };
 
 pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/create-perp-position", post(create_perp_position))
-        .route("/close-perp-position", post(close_perp_position))
-        .route("/close-all-perp-position", post(close_all_perp_position))
-        .route("/cancel-perp-position", post(cancel_perp_order))
+        .route("/spot-metadata", get(get_spot_metadata))
+        .route("/perp-metadata", get(get_perp_metadata))
 }

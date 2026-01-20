@@ -12,7 +12,8 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-use crate::{LIGHTER_WS_URL, helpers::markets, types::MarketStatsMsg};
+use crate::helpers::markets;
+use crate::{LIGHTER_WS_URL, types::MarketStatsMsg};
 use core::{funding::Dex, token_list::TOKEN_LIST, types::PlatformsFundingRate};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 

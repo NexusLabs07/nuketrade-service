@@ -1,5 +1,3 @@
-mod apis;
-mod client;
 mod ws;
 
 pub const PACIFICA_HTTP_URL: &str = "https://api.pacifica.fi/api/v1";

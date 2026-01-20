@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct MarketStatsMsg {
     pub channel: String,
@@ -8,6 +9,7 @@ pub struct MarketStatsMsg {
     pub lighter_type: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct MarketStats {
     pub market_id: u32,
