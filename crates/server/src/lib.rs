@@ -21,6 +21,7 @@ pub mod controller;
 pub mod error;
 pub mod middleware;
 pub mod routes;
+pub mod types;
 
 #[derive(Clone, Debug)]
 pub struct AppState {

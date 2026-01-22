@@ -1,3 +1,4 @@
+pub mod apis;
 pub mod perp_metadata;
 pub mod spot_metadata;
 mod types;
