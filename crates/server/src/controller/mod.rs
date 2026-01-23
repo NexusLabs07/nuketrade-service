@@ -3,6 +3,7 @@ use core::types::PlatformsFundingRate;
 
 use crate::AppState;
 
+pub mod aggregated;
 pub mod hyperliquid;
 pub mod pacifica;
 pub mod user;

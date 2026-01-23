@@ -129,6 +129,7 @@ pub async fn run_server(
         .nest("/user", routes::user::routes())
         .nest("/hyperliquid", routes::hyperliquid::routes())
         .nest("/pacifica", routes::pacifica::routes())
+        .nest("/aggregated", routes::aggregated::routes())
         .route("/funding-rate", get(get_funding_rate))
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))

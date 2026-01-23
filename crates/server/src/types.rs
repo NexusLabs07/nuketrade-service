@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenPositionsResponse {
     pub symbol: String,
     pub size: String,
@@ -9,4 +9,11 @@ pub struct OpenPositionsResponse {
     pub leverage: u32,
     #[serde(rename = "liquidationPrice")]
     pub liquidation_price: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MergedPositionResponse {
+    pub symbol: String,
+    pub hyperliquid: Option<OpenPositionsResponse>,
+    pub pacifica: Option<OpenPositionsResponse>,
 }
