@@ -3977,6 +3977,7 @@ dependencies = [
  "log",
  "nanoid",
  "once_cell",
+ "pacifica",
  "serde",
  "serde_json",
  "sqlx",

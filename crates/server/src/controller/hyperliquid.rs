@@ -32,7 +32,7 @@ pub async fn get_user_open_positions(
         let pos = &asset_position.position;
 
         open_position_response.push(OpenPositionsResponse {
-            coin: pos.coin.clone(),
+            symbol: pos.coin.clone(),
             size: pos.szi.clone(),
             pnl: pos.unrealized_pnl.clone(),
             funding: pos.cum_funding.all_time.clone(),

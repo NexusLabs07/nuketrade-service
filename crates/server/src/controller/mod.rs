@@ -4,6 +4,7 @@ use core::types::PlatformsFundingRate;
 use crate::AppState;
 
 pub mod hyperliquid;
+pub mod pacifica;
 pub mod user;
 
 pub async fn root() -> &'static str {

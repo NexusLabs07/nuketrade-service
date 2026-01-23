@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderValue, Method, Request, StatusCode},
     middleware as axum__middleware,
     response::Response,
-    routing::{get, post},
+    routing::get,
 };
 use sqlx::PgPool;
 use std::net::{IpAddr, SocketAddr};
@@ -128,6 +128,7 @@ pub async fn run_server(
         .route("/", get(root))
         .nest("/user", routes::user::routes())
         .nest("/hyperliquid", routes::hyperliquid::routes())
+        .nest("/pacifica", routes::pacifica::routes())
         .route("/funding-rate", get(get_funding_rate))
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))

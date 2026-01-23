@@ -12,6 +12,7 @@ axum = { workspace = true }
 tokio = { workspace = true }
 core = { path = "../core" }
 hyperliquid = { path = "../hyperliquid" }
+pacifica = { path = "../pacifica" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
