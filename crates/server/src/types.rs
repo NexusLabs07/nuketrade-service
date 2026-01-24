@@ -6,6 +6,7 @@ pub struct OpenPositionsResponse {
     pub size: String,
     pub pnl: String,
     pub funding: String,
+    pub margin: String,
     pub leverage: u32,
     #[serde(rename = "liquidationPrice")]
     pub liquidation_price: String,

@@ -21,12 +21,31 @@ pub struct UserPosition {
     pub entry_price: String,
     #[serde(default)]
     pub margin: Option<String>,
+    pub liquidation_price: String,
     pub funding: String,
     pub isolated: bool,
     pub created_at: u64,
     pub updated_at: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountSettingsResponse {
+    pub success: bool,
+    pub data: Option<Vec<AccountSetting>>,
+    pub error: Option<String>,
+    pub code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountSetting {
+    pub symbol: String,
+    pub isolated: bool,
+    pub leverage: u64,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone)]
 pub struct UserInfo {
     pub client: Client,
     pub base_url: String,
@@ -42,7 +61,7 @@ impl UserInfo {
         }
     }
 
-    pub async fn get_open_positions(self) -> Result<UserPositionsResponse> {
+    pub async fn get_open_positions(&self) -> Result<UserPositionsResponse> {
         let response = self
             .client
             .get(format!(
@@ -54,8 +73,30 @@ impl UserInfo {
 
         let data: UserPositionsResponse = match response.json().await {
             Ok(d) => d,
-            Err(err) => {
+            Err(_err) => {
                 return Err(anyhow::Error::msg("Failed to get pacifica open positions"));
+            }
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_account_settings(&self) -> Result<AccountSettingsResponse> {
+        let response = self
+            .client
+            .get(format!(
+                "{}{}{}",
+                self.base_url, "/account/settings?account=", self.solana_address
+            ))
+            .send()
+            .await?;
+
+        let data: AccountSettingsResponse = match response.json().await {
+            Ok(d) => d,
+            Err(_err) => {
+                return Err(anyhow::Error::msg(
+                    "Failed to get pacifica user account setting",
+                ));
             }
         };
 

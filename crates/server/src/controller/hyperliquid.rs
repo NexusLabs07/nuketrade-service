@@ -34,6 +34,7 @@ pub async fn get_user_open_positions(
         open_position_response.push(OpenPositionsResponse {
             symbol: pos.coin.clone(),
             size: pos.szi.clone(),
+            margin: pos.margin_used.clone(),
             pnl: pos.unrealized_pnl.clone(),
             funding: pos.cum_funding.all_time.clone(),
             leverage: pos.leverage.value.clone(),
