@@ -1,19 +1,39 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use axum::{Json, extract::Path, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 use hyperliquid::apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo};
 use pacifica::apis::user::{
     AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::types::{MergedPositionResponse, OpenPositionsResponse};
+use crate::{
+    AppState,
+    types::{MergedPositionResponse, OpenPositionsResponse},
+};
 
 #[derive(Deserialize)]
 pub struct MergedPositionsParams {
     pub user_evm_address: String,
     pub user_solana_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FundingRateStuct {
+    hyperliquid_funding_rate: Option<f64>,
+    pacifica_funding_rate: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenInfoResponse {
+    pub symbol: String,
+    pub hyperliquid: Option<f64>,
+    pub pacifica: Option<f64>,
 }
 
 pub async fn get_merged_open_positions(
@@ -107,4 +127,55 @@ pub async fn get_merged_open_positions(
     let merged_positions: Vec<MergedPositionResponse> = positions_map.into_values().collect();
 
     Ok(Json(merged_positions))
+}
+
+pub async fn get_tokens_funding(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<TokenInfoResponse>>, (StatusCode, String)> {
+    let funding_rate_clone = state.platforms_funding_rate.read().await.clone();
+
+    let mut tokens = HashMap::new();
+
+    for (symbol, funding_rate) in funding_rate_clone.hyperliquid {
+        tokens.insert(
+            symbol,
+            FundingRateStuct {
+                hyperliquid_funding_rate: Some(funding_rate),
+                pacifica_funding_rate: None,
+            },
+        );
+    }
+
+    for (symbol, funding_rate) in funding_rate_clone.pacifica {
+        let token_funding_rate = tokens.get(&symbol);
+
+        if token_funding_rate.is_some() {
+            tokens.insert(
+                symbol,
+                FundingRateStuct {
+                    hyperliquid_funding_rate: token_funding_rate.unwrap().hyperliquid_funding_rate,
+                    pacifica_funding_rate: Some(funding_rate),
+                },
+            );
+        } else {
+            tokens.insert(
+                symbol,
+                FundingRateStuct {
+                    hyperliquid_funding_rate: None,
+                    pacifica_funding_rate: Some(funding_rate),
+                },
+            );
+        }
+    }
+
+    let response: Vec<TokenInfoResponse> = tokens
+        .into_iter()
+        .map(|(symbol, rate)| TokenInfoResponse {
+            symbol,
+            hyperliquid: rate.hyperliquid_funding_rate,
+            pacifica: rate.pacifica_funding_rate,
+        })
+        .collect();
+
+    Ok(Json(response))
 }

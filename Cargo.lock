@@ -1341,7 +1341,6 @@ dependencies = [
  "db",
  "dotenv",
  "hyperliquid",
- "lighter",
  "log",
  "pacifica",
  "server",
