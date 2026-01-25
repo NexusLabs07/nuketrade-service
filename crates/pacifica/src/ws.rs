@@ -135,7 +135,6 @@ pub async fn start_pacifica_funding_feed(
                         symbol: symbol.clone(),
                         rate: *funding,
                         mark_px: *mark_px,
-                        timestamp: chrono::Utc::now().naive_utc(),
                     };
 
                 funding_rate_vec.push(funding_rate);
