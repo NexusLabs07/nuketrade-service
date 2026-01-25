@@ -6,6 +6,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use db::{crud::get_token_chart_info, types::FundingRate};
 use hyperliquid::apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo};
 use pacifica::apis::user::{
     AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse,
@@ -178,4 +179,20 @@ pub async fn get_tokens_funding(
         .collect();
 
     Ok(Json(response))
+}
+
+pub async fn get_token_chart(
+    Path(symbol): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<HashMap<String, Vec<FundingRate>>>, (StatusCode, String)> {
+    let rows = get_token_chart_info(state.db, symbol)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
+    for row in rows {
+        grouped.entry(row.platform.clone()).or_default().push(row);
+    }
+
+    Ok(Json(grouped))
 }

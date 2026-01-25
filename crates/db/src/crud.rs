@@ -296,3 +296,17 @@ pub async fn get_user_position(
 
     Ok(row.0)
 }
+
+pub async fn get_token_chart_info(
+    db_conn: Arc<PgPool>,
+    symbol: String,
+) -> Result<Vec<FundingRate>, anyhow::Error> {
+    let query = r#"SELECT * FROM funding_rate WHERE symbol = $1 ORDER BY created_at ASC"#;
+
+    let rows = sqlx::query_as::<_, FundingRate>(query)
+        .bind(symbol)
+        .fetch_all(&*db_conn)
+        .await?;
+
+    Ok(rows)
+}
