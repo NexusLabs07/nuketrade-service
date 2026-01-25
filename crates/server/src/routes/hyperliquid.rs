@@ -10,7 +10,7 @@ pub fn routes() -> axum::Router<AppState> {
         .route("/spot-metadata", get(get_spot_metadata))
         .route("/perp-metadata", get(get_perp_metadata))
         .route(
-            "/open-positions/{user_evm_adresss}",
+            "/open-positions/{user_evm_address}",
             get(get_user_open_positions),
         )
 }

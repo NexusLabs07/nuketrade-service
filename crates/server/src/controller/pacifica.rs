@@ -1,53 +1,41 @@
-use axum::{Json, extract::Path, http::StatusCode};
+use axum::{Json, extract::Path};
 use pacifica::apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse};
 
-use crate::types::OpenPositionsResponse;
+use crate::{error::AppError, types::OpenPositionsResponse};
 
 pub async fn get_user_open_positions(
     Path(user_solana_address): Path<String>,
-) -> Result<Json<Vec<OpenPositionsResponse>>, (StatusCode, String)> {
+) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
     let user_info_client = UserInfo::new(user_solana_address);
 
-    let open_positions: UserPositionsResponse = user_info_client
-        .get_open_positions()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let open_positions: UserPositionsResponse = user_info_client.get_open_positions().await?;
 
-    let account_setting: AccountSettingsResponse = user_info_client
-        .get_account_settings()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let account_setting: AccountSettingsResponse = user_info_client.get_account_settings().await?;
 
     let mut open_position_response: Vec<OpenPositionsResponse> = Vec::new();
 
-    if open_positions.data.is_none()
-        || open_positions.success == false
-        || account_setting.success == false
-        || account_setting.data.is_none()
-    {
+    let (Some(positions_data), Some(account_setting_data)) =
+        (open_positions.data, account_setting.data)
+    else {
+        return Ok(Json(open_position_response));
+    };
+
+    if !open_positions.success || !account_setting.success {
         return Ok(Json(open_position_response));
     }
 
-    let account_setting_data = account_setting.data.unwrap();
-
-    for asset_position in open_positions.data.unwrap().iter() {
-        let account_setting = account_setting_data
+    for asset_position in positions_data.iter() {
+        let leverage: u32 = account_setting_data
             .iter()
-            .find(|x| x.symbol == asset_position.symbol);
-
-        let leverage: u32 = {
-            if account_setting.is_some() {
-                account_setting.unwrap().leverage.try_into().unwrap()
-            } else {
-                0
-            }
-        };
+            .find(|x| x.symbol == asset_position.symbol)
+            .and_then(|s| s.leverage.try_into().ok())
+            .unwrap_or(0);
 
         open_position_response.push(OpenPositionsResponse {
             symbol: asset_position.symbol.clone(),
             size: asset_position.amount.clone(),
             pnl: String::from("0"), //TODO
-            margin: asset_position.margin.clone().unwrap(),
+            margin: asset_position.margin.clone().unwrap_or_default(),
             funding: asset_position.funding.clone(),
             leverage,
             liquidation_price: asset_position.liquidation_price.clone(),
