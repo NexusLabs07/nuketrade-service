@@ -236,7 +236,7 @@ async fn handle_ws_message(
                     (
                         m.symbol.to_string(),
                         m.mark.parse::<f64>().unwrap(),
-                        m.funding.parse::<f64>().unwrap() / 8.0,
+                        m.funding.parse::<f64>().unwrap(),
                     )
                 })
                 .collect();
