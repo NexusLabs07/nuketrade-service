@@ -1,4 +1,4 @@
-use core::types::PlatformsFundingRate;
+use core::types::LiveMarketFeed;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,7 +30,7 @@ const RATE_LIMIT_CLEANUP_THRESHOLD_SECS: u64 = 60;
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub db: Arc<PgPool>,
-    pub platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
+    pub live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 }
 
 fn get_client_ip(request: &Request<Body>) -> IpAddr {
@@ -115,13 +115,10 @@ fn get_cors_origins() -> Vec<HeaderValue> {
         .collect()
 }
 
-pub async fn run_server(
-    db: Arc<PgPool>,
-    platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
-) {
+pub async fn run_server(db: Arc<PgPool>, live_market_feed: Arc<RwLock<LiveMarketFeed>>) {
     let app_state = AppState {
         db,
-        platforms_funding_rate,
+        live_market_feed,
     };
 
     let cors = CorsLayer::new()

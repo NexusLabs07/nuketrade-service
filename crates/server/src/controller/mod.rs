@@ -1,5 +1,5 @@
 use axum::{Json, extract::State};
-use core::types::PlatformsFundingRate;
+use core::types::LiveMarketFeed;
 
 use crate::AppState;
 
@@ -12,7 +12,7 @@ pub async fn root() -> &'static str {
     "Perpetual Aggregator Server is running."
 }
 
-pub async fn get_funding_rate(State(state): State<AppState>) -> Json<PlatformsFundingRate> {
-    let snapshot = state.platforms_funding_rate.read().await;
+pub async fn get_live_market_feed(State(state): State<AppState>) -> Json<LiveMarketFeed> {
+    let snapshot = state.live_market_feed.read().await;
     Json(snapshot.clone())
 }

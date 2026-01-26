@@ -14,7 +14,7 @@ use tokio_tungstenite::{
 use uuid::Uuid;
 
 use crate::PACIFICA_WS_URL;
-use core::{funding::Dex, token_list::TOKEN_LIST, types::PlatformsFundingRate};
+use core::{funding::Dex, token_list::TOKEN_LIST, types::LiveMarketFeed};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,7 +39,7 @@ pub struct PriceData {
 
 pub async fn start_pacifica_funding_feed(
     db_conn: Arc<PgPool>,
-    platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
+    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) {
     const MAX_RETRIES: u32 = 3;
     let mut retry_count = 0;
@@ -115,9 +115,9 @@ pub async fn start_pacifica_funding_feed(
                     }
                 },
                 _ = state_tick.tick() => {
-                    let mut state = platforms_funding_rate.write().await;
-                    for (symbol, (funding, _)) in last_snapshot.iter() {
-                        state.pacifica.insert(symbol.clone(), *funding);
+                    let mut state = live_market_feed.write().await;
+                    for (symbol, (mark_px, funding)) in last_snapshot.iter() {
+                        state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
                     }
                 },
                 _ = db_tick.tick() => {
@@ -128,13 +128,13 @@ pub async fn start_pacifica_funding_feed(
 
                 let mut funding_rate_vec = Vec::new();
 
-                for (symbol, (funding, mark_px)) in last_snapshot.iter() {
+                for (symbol, (mark_px, funding)) in last_snapshot.iter() {
                     let funding_rate = FundingRate {
                         id: Uuid::new_v4(),
                         platform: Dex::Pacifica.to_string(),
                         symbol: symbol.clone(),
-                        rate: *funding,
                         mark_px: *mark_px,
+                        rate: *funding,
                     };
 
                 funding_rate_vec.push(funding_rate);
@@ -204,8 +204,8 @@ async fn handle_ws_message(
                 .map(|m| {
                     (
                         m.symbol.to_string(),
-                        m.funding.parse::<f64>().unwrap() / 8.0,
                         m.mark.parse::<f64>().unwrap(),
+                        m.funding.parse::<f64>().unwrap() / 8.0,
                     )
                 })
                 .collect();

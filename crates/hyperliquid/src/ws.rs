@@ -10,12 +10,12 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use uuid::Uuid;
 
 use crate::{HYPERLIQUID_WS_URL, types::ActiveAssetCtxMsg};
-use core::{funding::Dex, token_list::TOKEN_LIST, types::PlatformsFundingRate};
+use core::{funding::Dex, token_list::TOKEN_LIST, types::LiveMarketFeed};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub async fn start_hl_funding_feed(
     db_conn: Arc<PgPool>,
-    platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
+    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) {
     const MAX_RETRIES: u32 = 3;
     let mut retry_count = 0;
@@ -74,11 +74,11 @@ pub async fn start_hl_funding_feed(
                 match msg_res {
                     Ok(msg) => {
                         let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
-                        if let Some((symbol, funding, mark_px)) = new_snapshot {
+                        if let Some((symbol, mark_px, funding)) = new_snapshot {
 
                             log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
                             last_update = Instant::now();
-                            last_snapshot.insert(symbol, (funding, mark_px));
+                            last_snapshot.insert(symbol, (mark_px, funding));
                         }
                         if !keep_alive {
                             log::warn!("Connection failed with Hyperliquid WS. Crashing program...");
@@ -91,9 +91,9 @@ pub async fn start_hl_funding_feed(
                 }
             },
             _ = state_tick.tick() => {
-                let mut state = platforms_funding_rate.write().await;
-                for(symbol, (funding, _)) in last_snapshot.iter() {
-                    state.hyperliquid.insert(symbol.clone(), *funding);
+                let mut state = live_market_feed.write().await;
+                for(symbol, (mark_px, funding)) in last_snapshot.iter() {
+                    state.hyperliquid.insert(symbol.clone(), (*mark_px, *funding));
                 }
             },
             _ = db_tick.tick() => {
@@ -105,7 +105,7 @@ pub async fn start_hl_funding_feed(
                 let mut funding_rate_vec = Vec::new();
 
 
-                for (symbol, (funding, mark_px)) in last_snapshot.iter() {
+                for (symbol, (mark_px, funding)) in last_snapshot.iter() {
                     let funding_rate = FundingRate {
                         id: Uuid::new_v4(),
                         platform: Dex::Hyperliquid.to_string(),
@@ -167,7 +167,7 @@ async fn handle_ws_message(
                 Err(_) => return (true, None),
             };
 
-            (true, Some((coin, funding_hr, mark_px)))
+            (true, Some((coin, mark_px, funding_hr)))
         }
 
         _ => (true, None),

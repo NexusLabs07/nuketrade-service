@@ -2,7 +2,7 @@ use axum::routing::get;
 
 use crate::{
     AppState,
-    controller::aggregated::{get_merged_open_positions, get_token_chart, get_tokens_funding},
+    controller::aggregated::{get_live_market_feed, get_merged_open_positions, get_token_chart},
 };
 
 pub fn routes() -> axum::Router<AppState> {
@@ -12,5 +12,5 @@ pub fn routes() -> axum::Router<AppState> {
             get(get_merged_open_positions),
         )
         .route("/token/chart/{symbol}", get(get_token_chart))
-        .route("/tokens/funding", get(get_tokens_funding))
+        .route("/live/market-feed", get(get_live_market_feed))
 }

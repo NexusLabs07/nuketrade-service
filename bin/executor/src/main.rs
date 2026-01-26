@@ -1,4 +1,4 @@
-use core::types::PlatformsFundingRate;
+use core::types::LiveMarketFeed;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to connect with DB")?;
 
-    let platforms_funding_rate = Arc::new(RwLock::new(PlatformsFundingRate {
+    let live_market_feed = Arc::new(RwLock::new(LiveMarketFeed {
         hyperliquid: HashMap::new(),
         lighter: HashMap::new(),
         pacifica: HashMap::new(),
@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     //     .await;
     // });
 
-    run_server(db, platforms_funding_rate).await;
+    run_server(db, live_market_feed).await;
 
     Ok(())
 }

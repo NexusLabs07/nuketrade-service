@@ -24,17 +24,18 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
+//Market feeed with price and funding rate
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct FundingRateStruct {
-    hyperliquid_funding_rate: Option<f64>,
-    pacifica_funding_rate: Option<f64>,
+struct MarketFeedStruct {
+    hyperliquid: Option<(f64, f64)>,
+    pacifica: Option<(f64, f64)>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TokenInfoResponse {
+pub struct LiveMarketFeedResponse {
     pub symbol: String,
-    pub hyperliquid: Option<f64>,
-    pub pacifica: Option<f64>,
+    pub hyperliquid: Option<(f64, f64)>,
+    pub pacifica: Option<(f64, f64)>,
 }
 
 pub async fn get_merged_open_positions(
@@ -142,33 +143,28 @@ pub async fn get_merged_open_positions(
     Ok(Json(merged_positions))
 }
 
-pub async fn get_tokens_funding(
+pub async fn get_live_market_feed(
     State(state): State<AppState>,
-) -> Result<Json<Vec<TokenInfoResponse>>, AppError> {
-    let funding_rate = state.platforms_funding_rate.read().await;
+) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
+    let live_market_feed = state.live_market_feed.read().await.clone();
 
-    let mut tokens: HashMap<String, FundingRateStruct> = HashMap::new();
+    let mut market_feed: HashMap<String, MarketFeedStruct> = HashMap::new();
 
-    for (symbol, rate) in funding_rate.hyperliquid.iter() {
-        tokens
-            .entry(symbol.clone())
-            .or_default()
-            .hyperliquid_funding_rate = Some(*rate);
+    for (symbol, (mark_px, funding_rate)) in live_market_feed.hyperliquid.iter() {
+        market_feed.entry(symbol.clone()).or_default().hyperliquid =
+            Some((*mark_px, *funding_rate));
     }
 
-    for (symbol, rate) in funding_rate.pacifica.iter() {
-        tokens
-            .entry(symbol.clone())
-            .or_default()
-            .pacifica_funding_rate = Some(*rate);
+    for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
+        market_feed.entry(symbol.clone()).or_default().pacifica = Some((*mark_px, *funding_rate));
     }
 
-    let response: Vec<TokenInfoResponse> = tokens
+    let response: Vec<LiveMarketFeedResponse> = market_feed
         .into_iter()
-        .map(|(symbol, rate)| TokenInfoResponse {
+        .map(|(symbol, market_feed)| LiveMarketFeedResponse {
             symbol,
-            hyperliquid: rate.hyperliquid_funding_rate,
-            pacifica: rate.pacifica_funding_rate,
+            hyperliquid: market_feed.hyperliquid,
+            pacifica: market_feed.pacifica,
         })
         .collect();
 
