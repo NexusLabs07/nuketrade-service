@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-use crate::controller::{get_funding_rate, root};
+use crate::controller::root;
 
 pub mod controller;
 pub mod error;
@@ -81,9 +81,7 @@ async fn rate_limit_middleware(
     let mut requests = IP_REQUESTS.write().await;
 
     // Periodically clean up stale IP entries to prevent memory leak
-    requests.retain(|_, timestamps| {
-        timestamps.last().is_some_and(|&t| t > cleanup_threshold)
-    });
+    requests.retain(|_, timestamps| timestamps.last().is_some_and(|&t| t > cleanup_threshold));
 
     let timestamps = requests.entry(client_ip).or_default();
 
@@ -141,7 +139,6 @@ pub async fn run_server(
         .nest("/hyperliquid", routes::hyperliquid::routes())
         .nest("/pacifica", routes::pacifica::routes())
         .nest("/aggregated", routes::aggregated::routes())
-        .route("/funding-rate", get(get_funding_rate))
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
