@@ -1,3 +1,4 @@
+use chrono::Utc;
 use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
@@ -121,6 +122,7 @@ pub async fn start_lighter_funding_feed(
                         symbol: symbol.clone(),
                         rate: *funding,
                         mark_px: *mark_px,
+                        timestamp: Utc::now().naive_utc(),
                     };
 
                 funding_rate_vec.push(funding_rate);

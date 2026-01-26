@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -46,8 +47,8 @@ pub async fn start_pacifica_funding_feed(
 
     let ws_config = WebSocketConfig::default();
 
-    // Preserve state across reconnections
-    let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
+    // Preserve state across reconnections: (mark_px, funding, timestamp)
+    let mut last_snapshot: HashMap<String, (f64, f64, i64)> = HashMap::new();
     let mut last_update = Instant::now();
 
     // Outer reconnection loop - handles 24-hour disconnects and other connection failures
@@ -120,7 +121,7 @@ pub async fn start_pacifica_funding_feed(
                                 log::info!("Received new snapshot from Pacifica: {:?}", snapshot);
                                 last_update = Instant::now();
                                 for item in snapshot.into_iter() {
-                                    last_snapshot.insert(item.0, (item.1, item.2));
+                                    last_snapshot.insert(item.0, (item.1, item.2, item.3));
                                 }
                             }
                             if !keep_alive {
@@ -136,7 +137,7 @@ pub async fn start_pacifica_funding_feed(
                 },
                 _ = state_tick.tick() => {
                     let mut state = live_market_feed.write().await;
-                    for (symbol, (mark_px, funding)) in last_snapshot.iter() {
+                    for (symbol, (mark_px, funding, _)) in last_snapshot.iter() {
                         state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
                     }
                 },
@@ -148,13 +149,17 @@ pub async fn start_pacifica_funding_feed(
 
                     let mut funding_rate_vec = Vec::new();
 
-                    for (symbol, (mark_px, funding)) in last_snapshot.iter() {
+                    for (symbol, (mark_px, funding, timestamp)) in last_snapshot.iter() {
+                        let timestamp = DateTime::from_timestamp_millis(*timestamp)
+                            .unwrap_or_else(|| DateTime::from_timestamp(*timestamp, 0).unwrap())
+                            .naive_utc();
                         let funding_rate = FundingRate {
                             id: Uuid::new_v4(),
                             platform: Dex::Pacifica.to_string(),
                             symbol: symbol.clone(),
                             mark_px: *mark_px,
                             rate: *funding,
+                            timestamp,
                         };
 
                         funding_rate_vec.push(funding_rate);
@@ -198,7 +203,7 @@ async fn handle_ws_message(
         >,
         Message,
     >,
-) -> (bool, Option<Vec<(String, f64, f64)>>) {
+) -> (bool, Option<Vec<(String, f64, f64, i64)>>) {
     log::debug!("Received WS message: {:?}", msg);
 
     match msg {
@@ -253,7 +258,7 @@ async fn handle_ws_message(
                 }
             };
 
-            let tracked_tokens: Vec<(String, f64, f64)> = parsed
+            let tracked_tokens: Vec<(String, f64, f64, i64)> = parsed
                 .data
                 .into_iter()
                 .filter(|x| TOKEN_LIST.iter().any(|t| &x.symbol == t))
@@ -262,6 +267,7 @@ async fn handle_ws_message(
                         m.symbol.to_string(),
                         m.mark.parse::<f64>().unwrap(),
                         m.funding.parse::<f64>().unwrap(),
+                        m.timestamp,
                     )
                 })
                 .collect();

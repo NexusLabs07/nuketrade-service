@@ -194,8 +194,8 @@ pub async fn insert_funding_rate(
     funding_rate: FundingRate,
 ) -> Result<uuid::Uuid, anyhow::Error> {
     let query = r#"
-        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6)
     "#;
 
     sqlx::query(query)
@@ -204,6 +204,7 @@ pub async fn insert_funding_rate(
         .bind(funding_rate.symbol)
         .bind(funding_rate.rate)
         .bind(funding_rate.mark_px)
+        .bind(funding_rate.timestamp)
         .execute(&*db_conn)
         .await?;
 
@@ -221,8 +222,8 @@ pub async fn insert_funding_rates(
     let mut tx = db_conn.begin().await?;
 
     let query = r#"
-        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO funding_rate (id, platform, symbol, rate, mark_px, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6)
     "#;
 
     let mut count = 0;
@@ -233,6 +234,7 @@ pub async fn insert_funding_rates(
             .bind(funding_rate.symbol)
             .bind(funding_rate.rate)
             .bind(funding_rate.mark_px)
+            .bind(funding_rate.timestamp)
             .execute(&mut *tx)
             .await?;
         count += 1;
@@ -299,7 +301,7 @@ pub async fn get_token_chart_info(
     db_conn: Arc<PgPool>,
     symbol: String,
 ) -> Result<Vec<FundingRate>, anyhow::Error> {
-    let query = r#"SELECT id, platform, symbol, rate, mark_px FROM funding_rate WHERE symbol = $1 ORDER BY created_at ASC"#;
+    let query = r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY created_at ASC"#;
 
     let rows = sqlx::query_as::<_, FundingRate>(query)
         .bind(symbol)

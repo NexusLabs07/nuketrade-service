@@ -29,7 +29,7 @@ tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
 futures-util = "0.3"
 anyhow = "1"
 core = { path = "../core" }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 log = { version = "0.4.28", features = ["kv_serde"]}
 tracing = "0.1"
 tracing-subscriber = "0.3.22"

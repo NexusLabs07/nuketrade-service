@@ -8,6 +8,7 @@ pub struct FundingRate {
     pub symbol: String,
     pub rate: f64,
     pub mark_px: f64,
+    pub timestamp: chrono::NaiveDateTime,
 }
 
 #[derive(Debug, Clone)]
