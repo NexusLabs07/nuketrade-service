@@ -42,61 +42,76 @@ pub async fn start_pacifica_funding_feed(
     live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) {
     const MAX_RETRIES: u32 = 3;
-    let mut retry_count = 0;
+    const RECONNECT_DELAY_SECS: u64 = 5;
 
     let ws_config = WebSocketConfig::default();
 
-    let ws_stream = loop {
-        match connect_async_with_config(PACIFICA_WS_URL, Some(ws_config.clone()), true).await {
-            Ok((ws_stream, _)) => break ws_stream,
-            Err(e) => {
-                retry_count += 1;
-                log::error!(
-                    "Error connecting to Pacifica WS (attempt {}/{}): {}",
-                    retry_count,
-                    MAX_RETRIES,
-                    e
-                );
-
-                if retry_count >= MAX_RETRIES {
-                    log::error!("Max retries reached. Exiting Pacifica feed.");
-                    return;
-                }
-
-                log::info!("Retrying in 5 seconds...");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            }
-        }
-    };
-
-    log::info!("Connected to Pacifica WS");
-
-    let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
-    let mut state_tick = interval(Duration::from_secs(5));
-    let mut ping_tick = interval_at(
-        Instant::now() + Duration::from_secs(30),
-        Duration::from_secs(30),
-    );
-
+    // Preserve state across reconnections
     let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
     let mut last_update = Instant::now();
 
-    let (mut write, mut read) = ws_stream.split();
-
-    let sub = json!({
-        "method": "subscribe",
-        "params": {
-            "source": "prices"
-        }
-    });
-
-    match write.send(sub.to_string().into()).await {
-        Ok(_) => log::info!("Pacifica: Subscribed to market states"),
-        Err(e) => log::error!("Error subscribing to market stats: {}", e),
-    };
-
+    // Outer reconnection loop - handles 24-hour disconnects and other connection failures
     loop {
-        tokio::select! {
+        let mut retry_count = 0;
+
+        let ws_stream = loop {
+            match connect_async_with_config(PACIFICA_WS_URL, Some(ws_config.clone()), true).await {
+                Ok((ws_stream, _)) => break ws_stream,
+                Err(e) => {
+                    retry_count += 1;
+                    log::error!(
+                        "Error connecting to Pacifica WS (attempt {}/{}): {}",
+                        retry_count,
+                        MAX_RETRIES,
+                        e
+                    );
+
+                    if retry_count >= MAX_RETRIES {
+                        log::error!(
+                            "Max retries reached. Waiting {} seconds before retry cycle...",
+                            RECONNECT_DELAY_SECS * 2
+                        );
+                        tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS * 2)).await;
+                        retry_count = 0;
+                        continue;
+                    }
+
+                    log::info!("Retrying in {} seconds...", RECONNECT_DELAY_SECS);
+                    tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
+                }
+            }
+        };
+
+        log::info!("Connected to Pacifica WS");
+
+        let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
+        let mut state_tick = interval(Duration::from_secs(5));
+        let mut ping_tick = interval_at(
+            Instant::now() + Duration::from_secs(30),
+            Duration::from_secs(30),
+        );
+
+        let (mut write, mut read) = ws_stream.split();
+
+        let sub = json!({
+            "method": "subscribe",
+            "params": {
+                "source": "prices"
+            }
+        });
+
+        match write.send(sub.to_string().into()).await {
+            Ok(_) => log::info!("Pacifica: Subscribed to market states"),
+            Err(e) => {
+                log::error!("Error subscribing to market stats: {}. Reconnecting...", e);
+                tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
+                continue;
+            }
+        };
+
+        // Inner message loop - runs until connection drops
+        let should_reconnect = loop {
+            tokio::select! {
                 Some(msg_res) = read.next() => {
                     match msg_res {
                         Ok(msg) => {
@@ -109,12 +124,13 @@ pub async fn start_pacifica_funding_feed(
                                 }
                             }
                             if !keep_alive {
-                                log::warn!("Connection failed with Pacifica WS. Crashing program...");
-                                std::process::exit(1);
+                                log::warn!("Pacifica WS connection closed. Reconnecting...");
+                                break true;
                             }
                         },
                         Err(e) => {
-                            log::error!("Pacifica WS read error: {}", e);
+                            log::error!("Pacifica WS read error: {}. Reconnecting...", e);
+                            break true;
                         }
                     }
                 },
@@ -130,38 +146,47 @@ pub async fn start_pacifica_funding_feed(
                         continue;
                     }
 
-                let mut funding_rate_vec = Vec::new();
+                    let mut funding_rate_vec = Vec::new();
 
-                for (symbol, (mark_px, funding)) in last_snapshot.iter() {
-                    let funding_rate = FundingRate {
-                        id: Uuid::new_v4(),
-                        platform: Dex::Pacifica.to_string(),
-                        symbol: symbol.clone(),
-                        mark_px: *mark_px,
-                        rate: *funding,
-                    };
+                    for (symbol, (mark_px, funding)) in last_snapshot.iter() {
+                        let funding_rate = FundingRate {
+                            id: Uuid::new_v4(),
+                            platform: Dex::Pacifica.to_string(),
+                            symbol: symbol.clone(),
+                            mark_px: *mark_px,
+                            rate: *funding,
+                        };
 
-                funding_rate_vec.push(funding_rate);
-            }
-
-            let db = db_conn.clone();
-
-            tokio::spawn(async move {
-                    if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
-                        log::warn!("DB insert failed: {:?}", e);
+                        funding_rate_vec.push(funding_rate);
                     }
-            });
 
-            },
-            _ = ping_tick.tick() => {
-                let ping_msg = json!({"method": "ping"});
-                if let Err(e) = write.send(Message::Text(ping_msg.to_string().into())).await {
-                    log::error!("Failed to send heartbeat ping: {}", e);
-                } else {
-                    log::info!("Sent heartbeat ping to Pacifica");
+                    let db = db_conn.clone();
+
+                    tokio::spawn(async move {
+                        if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
+                            log::warn!("DB insert failed: {:?}", e);
+                        }
+                    });
+                },
+                _ = ping_tick.tick() => {
+                    let ping_msg = json!({"method": "ping"});
+                    if let Err(e) = write.send(Message::Text(ping_msg.to_string().into())).await {
+                        log::error!("Failed to send heartbeat ping: {}. Reconnecting...", e);
+                        break true;
+                    } else {
+                        log::info!("Sent heartbeat ping to Pacifica");
+                    }
                 }
-            }
+            };
         };
+
+        if should_reconnect {
+            log::info!(
+                "Waiting {} seconds before reconnecting to Pacifica...",
+                RECONNECT_DELAY_SECS
+            );
+            tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
+        }
     }
 }
 
