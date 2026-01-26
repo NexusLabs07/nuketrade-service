@@ -11,6 +11,6 @@ pub fn routes() -> axum::Router<AppState> {
             "/open-positions/{user_evm_address}/{user_solana_address}",
             get(get_merged_open_positions),
         )
-        .route("/token/chart/{symbol}", get(get_token_chart))
+        .route("/chart/{symbol}", get(get_token_chart))
         .route("/live/market-feed", get(get_live_market_feed))
 }
