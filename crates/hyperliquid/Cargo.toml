@@ -27,3 +27,4 @@ sha3 = "0.10"
 hex = "0.4"
 ethers = { version = "2.0", features = ["abigen", "ws"] }
 thiserror = "2.0"
+once_cell = "1.19"

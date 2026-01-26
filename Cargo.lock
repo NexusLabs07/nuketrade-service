@@ -2006,6 +2006,7 @@ dependencies = [
  "futures-util",
  "hex",
  "log",
+ "once_cell",
  "reqwest 0.12.28",
  "rmp-serde",
  "serde",

@@ -6,9 +6,13 @@ use axum::{
     extract::{Path, State},
 };
 use db::{crud::get_token_chart_info, types::FundingRate};
-use hyperliquid::apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo};
-use pacifica::apis::user::{
-    AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse,
+use hyperliquid::{
+    apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
+    helpers::markets::MARKETS as HL_MARKETS,
+};
+use pacifica::{
+    apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
+    helpers::markets::MARKETS,
 };
 use serde::{Deserialize, Serialize};
 
@@ -24,18 +28,25 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct MarketFeedValueStruct {
+    pub mark_px: Option<f64>,
+    pub funding: Option<f64>,
+    pub max_leverage: Option<u32>,
+}
+
 //Market feeed with price and funding rate
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct MarketFeedStruct {
-    hyperliquid: Option<(f64, f64)>,
-    pacifica: Option<(f64, f64)>,
+    hyperliquid: MarketFeedValueStruct,
+    pacifica: MarketFeedValueStruct,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LiveMarketFeedResponse {
     pub symbol: String,
-    pub hyperliquid: Option<(f64, f64)>,
-    pub pacifica: Option<(f64, f64)>,
+    pub hyperliquid: Option<MarketFeedValueStruct>,
+    pub pacifica: Option<MarketFeedValueStruct>,
 }
 
 pub async fn get_merged_open_positions(
@@ -151,20 +162,49 @@ pub async fn get_live_market_feed(
     let mut market_feed: HashMap<String, MarketFeedStruct> = HashMap::new();
 
     for (symbol, (mark_px, funding_rate)) in live_market_feed.hyperliquid.iter() {
-        market_feed.entry(symbol.clone()).or_default().hyperliquid =
-            Some((*mark_px, *funding_rate));
+        let max_leverage = HL_MARKETS
+            .iter()
+            .find(|x| x.name == *symbol)
+            .map(|x| x.max_leverage);
+
+        market_feed.entry(symbol.clone()).or_default().hyperliquid = MarketFeedValueStruct {
+            mark_px: Some(*mark_px),
+            funding: Some(*funding_rate),
+            max_leverage,
+        };
     }
 
     for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
-        market_feed.entry(symbol.clone()).or_default().pacifica = Some((*mark_px, *funding_rate));
+        let max_leverage = MARKETS
+            .iter()
+            .find(|x| x.symbol == symbol)
+            .map(|x| x.max_leverage);
+
+        market_feed.entry(symbol.clone()).or_default().pacifica = MarketFeedValueStruct {
+            mark_px: Some(*mark_px),
+            funding: Some(*funding_rate),
+            max_leverage,
+        };
     }
 
     let response: Vec<LiveMarketFeedResponse> = market_feed
         .into_iter()
-        .map(|(symbol, market_feed)| LiveMarketFeedResponse {
-            symbol,
-            hyperliquid: market_feed.hyperliquid,
-            pacifica: market_feed.pacifica,
+        .map(|(symbol, market_feed)| {
+            let hyperliquid = if market_feed.hyperliquid.mark_px.is_some() {
+                Some(market_feed.hyperliquid)
+            } else {
+                None
+            };
+            let pacifica = if market_feed.pacifica.mark_px.is_some() {
+                Some(market_feed.pacifica)
+            } else {
+                None
+            };
+            LiveMarketFeedResponse {
+                symbol,
+                hyperliquid,
+                pacifica,
+            }
         })
         .collect();
 
