@@ -73,6 +73,7 @@ pub async fn start_pacifica_funding_feed(
 
     let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
     let mut state_tick = interval(Duration::from_secs(5));
+    let mut ping_tick = interval(Duration::from_secs(30));
 
     let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
     let mut last_update = Instant::now();
@@ -148,6 +149,14 @@ pub async fn start_pacifica_funding_feed(
                     }
             });
 
+            },
+            _ = ping_tick.tick() => {
+                let ping_msg = json!({"method": "ping"});
+                if let Err(e) = write.send(Message::Text(ping_msg.to_string().into())).await {
+                    log::error!("Failed to send heartbeat ping: {}", e);
+                } else {
+                    log::debug!("Sent heartbeat ping to Pacifica");
+                }
             }
         };
     }
@@ -192,6 +201,13 @@ async fn handle_ws_message(
                 }
                 return (true, None);
             }
+
+            // Handle heartbeat pong response
+            if text.contains(r#""channel":"pong""#) || text.contains(r#""channel": "pong""#) {
+                log::debug!("Received heartbeat pong from Pacifica");
+                return (true, None);
+            }
+
             let parsed: PricesMessage = match serde_json::from_str(text.as_str()) {
                 Ok(v) => v,
                 Err(_) => return (true, None),
