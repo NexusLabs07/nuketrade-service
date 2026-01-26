@@ -107,7 +107,13 @@ pub async fn get_merged_open_positions(
                         .as_ref()
                         .and_then(|settings| settings.iter().find(|x| x.symbol == symbol))
                         .map(|s| s.leverage as u32)
-                        .unwrap_or(0);
+                        .unwrap_or(
+                            MARKETS
+                                .iter()
+                                .find(|x| x.symbol == symbol)
+                                .map(|s| s.max_leverage as u32)
+                                .unwrap_or_default(),
+                        );
 
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
