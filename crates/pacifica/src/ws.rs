@@ -5,7 +5,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use tokio::{
     sync::RwLock,
-    time::{Instant, interval},
+    time::{Instant, interval, interval_at},
 };
 use tokio_tungstenite::{
     connect_async_with_config,
@@ -73,7 +73,10 @@ pub async fn start_pacifica_funding_feed(
 
     let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
     let mut state_tick = interval(Duration::from_secs(5));
-    let mut ping_tick = interval(Duration::from_secs(30));
+    let mut ping_tick = interval_at(
+        Instant::now() + Duration::from_secs(30),
+        Duration::from_secs(30),
+    );
 
     let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
     let mut last_update = Instant::now();
@@ -155,7 +158,7 @@ pub async fn start_pacifica_funding_feed(
                 if let Err(e) = write.send(Message::Text(ping_msg.to_string().into())).await {
                     log::error!("Failed to send heartbeat ping: {}", e);
                 } else {
-                    log::debug!("Sent heartbeat ping to Pacifica");
+                    log::info!("Sent heartbeat ping to Pacifica");
                 }
             }
         };
@@ -202,15 +205,27 @@ async fn handle_ws_message(
                 return (true, None);
             }
 
-            // Handle heartbeat pong response
+            // Handle heartbeat pong response - re-subscribe to get fresh snapshot
             if text.contains(r#""channel":"pong""#) || text.contains(r#""channel": "pong""#) {
-                log::debug!("Received heartbeat pong from Pacifica");
+                log::info!("Received heartbeat pong from Pacifica, re-subscribing...");
+                let resub = json!({
+                    "method": "subscribe",
+                    "params": {
+                        "source": "prices"
+                    }
+                });
+                if let Err(e) = write.send(Message::Text(resub.to_string().into())).await {
+                    log::error!("Failed to re-subscribe after pong: {}", e);
+                }
                 return (true, None);
             }
 
             let parsed: PricesMessage = match serde_json::from_str(text.as_str()) {
                 Ok(v) => v,
-                Err(_) => return (true, None),
+                Err(e) => {
+                    log::warn!("Failed to parse Pacifica message: {} - raw: {}", e, text);
+                    return (true, None);
+                }
             };
 
             let tracked_tokens: Vec<(String, f64, f64)> = parsed
