@@ -77,7 +77,7 @@ pub async fn start_hl_funding_feed(
                         let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
                         if let Some((symbol, mark_px, funding)) = new_snapshot {
 
-                            log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
+                            // log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
                             last_update = Instant::now();
                             last_snapshot.insert(symbol, (mark_px, funding));
                         }

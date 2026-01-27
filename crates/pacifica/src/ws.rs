@@ -118,7 +118,7 @@ pub async fn start_pacifica_funding_feed(
                         Ok(msg) => {
                             let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
                             if let Some(snapshot) = new_snapshot {
-                                log::info!("Received new snapshot from Pacifica: {:?}", snapshot);
+                                // log::info!("Received new snapshot from Pacifica: {:?}", snapshot);
                                 last_update = Instant::now();
                                 for item in snapshot.into_iter() {
                                     last_snapshot.insert(item.0, (item.1, item.2, item.3));

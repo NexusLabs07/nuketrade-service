@@ -116,21 +116,21 @@ pub async fn get_merged_open_positions(
                                 .unwrap_or_default(),
                         );
 
+                    let current_feed = state
+                        .live_market_feed
+                        .read()
+                        .await
+                        .pacifica
+                        .get(&asset_position.symbol)
+                        .cloned()
+                        .unwrap_or_default();
+
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
                     } else {
                         let value = match asset_position.amount.parse::<f64>().ok() {
                             Some(amt) if leverage > 0 => {
-                                let current_state = state
-                                    .live_market_feed
-                                    .read()
-                                    .await
-                                    .pacifica
-                                    .get(&symbol)
-                                    .copied()
-                                    .unwrap_or_default();
-
-                                (amt * current_state.0 / leverage as f64).to_string()
+                                (amt * current_feed.0 / leverage as f64).to_string()
                             }
                             _ => "0".to_string(),
                         };
@@ -138,10 +138,19 @@ pub async fn get_merged_open_positions(
                         value
                     };
 
+                    let pnl: f64 = if current_feed.0 != 0.0 {
+                        let entry_price = asset_position.entry_price.parse::<f64>().unwrap_or(0.0);
+                        let amount = asset_position.amount.parse::<f64>().unwrap_or(0.0);
+
+                        (current_feed.0 - entry_price) * amount
+                    } else {
+                        0.0
+                    };
+
                     let pacifica_position = OpenPositionsResponse {
                         symbol: symbol.clone(),
                         size: asset_position.amount.clone(),
-                        pnl: String::from("0"), //TODO
+                        pnl: pnl.to_string(),
                         funding: asset_position.funding.clone(),
                         leverage,
                         margin,
