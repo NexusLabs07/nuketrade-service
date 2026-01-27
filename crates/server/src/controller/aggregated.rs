@@ -51,6 +51,7 @@ pub struct LiveMarketFeedResponse {
 
 pub async fn get_merged_open_positions(
     Path(params): Path<MergedPositionsParams>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
@@ -118,18 +119,23 @@ pub async fn get_merged_open_positions(
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
                     } else {
-                        asset_position
-                            .amount
-                            .parse::<f64>()
-                            .ok()
-                            .map(|amt| {
-                                if leverage > 0 {
-                                    (amt / leverage as f64).to_string()
-                                } else {
-                                    "0".to_string()
-                                }
-                            })
-                            .unwrap_or_else(|| "0".to_string())
+                        let value = match asset_position.amount.parse::<f64>().ok() {
+                            Some(amt) if leverage > 0 => {
+                                let current_state = state
+                                    .live_market_feed
+                                    .read()
+                                    .await
+                                    .pacifica
+                                    .get(&symbol)
+                                    .copied()
+                                    .unwrap_or_default();
+
+                                (amt * current_state.0 / leverage as f64).to_string()
+                            }
+                            _ => "0".to_string(),
+                        };
+
+                        value
                     };
 
                     let pacifica_position = OpenPositionsResponse {
