@@ -1,9 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Side {
+    Long,
+    Short,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenPositionsResponse {
     pub symbol: String,
     pub size: String,
+    pub side: Side,
     pub pnl: String,
     pub funding: String,
     pub margin: String,

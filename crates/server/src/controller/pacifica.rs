@@ -4,7 +4,11 @@ use axum::{
 };
 use pacifica::apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse};
 
-use crate::{AppState, error::AppError, types::OpenPositionsResponse};
+use crate::{
+    AppState,
+    error::AppError,
+    types::{OpenPositionsResponse, Side},
+};
 
 pub async fn get_user_open_positions(
     Path(user_solana_address): Path<String>,
@@ -68,7 +72,16 @@ pub async fn get_user_open_positions(
         open_position_response.push(OpenPositionsResponse {
             symbol: asset_position.symbol.clone(),
             size: asset_position.amount.clone(),
-            pnl: pnl.to_string(),
+            side: if asset_position.side == "bid" {
+                Side::Long
+            } else {
+                Side::Short
+            },
+            pnl: if asset_position.side == "ask" {
+                (-pnl).to_string()
+            } else {
+                pnl.to_string()
+            },
             margin,
             funding: asset_position.funding.clone(),
             leverage,

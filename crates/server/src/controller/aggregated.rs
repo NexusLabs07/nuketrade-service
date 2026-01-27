@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     error::AppError,
-    types::{MergedPositionResponse, OpenPositionsResponse},
+    types::{MergedPositionResponse, OpenPositionsResponse, Side},
 };
 
 #[derive(Deserialize)]
@@ -73,10 +73,20 @@ pub async fn get_merged_open_positions(
         for asset_position in hl_positions.asset_positions.iter() {
             let pos = &asset_position.position;
             let symbol = pos.coin.clone();
+            let side = if pos.szi.parse::<f64>().unwrap() > 0.0 {
+                Side::Long
+            } else {
+                Side::Short
+            };
 
             let hl_position = OpenPositionsResponse {
                 symbol: symbol.clone(),
-                size: pos.szi.clone(),
+                size: if side == Side::Short {
+                    (-pos.szi.parse::<f64>().unwrap()).to_string().clone()
+                } else {
+                    pos.szi.clone()
+                },
+                side,
                 margin: pos.margin_used.clone(),
                 pnl: pos.unrealized_pnl.clone(),
                 funding: pos.cum_funding.all_time.clone(),
@@ -150,7 +160,16 @@ pub async fn get_merged_open_positions(
                     let pacifica_position = OpenPositionsResponse {
                         symbol: symbol.clone(),
                         size: asset_position.amount.clone(),
-                        pnl: pnl.to_string(),
+                        side: if asset_position.side == "bid" {
+                            Side::Long
+                        } else {
+                            Side::Short
+                        },
+                        pnl: if asset_position.side == "ask" {
+                            (-pnl).to_string()
+                        } else {
+                            pnl.to_string()
+                        },
                         funding: asset_position.funding.clone(),
                         leverage,
                         margin,
