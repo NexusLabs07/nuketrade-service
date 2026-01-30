@@ -3035,6 +3035,8 @@ name = "pacifica"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "bincode",
  "chrono",
  "core",
  "db",
@@ -3046,8 +3048,11 @@ dependencies = [
  "serde_with",
  "solana-instruction",
  "solana-keypair",
+ "solana-message",
  "solana-pubkey",
  "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-signer",
  "solana-transaction",
  "spl-associated-token-account-client",
  "sqlx",

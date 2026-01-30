@@ -19,115 +19,126 @@ pub async fn start_hl_funding_feed(
     live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) {
     const MAX_RETRIES: u32 = 3;
-    let mut retry_count = 0;
-
-    let ws_stream = loop {
-        match connect_async(HYPERLIQUID_WS_URL).await {
-            Ok((ws_stream, _)) => break ws_stream,
-            Err(e) => {
-                retry_count += 1;
-                log::error!(
-                    "Error connecting to Hyperliquid WS (attempt {}/{}): {}",
-                    retry_count,
-                    MAX_RETRIES,
-                    e
-                );
-
-                if retry_count >= MAX_RETRIES {
-                    log::error!("Max retries reached. Exiting Hyperliquid feed.");
-                    return;
-                }
-
-                log::info!("Retrying in 60 seconds...");
-                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            }
-        }
-    };
-
-    log::info!("Connected to Hyperliquid WS");
-
-    let mut db_tick = interval(Duration::from_secs(30 * 60));
-    let mut state_tick = interval(Duration::from_secs(5));
-
     let mut last_snapshot: HashMap<String, (f64, f64)> = HashMap::new();
-    let mut last_update = Instant::now();
-
-    let (mut write, mut read) = ws_stream.split();
-
-    for i in 0..TOKEN_LIST.len() {
-        let sub = json!({
-            "method": "subscribe",
-            "subscription": {
-                "type": "activeAssetCtx",
-                "coin": TOKEN_LIST[i]
-            }
-        });
-
-        match write.send(sub.to_string().into()).await {
-            Ok(_) => log::info!("Subscribed to {}", TOKEN_LIST[i]),
-            Err(e) => log::error!("Error subscribing to {}: {}", TOKEN_LIST[i], e),
-        };
-    }
 
     loop {
-        tokio::select! {
-            Some(msg_res) = read.next() => {
-                match msg_res {
-                    Ok(msg) => {
-                        let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
-                        if let Some((symbol, mark_px, funding)) = new_snapshot {
+        let mut retry_count = 0;
 
-                            log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
-                            last_update = Instant::now();
-                            last_snapshot.insert(symbol, (mark_px, funding));
-                        }
-                        if !keep_alive {
-                            log::warn!("Connection failed with Hyperliquid WS. Crashing program...");
-                            std::process::exit(1);
-                        }
-                    },
-                    Err(e) => {
-                        log::error!("Hyperliquid WS read error: {}", e);
+        let ws_stream = loop {
+            match connect_async(HYPERLIQUID_WS_URL).await {
+                Ok((ws_stream, _)) => break ws_stream,
+                Err(e) => {
+                    retry_count += 1;
+                    log::error!(
+                        "Error connecting to Hyperliquid WS (attempt {}/{}): {}",
+                        retry_count,
+                        MAX_RETRIES,
+                        e
+                    );
+
+                    if retry_count >= MAX_RETRIES {
+                        log::error!("Max retries reached. Waiting before next reconnect attempt...");
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        retry_count = 0;
+                        continue;
                     }
+
+                    log::info!("Retrying in 5 seconds...");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                 }
-            },
-            _ = state_tick.tick() => {
-                let mut state = live_market_feed.write().await;
-                for(symbol, (mark_px, funding)) in last_snapshot.iter() {
-                    state.hyperliquid.insert(symbol.clone(), (*mark_px, *funding));
+            }
+        };
+
+        log::info!("Connected to Hyperliquid WS");
+
+        let mut db_tick = interval(Duration::from_secs(30 * 60));
+        let mut state_tick = interval(Duration::from_secs(5));
+        let mut last_update = Instant::now();
+
+        let (mut write, mut read) = ws_stream.split();
+
+        for i in 0..TOKEN_LIST.len() {
+            let sub = json!({
+                "method": "subscribe",
+                "subscription": {
+                    "type": "activeAssetCtx",
+                    "coin": TOKEN_LIST[i]
                 }
-            },
-            _ = db_tick.tick() => {
+            });
+
+            match write.send(sub.to_string().into()).await {
+                Ok(_) => log::info!("Subscribed to {}", TOKEN_LIST[i]),
+                Err(e) => log::error!("Error subscribing to {}: {}", TOKEN_LIST[i], e),
+            };
+        }
+
+        let should_reconnect = loop {
+            tokio::select! {
+                Some(msg_res) = read.next() => {
+                    match msg_res {
+                        Ok(msg) => {
+                            let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
+                            if let Some((symbol, mark_px, funding)) = new_snapshot {
+                                log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
+                                last_update = Instant::now();
+                                last_snapshot.insert(symbol, (mark_px, funding));
+                            }
+                            if !keep_alive {
+                                log::warn!("Hyperliquid WS closed, will reconnect...");
+                                break true;
+                            }
+                        },
+                        Err(e) => {
+                            log::error!("Hyperliquid WS read error: {}, will reconnect...", e);
+                            break true;
+                        }
+                    }
+                },
+                None = read.next() => {
+                    log::warn!("Hyperliquid WS stream ended, will reconnect...");
+                    break true;
+                },
+                _ = state_tick.tick() => {
+                    let mut state = live_market_feed.write().await;
+                    for(symbol, (mark_px, funding)) in last_snapshot.iter() {
+                        state.hyperliquid.insert(symbol.clone(), (*mark_px, *funding));
+                    }
+                },
+                _ = db_tick.tick() => {
                     if last_update.elapsed() > Duration::from_secs(60) {
                         log::warn!("Skipping DB write: Hyperliquid data is stale");
                         continue;
                     }
 
-                let mut funding_rate_vec = Vec::new();
+                    let mut funding_rate_vec = Vec::new();
 
+                    for (symbol, (mark_px, funding)) in last_snapshot.iter() {
+                        let funding_rate = FundingRate {
+                            id: Uuid::new_v4(),
+                            platform: Dex::Hyperliquid.to_string(),
+                            symbol: symbol.clone(),
+                            rate: *funding,
+                            mark_px: *mark_px,
+                            timestamp: Utc::now().naive_utc(),
+                        };
 
-                for (symbol, (mark_px, funding)) in last_snapshot.iter() {
-                    let funding_rate = FundingRate {
-                        id: Uuid::new_v4(),
-                        platform: Dex::Hyperliquid.to_string(),
-                        symbol: symbol.clone(),
-                        rate: *funding,
-                        mark_px: *mark_px,
-                        timestamp: Utc::now().naive_utc(),
-                    };
-
-                    funding_rate_vec.push(funding_rate);
-
-                }
-
-                let db = db_conn.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
-                            log::warn!("DB insert failed: {:?}", e);
+                        funding_rate_vec.push(funding_rate);
                     }
-                });
-            }
+
+                    let db = db_conn.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
+                            log::warn!("DB insert failed: {:?}", e);
+                        }
+                    });
+                }
+            };
         };
+
+        if should_reconnect {
+            log::info!("Reconnecting to Hyperliquid WS in 2 seconds...");
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
     }
 }
 

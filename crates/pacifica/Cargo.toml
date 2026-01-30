@@ -13,6 +13,8 @@ uuid = { workspace = true }
 serde_with = { version = "3.16.1", features = ["base64"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+base64 = { workspace = true }
+bincode = { workspace = true }
 core = { path = "../core" }
 db = { path = "../db" }
 sqlx = { workspace = true }
@@ -25,6 +27,9 @@ anyhow = { workspace = true }
 solana-transaction = { workspace = true }
 solana-keypair = { workspace = true }
 solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
 solana-instruction = { workspace = true }
 solana-pubkey = { workspace = true }
+solana-message = { workspace = true }
+solana-signer = { workspace = true }
 spl-associated-token-account-client = { workspace = true }
