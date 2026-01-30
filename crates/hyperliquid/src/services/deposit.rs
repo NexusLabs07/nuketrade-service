@@ -114,21 +114,15 @@ async fn check_user_balance(
     Ok(balance)
 }
 
-/// Encode the deposit call data
-fn encode_deposit_call(
-    user_address: Address,
+/// Encode the depositWithPermit call data
+fn encode_deposit_with_permit_call(
     amount: u64,
     permit: &PermitSignature,
 ) -> Result<Bytes, DepositError> {
-    // deposit(address user, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+    // depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
     let deposit_fn = Function {
-        name: "deposit".to_string(),
+        name: "depositWithPermit".to_string(),
         inputs: vec![
-            Param {
-                name: "user".to_string(),
-                kind: ParamType::Address,
-                internal_type: None,
-            },
             Param {
                 name: "amount".to_string(),
                 kind: ParamType::Uint(256),
@@ -161,7 +155,6 @@ fn encode_deposit_call(
     };
 
     let tokens = vec![
-        Token::Address(user_address),
         Token::Uint(U256::from(amount)),
         Token::Uint(permit.deadline),
         Token::Uint(U256::from(permit.v)),
@@ -188,7 +181,7 @@ async fn simulate_deposit<M: Middleware>(
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
-    let call_data = encode_deposit_call(user_address, amount, permit)?;
+    let call_data = encode_deposit_with_permit_call(amount, permit)?;
 
     let tx = TransactionRequest::new()
         .to(contract_address)
@@ -265,7 +258,7 @@ pub async fn deposit_to_hyperliquid(
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
-    let call_data = encode_deposit_call(user_addr, amount, &permit)?;
+    let call_data = encode_deposit_with_permit_call(amount, &permit)?;
 
     let tx = TransactionRequest::new()
         .to(contract_address)
