@@ -74,9 +74,9 @@ pub async fn start_hl_funding_feed(
 
         let should_reconnect = loop {
             tokio::select! {
-                Some(msg_res) = read.next() => {
-                    match msg_res {
-                        Ok(msg) => {
+                msg_opt = read.next() => {
+                    match msg_opt {
+                        Some(Ok(msg)) => {
                             let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
                             if let Some((symbol, mark_px, funding)) = new_snapshot {
                                 log::info!("Hyperliquid new snapshot for token: {:?}", symbol.clone());
@@ -88,15 +88,15 @@ pub async fn start_hl_funding_feed(
                                 break true;
                             }
                         },
-                        Err(e) => {
+                        Some(Err(e)) => {
                             log::error!("Hyperliquid WS read error: {}, will reconnect...", e);
+                            break true;
+                        },
+                        None => {
+                            log::warn!("Hyperliquid WS stream ended, will reconnect...");
                             break true;
                         }
                     }
-                },
-                None = read.next() => {
-                    log::warn!("Hyperliquid WS stream ended, will reconnect...");
-                    break true;
                 },
                 _ = state_tick.tick() => {
                     let mut state = live_market_feed.write().await;
