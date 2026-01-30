@@ -1,5 +1,6 @@
 pub mod apis;
 pub mod helpers;
+pub mod services;
 pub mod ws;
 pub use ws::start_pacifica_funding_feed;
 

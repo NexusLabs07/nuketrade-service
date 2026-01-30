@@ -22,3 +22,9 @@ log = { workspace = true }
 chrono = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
 anyhow = { workspace = true }
+solana-transaction = { workspace = true }
+solana-keypair = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-instruction = { workspace = true }
+solana-pubkey = { workspace = true }
+spl-associated-token-account-client = { workspace = true }
