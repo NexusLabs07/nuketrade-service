@@ -1,6 +1,7 @@
 pub mod apis;
 pub mod helpers;
 pub mod perp_metadata;
+pub mod services;
 pub mod spot_metadata;
 mod types;
 mod ws;

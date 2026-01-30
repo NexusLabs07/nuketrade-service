@@ -18,8 +18,8 @@ use crate::services::{
     PACIFICA_PROGRAM_ADDRESS, PACIFICA_VAULT_ADDRESS,
 };
 
-// 0.11 USDC = 110_000 (USDC has 6 decimals)
-const GAS_REIMBURSEMENT_AMOUNT: u64 = 110_000;
+// 0.2 USDC = 200_000 (USDC has 6 decimals)
+const GAS_REIMBURSEMENT_AMOUNT: u64 = 200_000;
 
 pub async fn deposit_to_pacifica(
     solana_rpc_url: String,
@@ -47,6 +47,8 @@ pub async fn deposit_to_pacifica(
     let event_authority_pubkey = Pubkey::from_str(EVENT_AUTHORITY)?;
     let pacifica_program_pubkey = Pubkey::from_str(PACIFICA_PROGRAM_ADDRESS)?;
 
+    let amount_to_deposit = amount - GAS_REIMBURSEMENT_AMOUNT;
+
     let deposit_ix = Instruction {
         program_id: pacifica_program_pubkey,
         accounts: vec![
@@ -64,7 +66,7 @@ pub async fn deposit_to_pacifica(
         data: {
             let mut d: Vec<u8> = Vec::with_capacity(16);
             d.extend_from_slice(&DEPOSIT_DISCRIMINATOR);
-            d.extend_from_slice(&amount.to_le_bytes());
+            d.extend_from_slice(&amount_to_deposit.to_le_bytes());
             d
         },
     };
