@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "perp_core"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -10,3 +10,15 @@ publish.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = "0.1"
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+log = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+
+[dependencies.db]
+path = "../db"

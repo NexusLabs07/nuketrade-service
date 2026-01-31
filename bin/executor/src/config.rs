@@ -1,21 +1,71 @@
 use anyhow::Context;
 
+/// Application configuration loaded from environment variables.
+///
+/// Required variables:
+/// - `DATABASE_URL`: PostgreSQL connection URL
+/// - `SOLANA_RPC_URL`: Solana RPC endpoint
+/// - `SERVER_HOST`: Server bind host (default: 0.0.0.0)
+/// - `SERVER_PORT`: Server bind port (default: 8000)
+/// - `CORS_ALLOWED_ORIGINS`: Comma-separated CORS origins
+#[derive(Debug, Clone)]
 pub struct Config {
+    // Database
     pub db_url: String,
+
+    // Solana
     pub solana_rpc_url: String,
+
+    // Arbitrum
+    pub arbitrum_rpc_url: String,
+
+    // Server
+    pub server_host: String,
+    pub server_port: u16,
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl Config {
+    /// Load configuration from environment variables.
+    ///
+    /// # Errors
+    /// Returns an error if required environment variables are missing.
     pub fn from_env() -> Result<Self, anyhow::Error> {
+        // Required variables
         let db_url = std::env::var("DATABASE_URL")
-            .context("DATABASE_URL environment variable is not set or invalid")?;
+            .context("DATABASE_URL environment variable is required")?;
 
         let solana_rpc_url = std::env::var("SOLANA_RPC_URL")
-            .context("SOLANA_RPC_URL environment variable is not set or invalid")?;
+            .context("SOLANA_RPC_URL environment variable is required")?;
+
+        // Arbitrum config
+        let arbitrum_rpc_url = std::env::var("ARBITRUM_RPC_URL")
+            .unwrap_or_else(|_| "https://arb1.arbitrum.io/rpc".to_string());
+
+        // Server config
+        let server_host = std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+        let server_port = std::env::var("SERVER_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(8000);
+        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .unwrap_or_else(|_| "https://nuketrade.xyz,http://localhost:3000".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
 
         Ok(Self {
             db_url,
             solana_rpc_url,
+            arbitrum_rpc_url,
+            server_host,
+            server_port,
+            cors_allowed_origins,
         })
+    }
+
+    /// Get the server bind address as a string.
+    pub fn bind_addr(&self) -> String {
+        format!("{}:{}", self.server_host, self.server_port)
     }
 }

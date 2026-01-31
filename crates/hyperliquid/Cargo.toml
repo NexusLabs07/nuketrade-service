@@ -15,7 +15,7 @@ tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 anyhow = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
-core = { path = "../core" }
+perp_core = { path = "../core" }
 db = { path = "../db" }
 chrono = { workspace = true }
 log = { workspace = true }
@@ -28,3 +28,4 @@ hex = "0.4"
 ethers = { version = "2.0", features = ["abigen", "ws"] }
 thiserror = "2.0"
 once_cell = "1.19"
+async-trait = "0.1"

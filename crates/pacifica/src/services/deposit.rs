@@ -1,4 +1,4 @@
-use core::{ASSOCIATED_TOKEN_PROGRAM, SOLANA_USDC_MINT, SYSTEM_PROGRAM, TOKEN_PROGRAM};
+use perp_core::{ASSOCIATED_TOKEN_PROGRAM, SOLANA_USDC_MINT, SYSTEM_PROGRAM, TOKEN_PROGRAM};
 use std::str::FromStr;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -13,7 +13,7 @@ use solana_signer::Signer;
 use solana_transaction::Transaction;
 use spl_associated_token_account_client::address::get_associated_token_address;
 
-use crate::services::{
+use crate::{
     DEPOSIT_DISCRIMINATOR, EVENT_AUTHORITY, PACIFICA_CENTRAL_STATE_ADDRESS,
     PACIFICA_PROGRAM_ADDRESS, PACIFICA_VAULT_ADDRESS,
 };

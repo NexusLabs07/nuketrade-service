@@ -15,7 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
-core = { path = "../core" }
+perp_core = { path = "../core" }
 db = { path = "../db" }
 sqlx = { workspace = true }
 tokio = { workspace = true }
@@ -33,3 +33,4 @@ solana-pubkey = { workspace = true }
 solana-message = { workspace = true }
 solana-signer = { workspace = true }
 spl-associated-token-account-client = { workspace = true }
+async-trait = "0.1"

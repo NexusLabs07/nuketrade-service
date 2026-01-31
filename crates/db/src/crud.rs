@@ -123,13 +123,8 @@ pub async fn insert_user_with_wallet_and_points(
 ) -> Result<uuid::Uuid, anyhow::Error> {
     let mut tx = db_conn.begin().await?;
 
-    let referred_by_user_id = match referred_by_user {
-        Some(user) => Some(user.id),
-        None => None,
-    };
-
-    if referred_by_user_id.is_some() {
-        update_points_with_executor(&mut *tx, referred_by_user_id.unwrap(), 25).await?;
+    if let Some(referred_user) = referred_by_user {
+        update_points_with_executor(&mut *tx, referred_user.id, 25).await?;
     }
 
     insert_wallet_with_executor(&mut *tx, &wallet).await?;

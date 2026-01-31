@@ -6,19 +6,11 @@ use ethers::{
     signers::{LocalWallet, Signer},
     types::{Address, Bytes, TransactionRequest, U256},
 };
+use perp_core::{ARBITRUM_CHAIN_ID, ARBITRUM_USDC_ADDRESS};
 use std::sync::Arc;
 
 /// Hyperliquid deposit contract address (replace with actual)
 pub const DEPOSIT_CONTRACT_ADDRESS: &str = "0x0000000000000000000000000000000000000000"; //TODO: change that
-
-/// USDC contract on Arbitrum
-pub const ARBITRUM_USDC_ADDRESS: &str = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
-
-/// Arbitrum RPC URL
-pub const ARBITRUM_RPC_URL: &str = "https://arb1.arbitrum.io/rpc"; //TODO: CHANGE that
-
-/// Arbitrum chain ID
-pub const ARBITRUM_CHAIN_ID: u64 = 42161;
 
 /// Minimum deposit amount: 10 USDC (6 decimals)
 pub const MIN_DEPOSIT_AMOUNT: u64 = 10_000_000;
@@ -210,7 +202,7 @@ async fn simulate_deposit<M: Middleware>(
 /// 3. Simulates the transaction
 /// 4. Executes the contract call and returns tx hash
 pub async fn deposit_to_hyperliquid(
-    rpc_url: Option<String>,
+    rpc_url: &str,
     fee_payer_private_key: String,
     user_address: String,
     amount: u64,
@@ -224,8 +216,7 @@ pub async fn deposit_to_hyperliquid(
         });
     }
 
-    let rpc = rpc_url.unwrap_or_else(|| ARBITRUM_RPC_URL.to_string());
-    let provider = Provider::<Http>::try_from(&rpc)
+    let provider = Provider::<Http>::try_from(rpc_url)
         .map_err(|e| DepositError::ProviderError(format!("{:?}", e)))?;
 
     let user_addr: Address = user_address

@@ -1,5 +1,5 @@
 use axum::{Json, extract::State};
-use core::types::LiveMarketFeed;
+use perp_core::types::LiveMarketFeed;
 
 use crate::AppState;
 

@@ -1,4 +1,4 @@
-use core::types::LiveMarketFeed;
+use perp_core::types::LiveMarketFeed;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     //     .await;
     // });
 
-    run_server(db, live_market_feed).await;
+    run_server(db, live_market_feed).await?;
 
     Ok(())
 }

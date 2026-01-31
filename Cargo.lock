@@ -671,14 +671,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1564,12 +1556,12 @@ name = "executor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "core",
  "db",
  "dotenv",
  "hyperliquid",
  "log",
  "pacifica",
+ "perp_core",
  "server",
  "thiserror 2.0.17",
  "tokio",
@@ -2276,14 +2268,15 @@ name = "hyperliquid"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
- "core",
  "db",
  "ethers",
  "futures-util",
  "hex",
  "log",
  "once_cell",
+ "perp_core",
  "reqwest 0.12.28",
  "rmp-serde",
  "serde",
@@ -2688,12 +2681,13 @@ name = "lighter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "chrono",
- "core",
  "db",
  "futures-util",
  "log",
+ "perp_core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -3035,13 +3029,14 @@ name = "pacifica"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "bincode",
  "chrono",
- "core",
  "db",
  "futures-util",
  "log",
+ "perp_core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -3196,6 +3191,24 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "perp_core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "db",
+ "futures-util",
+ "log",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "uuid 1.19.0",
+]
 
 [[package]]
 name = "petgraph"
@@ -4461,7 +4474,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "core",
  "db",
  "governor",
  "hyperliquid",
@@ -4469,6 +4481,8 @@ dependencies = [
  "nanoid",
  "once_cell",
  "pacifica",
+ "perp_core",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sqlx",

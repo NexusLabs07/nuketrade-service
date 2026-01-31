@@ -1,4 +1,5 @@
 use axum::{Json, extract::Path};
+use perp_core::parse_f64_or_zero;
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
     perp_metadata::PERP_META,
@@ -30,7 +31,8 @@ pub async fn get_user_open_positions(
 
     for asset_position in open_positions.asset_positions.iter() {
         let pos = &asset_position.position;
-        let side = if pos.szi.parse::<f64>().unwrap() > 0.0 {
+        let size_value = parse_f64_or_zero(&pos.szi);
+        let side = if size_value > 0.0 {
             Side::Long
         } else {
             Side::Short
@@ -39,7 +41,7 @@ pub async fn get_user_open_positions(
         open_position_response.push(OpenPositionsResponse {
             symbol: pos.coin.clone(),
             size: if side == Side::Short {
-                (-pos.szi.parse::<f64>().unwrap()).to_string().clone()
+                (-size_value).to_string()
             } else {
                 pos.szi.clone()
             },

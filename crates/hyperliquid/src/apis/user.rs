@@ -117,9 +117,13 @@ impl UserInfo {
     }
 
     pub async fn get_funding_rate(self) -> Result<HyperliquidResponse> {
+        let evm_address = self
+            .evm_address
+            .ok_or_else(|| anyhow::Error::msg("EVM address is required for funding rate query"))?;
+
         let funding_rate_request = FundingRateRequest {
             funding_type: "userFunding".to_string(),
-            user: self.evm_address.unwrap(),
+            user: evm_address,
             start_time: Utc::now().timestamp_millis(), //TODO: change this to a suitable time
         };
 
@@ -147,9 +151,13 @@ impl UserInfo {
     }
 
     pub async fn get_open_positions(self) -> Result<ClearinghouseState> {
+        let evm_address = self.evm_address.ok_or_else(|| {
+            anyhow::Error::msg("EVM address is required for open positions query")
+        })?;
+
         let open_position_request = OpenPositionRequest {
             position_type: "clearinghouseState".to_string(),
-            user: self.evm_address.unwrap(),
+            user: evm_address,
         };
 
         let response = self

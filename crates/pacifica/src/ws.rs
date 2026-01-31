@@ -1,29 +1,20 @@
-use chrono::DateTime;
-use db::{crud::insert_funding_rates, types::FundingRate};
-use futures_util::{SinkExt, StreamExt};
+//! Pacifica WebSocket funding feed.
+
+use crate::PacificaExchange;
+use perp_core::{token_list::TOKEN_LIST, types::LiveMarketFeed, ws::{run_funding_feed, WsConfig}};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sqlx::PgPool;
-use tokio::{
-    sync::RwLock,
-    time::{Instant, interval, interval_at},
-};
-use tokio_tungstenite::{
-    connect_async_with_config,
-    tungstenite::{Message, protocol::WebSocketConfig},
-};
-use uuid::Uuid;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use crate::PACIFICA_WS_URL;
-use core::{funding::Dex, token_list::TOKEN_LIST, types::LiveMarketFeed};
-use std::{collections::HashMap, sync::Arc, time::Duration};
-
+/// Pacifica prices WebSocket message format.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PricesMessage {
     pub channel: String,
     pub data: Vec<PriceData>,
 }
 
+/// Individual price data in a Pacifica prices message.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PriceData {
     pub funding: String,
@@ -38,243 +29,24 @@ pub struct PriceData {
     pub yesterday_price: String,
 }
 
+/// Start the Pacifica funding rate feed using the generic WebSocket handler.
 pub async fn start_pacifica_funding_feed(
     db_conn: Arc<PgPool>,
     live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) {
-    const MAX_RETRIES: u32 = 3;
-    const RECONNECT_DELAY_SECS: u64 = 5;
+    let exchange = Arc::new(PacificaExchange::new());
 
-    let ws_config = WebSocketConfig::default();
+    let config = WsConfig {
+        max_retries: 3,
+        reconnect_delay_secs: 5,
+        db_write_interval_secs: 30 * 60,
+        state_update_interval_secs: 5,
+        stale_threshold_secs: 60,
+        ping_interval_secs: Some(30), // Pacifica needs periodic pings
+        use_custom_ws_config: true,
+    };
 
-    // Preserve state across reconnections: (mark_px, funding, timestamp)
-    let mut last_snapshot: HashMap<String, (f64, f64, i64)> = HashMap::new();
-    let mut last_update = Instant::now();
+    let symbols: Vec<&str> = TOKEN_LIST.iter().map(|s| &**s).collect();
 
-    // Outer reconnection loop - handles 24-hour disconnects and other connection failures
-    loop {
-        let mut retry_count = 0;
-
-        let ws_stream = loop {
-            match connect_async_with_config(PACIFICA_WS_URL, Some(ws_config.clone()), true).await {
-                Ok((ws_stream, _)) => break ws_stream,
-                Err(e) => {
-                    retry_count += 1;
-                    log::error!(
-                        "Error connecting to Pacifica WS (attempt {}/{}): {}",
-                        retry_count,
-                        MAX_RETRIES,
-                        e
-                    );
-
-                    if retry_count >= MAX_RETRIES {
-                        log::error!(
-                            "Max retries reached. Waiting {} seconds before retry cycle...",
-                            RECONNECT_DELAY_SECS * 2
-                        );
-                        tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS * 2)).await;
-                        retry_count = 0;
-                        continue;
-                    }
-
-                    log::info!("Retrying in {} seconds...", RECONNECT_DELAY_SECS);
-                    tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
-                }
-            }
-        };
-
-        log::info!("Connected to Pacifica WS");
-
-        let mut db_tick: tokio::time::Interval = interval(Duration::from_secs(30 * 60));
-        let mut state_tick = interval(Duration::from_secs(5));
-        let mut ping_tick = interval_at(
-            Instant::now() + Duration::from_secs(30),
-            Duration::from_secs(30),
-        );
-
-        let (mut write, mut read) = ws_stream.split();
-
-        let sub = json!({
-            "method": "subscribe",
-            "params": {
-                "source": "prices"
-            }
-        });
-
-        match write.send(sub.to_string().into()).await {
-            Ok(_) => log::info!("Pacifica: Subscribed to market states"),
-            Err(e) => {
-                log::error!("Error subscribing to market stats: {}. Reconnecting...", e);
-                tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
-                continue;
-            }
-        };
-
-        // Inner message loop - runs until connection drops
-        let should_reconnect = loop {
-            tokio::select! {
-                Some(msg_res) = read.next() => {
-                    match msg_res {
-                        Ok(msg) => {
-                            let (keep_alive, new_snapshot) = handle_ws_message(msg, &mut write).await;
-                            if let Some(snapshot) = new_snapshot {
-                                // log::info!("Received new snapshot from Pacifica: {:?}", snapshot);
-                                last_update = Instant::now();
-                                for item in snapshot.into_iter() {
-                                    last_snapshot.insert(item.0, (item.1, item.2, item.3));
-                                }
-                            }
-                            if !keep_alive {
-                                log::warn!("Pacifica WS connection closed. Reconnecting...");
-                                break true;
-                            }
-                        },
-                        Err(e) => {
-                            log::error!("Pacifica WS read error: {}. Reconnecting...", e);
-                            break true;
-                        }
-                    }
-                },
-                _ = state_tick.tick() => {
-                    let mut state = live_market_feed.write().await;
-                    for (symbol, (mark_px, funding, _)) in last_snapshot.iter() {
-                        state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
-                    }
-                },
-                _ = db_tick.tick() => {
-                    if last_update.elapsed() > Duration::from_secs(60) {
-                        log::warn!("Skipping DB write: Pacifica data is stale");
-                        continue;
-                    }
-
-                    let mut funding_rate_vec = Vec::new();
-
-                    for (symbol, (mark_px, funding, timestamp)) in last_snapshot.iter() {
-                        let timestamp = DateTime::from_timestamp_millis(*timestamp)
-                            .unwrap_or_else(|| DateTime::from_timestamp(*timestamp, 0).unwrap())
-                            .naive_utc();
-                        let funding_rate = FundingRate {
-                            id: Uuid::new_v4(),
-                            platform: Dex::Pacifica.to_string(),
-                            symbol: symbol.clone(),
-                            mark_px: *mark_px,
-                            rate: *funding,
-                            timestamp,
-                        };
-
-                        funding_rate_vec.push(funding_rate);
-                    }
-
-                    let db = db_conn.clone();
-
-                    tokio::spawn(async move {
-                        if let Err(e) = insert_funding_rates(db, funding_rate_vec).await {
-                            log::warn!("DB insert failed: {:?}", e);
-                        }
-                    });
-                },
-                _ = ping_tick.tick() => {
-                    let ping_msg = json!({"method": "ping"});
-                    if let Err(e) = write.send(Message::Text(ping_msg.to_string().into())).await {
-                        log::error!("Failed to send heartbeat ping: {}. Reconnecting...", e);
-                        break true;
-                    } else {
-                        log::info!("Sent heartbeat ping to Pacifica");
-                    }
-                }
-            };
-        };
-
-        if should_reconnect {
-            log::info!(
-                "Waiting {} seconds before reconnecting to Pacifica...",
-                RECONNECT_DELAY_SECS
-            );
-            tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
-        }
-    }
-}
-
-async fn handle_ws_message(
-    msg: Message,
-    write: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-        Message,
-    >,
-) -> (bool, Option<Vec<(String, f64, f64, i64)>>) {
-    log::debug!("Received WS message: {:?}", msg);
-
-    match msg {
-        Message::Ping(p) => {
-            log::info!("Received ping from server, sending pong");
-            if let Err(e) = write.send(Message::Pong(p)).await {
-                log::error!("Failed to send pong: {}", e);
-            }
-            (true, None)
-        }
-
-        Message::Pong(_) => {
-            log::info!("Received pong from server");
-            (true, None)
-        }
-
-        Message::Close(frame) => {
-            log::warn!("Pacifica WS closed: {:?}", frame);
-            (false, None)
-        }
-
-        Message::Text(text) => {
-            // Check if it's a text-based ping
-            if text.contains("ping") {
-                log::info!("Received text ping, sending text pong.");
-                if let Err(e) = write.send(Message::Text(r#"{"type":"pong"}"#.into())).await {
-                    log::error!("Failed to send text pong: {}", e);
-                }
-                return (true, None);
-            }
-
-            // Handle heartbeat pong response - re-subscribe to get fresh snapshot
-            if text.contains(r#""channel":"pong""#) || text.contains(r#""channel": "pong""#) {
-                log::info!("Received heartbeat pong from Pacifica, re-subscribing...");
-                let resub = json!({
-                    "method": "subscribe",
-                    "params": {
-                        "source": "prices"
-                    }
-                });
-                if let Err(e) = write.send(Message::Text(resub.to_string().into())).await {
-                    log::error!("Failed to re-subscribe after pong: {}", e);
-                }
-                return (true, None);
-            }
-
-            let parsed: PricesMessage = match serde_json::from_str(text.as_str()) {
-                Ok(v) => v,
-                Err(e) => {
-                    log::warn!("Failed to parse Pacifica message: {} - raw: {}", e, text);
-                    return (true, None);
-                }
-            };
-
-            let tracked_tokens: Vec<(String, f64, f64, i64)> = parsed
-                .data
-                .into_iter()
-                .filter(|x| TOKEN_LIST.iter().any(|t| &x.symbol == t))
-                .map(|m| {
-                    (
-                        m.symbol.to_string(),
-                        m.mark.parse::<f64>().unwrap(),
-                        m.funding.parse::<f64>().unwrap(),
-                        m.timestamp,
-                    )
-                })
-                .collect();
-
-            (true, Some(tracked_tokens))
-        }
-
-        _ => (true, None),
-    }
+    run_funding_feed(exchange, db_conn, live_market_feed, config, &symbols).await;
 }

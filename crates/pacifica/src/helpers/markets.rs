@@ -14,7 +14,7 @@ pub struct Market {
     pub created_at: u64,
 }
 
-pub const MARKETS: &[Market] = &[
+pub const PACIFICA_MARKETS: &[Market] = &[
     Market {
         symbol: "SOL",
         tick_size: "0.01",

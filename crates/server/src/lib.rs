@@ -1,4 +1,4 @@
-use core::types::LiveMarketFeed;
+use perp_core::types::LiveMarketFeed;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,6 +22,7 @@ pub mod controller;
 pub mod error;
 pub mod middleware;
 pub mod routes;
+pub mod services;
 pub mod types;
 
 const RATE_LIMIT_REQUESTS_PER_SECOND: usize = 20;
@@ -112,7 +113,10 @@ fn get_cors_origins() -> Vec<HeaderValue> {
         .collect()
 }
 
-pub async fn run_server(db: Arc<PgPool>, live_market_feed: Arc<RwLock<LiveMarketFeed>>) {
+pub async fn run_server(
+    db: Arc<PgPool>,
+    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+) -> anyhow::Result<()> {
     let app_state = AppState {
         db,
         live_market_feed,
@@ -137,9 +141,12 @@ pub async fn run_server(db: Arc<PgPool>, live_market_feed: Arc<RwLock<LiveMarket
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
+    let bind_addr = std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 
-    log::info!("Starting Server...");
+    log::info!("Starting Server on {}...", bind_addr);
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }

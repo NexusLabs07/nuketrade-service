@@ -8,12 +8,13 @@ use axum::{
 use db::{crud::get_token_chart_info, types::FundingRate};
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
-    helpers::markets::MARKETS as HL_MARKETS,
+    helpers::markets::HL_MARKETS,
 };
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
-    helpers::markets::MARKETS,
+    helpers::markets::PACIFICA_MARKETS,
 };
+use perp_core::parse_f64_or_zero;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -73,7 +74,8 @@ pub async fn get_merged_open_positions(
         for asset_position in hl_positions.asset_positions.iter() {
             let pos = &asset_position.position;
             let symbol = pos.coin.clone();
-            let side = if pos.szi.parse::<f64>().unwrap() > 0.0 {
+            let size_value = parse_f64_or_zero(&pos.szi);
+            let side = if size_value > 0.0 {
                 Side::Long
             } else {
                 Side::Short
@@ -82,7 +84,7 @@ pub async fn get_merged_open_positions(
             let hl_position = OpenPositionsResponse {
                 symbol: symbol.clone(),
                 size: if side == Side::Short {
-                    (-pos.szi.parse::<f64>().unwrap()).to_string().clone()
+                    (-size_value).to_string()
                 } else {
                     pos.szi.clone()
                 },
@@ -119,7 +121,7 @@ pub async fn get_merged_open_positions(
                         .and_then(|settings| settings.iter().find(|x| x.symbol == symbol))
                         .map(|s| s.leverage as u32)
                         .unwrap_or(
-                            MARKETS
+                            PACIFICA_MARKETS
                                 .iter()
                                 .find(|x| x.symbol == symbol)
                                 .map(|s| s.max_leverage as u32)
@@ -215,7 +217,7 @@ pub async fn get_live_market_feed(
     }
 
     for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
-        let max_leverage = MARKETS
+        let max_leverage = PACIFICA_MARKETS
             .iter()
             .find(|x| x.symbol == symbol)
             .map(|x| x.max_leverage);
