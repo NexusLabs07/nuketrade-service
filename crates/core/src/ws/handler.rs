@@ -199,7 +199,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                         log::error!("{}: Failed to send ping: {}. Reconnecting...", exchange_name, e);
                         break true;
                     } else {
-                        log::debug!("{}: Sent heartbeat ping", exchange_name);
+                        log::info!("{}: Sent heartbeat ping", exchange_name);
                     }
                 }
             }
@@ -234,7 +234,7 @@ async fn handle_message<E: Exchange>(
 ) -> (bool, Vec<(String, f64, f64, i64)>) {
     match msg {
         Message::Ping(p) => {
-            log::debug!("Received ping, sending pong");
+            log::info!("Received ping, sending pong");
             if let Err(e) = write.send(Message::Pong(p)).await {
                 log::error!("Failed to send pong: {}", e);
             }
@@ -242,7 +242,7 @@ async fn handle_message<E: Exchange>(
         }
 
         Message::Pong(_) => {
-            log::debug!("Received pong");
+            log::info!("Received pong");
             // Send any pong response messages (e.g., re-subscribe)
             for msg in exchange.on_pong_messages(symbols) {
                 if let Err(e) = write.send(Message::Text(msg.into())).await {
@@ -279,7 +279,7 @@ async fn handle_message<E: Exchange>(
                     }
 
                     WsMessage::Pong => {
-                        log::debug!("Received text pong");
+                        log::info!("Received text pong");
                         // Send any pong response messages (e.g., re-subscribe)
                         for msg in exchange.on_pong_messages(symbols) {
                             if let Err(e) = write.send(Message::Text(msg.into())).await {
@@ -294,7 +294,7 @@ async fn handle_message<E: Exchange>(
                         funding_rate,
                         timestamp_ms,
                     } => {
-                        log::debug!(
+                        log::info!(
                             "{}: Update for {} - mark: {}, funding: {}",
                             exchange.name(),
                             symbol,
