@@ -47,21 +47,21 @@ async fn main() -> anyhow::Result<()> {
         pacifica: HashMap::new(),
     }));
 
-    log::info!("Starting Hyperliquid live feed....");
-    let db_clone_1 = db.clone();
-    let live_market_feed_clone = live_market_feed.clone();
-    tokio::spawn(async move {
-        hyperliquid::start_hl_funding_feed(db_clone_1.clone(), live_market_feed_clone.clone())
-            .await;
-    });
+    // log::info!("Starting Hyperliquid live feed....");
+    // let db_clone_1 = db.clone();
+    // let live_market_feed_clone = live_market_feed.clone();
+    // tokio::spawn(async move {
+    //     hyperliquid::start_hl_funding_feed(db_clone_1.clone(), live_market_feed_clone.clone())
+    //         .await;
+    // });
 
-    log::info!("Starting Pacifica live feed....");
-    let db_clone_2 = db.clone();
-    let live_market_feed_clone_2 = live_market_feed.clone();
-    tokio::spawn(async move {
-        pacifica::start_pacifica_funding_feed(db_clone_2.clone(), live_market_feed_clone_2.clone())
-            .await;
-    });
+    // log::info!("Starting Pacifica live feed....");
+    // let db_clone_2 = db.clone();
+    // let live_market_feed_clone_2 = live_market_feed.clone();
+    // tokio::spawn(async move {
+    //     pacifica::start_pacifica_funding_feed(db_clone_2.clone(), live_market_feed_clone_2.clone())
+    //         .await;
+    // });
 
     // log::info!("Starting Lighter funding feed....");
     // let db_clone_2 = db.clone();
