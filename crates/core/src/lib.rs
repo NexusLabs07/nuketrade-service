@@ -1,3 +1,4 @@
+pub mod config;
 pub mod exchange;
 pub mod funding;
 pub mod token_list;

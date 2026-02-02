@@ -8,6 +8,7 @@ use anyhow::Context;
 /// - `SERVER_HOST`: Server bind host (default: 0.0.0.0)
 /// - `SERVER_PORT`: Server bind port (default: 8000)
 /// - `CORS_ALLOWED_ORIGINS`: Comma-separated CORS origins
+/// - `FEE_PAYER_PRIVATE_KEY`: Fee payer private key
 #[derive(Debug, Clone)]
 pub struct Config {
     // Database
@@ -23,6 +24,9 @@ pub struct Config {
     pub server_host: String,
     pub server_port: u16,
     pub cors_allowed_origins: Vec<String>,
+
+    //Private keys
+    pub fee_payer_private_key: String, //TODO: add seperate solana and evm private key
 }
 
 impl Config {
@@ -54,8 +58,12 @@ impl Config {
             .map(|s| s.trim().to_string())
             .collect();
 
+        let fee_payer_private_key =
+            std::env::var("FEE_PAYER_PRIVATE_KEY").context("FEE_PAYER_PRIVATE_KEY is required")?;
+
         Ok(Self {
             db_url,
+            fee_payer_private_key,
             solana_rpc_url,
             arbitrum_rpc_url,
             server_host,

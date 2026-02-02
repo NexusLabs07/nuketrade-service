@@ -1,8 +1,10 @@
-use axum::routing::get;
+use axum::routing::{get, post};
 
 use crate::{
     AppState,
-    controller::hyperliquid::{get_perp_metadata, get_spot_metadata, get_user_open_positions},
+    controller::hyperliquid::{
+        bridge_to_hyperliquid, get_perp_metadata, get_spot_metadata, get_user_open_positions,
+    },
 };
 
 pub fn routes() -> axum::Router<AppState> {
@@ -13,4 +15,5 @@ pub fn routes() -> axum::Router<AppState> {
             "/open-positions/{user_evm_address}",
             get(get_user_open_positions),
         )
+        .route("/deposit", post(bridge_to_hyperliquid))
 }

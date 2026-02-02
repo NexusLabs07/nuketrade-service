@@ -7,6 +7,7 @@ use ethers::{
     types::{Address, Bytes, TransactionRequest, U256},
 };
 use perp_core::{ARBITRUM_CHAIN_ID, ARBITRUM_USDC_ADDRESS};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Hyperliquid deposit contract address (replace with actual)
@@ -14,6 +15,13 @@ pub const DEPOSIT_CONTRACT_ADDRESS: &str = "0x0000000000000000000000000000000000
 
 /// Minimum deposit amount: 10 USDC (6 decimals)
 pub const MIN_DEPOSIT_AMOUNT: u64 = 10_000_000;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DepositParams {
+    pub amount: u64,
+    pub user_address: String,
+    pub permit: PermitSignature,
+}
 
 #[derive(Debug)]
 pub enum DepositError {
@@ -58,7 +66,7 @@ impl std::fmt::Display for DepositError {
 impl std::error::Error for DepositError {}
 
 /// Permit signature components
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermitSignature {
     pub v: u8,
     pub r: [u8; 32],
@@ -202,24 +210,23 @@ async fn simulate_deposit<M: Middleware>(
 /// 3. Simulates the transaction
 /// 4. Executes the contract call and returns tx hash
 pub async fn deposit_to_hyperliquid(
-    rpc_url: &str,
+    arbitrum_rpc_url: &str,
     fee_payer_private_key: String,
-    user_address: String,
-    amount: u64,
-    permit: PermitSignature,
+    deposit_params: DepositParams,
 ) -> Result<String, DepositError> {
     // Check minimum deposit
-    if amount < MIN_DEPOSIT_AMOUNT {
+    if deposit_params.amount < MIN_DEPOSIT_AMOUNT {
         return Err(DepositError::BelowMinimumDeposit {
-            amount,
+            amount: deposit_params.amount,
             minimum: MIN_DEPOSIT_AMOUNT,
         });
     }
 
-    let provider = Provider::<Http>::try_from(rpc_url)
+    let provider = Provider::<Http>::try_from(arbitrum_rpc_url)
         .map_err(|e| DepositError::ProviderError(format!("{:?}", e)))?;
 
-    let user_addr: Address = user_address
+    let user_addr: Address = deposit_params
+        .user_address
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
@@ -232,24 +239,32 @@ pub async fn deposit_to_hyperliquid(
     let fee_payer_address = fee_payer_wallet.address();
 
     // Step 1: Check user balance
-    let balance = check_user_balance(&provider, user_addr, U256::from(amount)).await?;
+    let balance =
+        check_user_balance(&provider, user_addr, U256::from(deposit_params.amount)).await?;
     log::info!(
         "User {} balance: {} (required: {})",
         user_addr,
         balance,
-        amount
+        deposit_params.amount
     );
 
     // Step 2: Simulate the deposit
     let client = SignerMiddleware::new(provider.clone(), fee_payer_wallet);
-    simulate_deposit(&client, fee_payer_address, user_addr, amount, &permit).await?;
+    simulate_deposit(
+        &client,
+        fee_payer_address,
+        user_addr,
+        deposit_params.amount,
+        &deposit_params.permit,
+    )
+    .await?;
 
     // Step 3: Execute the contract call
     let contract_address: Address = DEPOSIT_CONTRACT_ADDRESS
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
-    let call_data = encode_deposit_with_permit_call(amount, &permit)?;
+    let call_data = encode_deposit_with_permit_call(deposit_params.amount, &deposit_params.permit)?;
 
     let tx = TransactionRequest::new()
         .to(contract_address)

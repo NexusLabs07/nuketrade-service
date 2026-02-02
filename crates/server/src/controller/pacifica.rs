@@ -2,7 +2,10 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use pacifica::apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse};
+use pacifica::{
+    apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse},
+    services::deposit::{DepositParams, deposit_to_pacifica},
+};
 
 use crate::{
     AppState,
@@ -90,4 +93,15 @@ pub async fn get_user_open_positions(
     }
 
     Ok(Json(open_position_response))
+}
+
+pub async fn bridge_to_pacifica(
+    State(state): State<AppState>,
+    Json(payload): Json<DepositParams>,
+) -> Result<Json<String>, AppError> {
+    let solana_rpc_url = state.config.solana_rpc_url;
+
+    let serialized_tx = deposit_to_pacifica(solana_rpc_url, payload).await?;
+
+    Ok(Json(serialized_tx))
 }

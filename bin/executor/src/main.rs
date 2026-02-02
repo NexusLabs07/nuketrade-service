@@ -1,9 +1,8 @@
-use perp_core::types::LiveMarketFeed;
+use perp_core::{config::Config, types::LiveMarketFeed};
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
 use db::connect_db;
-use executor::config::Config;
 use server::run_server;
 use tokio::sync::RwLock;
 
@@ -74,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
     //     .await;
     // });
 
-    run_server(db, live_market_feed).await?;
+    run_server(config, db, live_market_feed).await?;
 
     Ok(())
 }

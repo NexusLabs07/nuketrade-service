@@ -1,4 +1,5 @@
 use perp_core::{ASSOCIATED_TOKEN_PROGRAM, SOLANA_USDC_MINT, SYSTEM_PROGRAM, TOKEN_PROGRAM};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -21,17 +22,22 @@ use crate::{
 // 0.2 USDC = 200_000 (USDC has 6 decimals)
 const GAS_REIMBURSEMENT_AMOUNT: u64 = 200_000;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepositParams {
+    pub user_address: String,
+    pub amount: u64,
+}
+
 pub async fn deposit_to_pacifica(
     solana_rpc_url: String,
-    depositor: String,
-    amount: u64,
+    deposit_params: DepositParams,
 ) -> anyhow::Result<String> {
     let rpc = RpcClient::new(solana_rpc_url);
 
     let fee_payer_keypair = Keypair::from_base58_string("FEE_PAYER_PRIVATE_KEY");
     let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
-    let user_pubkey = Pubkey::from_str(&depositor)?;
+    let user_pubkey = Pubkey::from_str(&deposit_params.user_address)?;
     let usdc_pubkey = Pubkey::from_str(SOLANA_USDC_MINT)?;
 
     let user_usdc_ata = get_associated_token_address(&user_pubkey, &usdc_pubkey);
@@ -47,7 +53,7 @@ pub async fn deposit_to_pacifica(
     let event_authority_pubkey = Pubkey::from_str(EVENT_AUTHORITY)?;
     let pacifica_program_pubkey = Pubkey::from_str(PACIFICA_PROGRAM_ADDRESS)?;
 
-    let amount_to_deposit = amount - GAS_REIMBURSEMENT_AMOUNT;
+    let amount_to_deposit = deposit_params.amount - GAS_REIMBURSEMENT_AMOUNT;
 
     let deposit_ix = Instruction {
         program_id: pacifica_program_pubkey,

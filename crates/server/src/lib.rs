@@ -1,4 +1,7 @@
-use perp_core::types::LiveMarketFeed;
+use perp_core::{
+    config::{self, Config},
+    types::LiveMarketFeed,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,6 +33,7 @@ const RATE_LIMIT_CLEANUP_THRESHOLD_SECS: u64 = 60;
 
 #[derive(Clone, Debug)]
 pub struct AppState {
+    pub config: Config,
     pub db: Arc<PgPool>,
     pub live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 }
@@ -114,10 +118,12 @@ fn get_cors_origins() -> Vec<HeaderValue> {
 }
 
 pub async fn run_server(
+    config: Config,
     db: Arc<PgPool>,
     live_market_feed: Arc<RwLock<LiveMarketFeed>>,
 ) -> anyhow::Result<()> {
     let app_state = AppState {
+        config,
         db,
         live_market_feed,
     };
@@ -141,7 +147,8 @@ pub async fn run_server(
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
 
-    let bind_addr = std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let bind_addr =
+        std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 
     log::info!("Starting Server on {}...", bind_addr);
