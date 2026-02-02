@@ -100,8 +100,9 @@ pub async fn bridge_to_pacifica(
     Json(payload): Json<DepositParams>,
 ) -> Result<Json<String>, AppError> {
     let solana_rpc_url = state.config.solana_rpc_url;
+    let fee_payer_private_key = state.config.solana_fee_payer_private_key;
 
-    let serialized_tx = deposit_to_pacifica(solana_rpc_url, payload).await?;
+    let serialized_tx = deposit_to_pacifica(solana_rpc_url, fee_payer_private_key, payload).await?;
 
     Ok(Json(serialized_tx))
 }

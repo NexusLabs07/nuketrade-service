@@ -143,6 +143,7 @@ pub async fn run_server(
         .nest("/hyperliquid", routes::hyperliquid::routes())
         .nest("/pacifica", routes::pacifica::routes())
         .nest("/aggregated", routes::aggregated::routes())
+        .nest("/bridge", routes::bridge::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);

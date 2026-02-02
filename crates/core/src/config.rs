@@ -26,7 +26,8 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
 
     //Private keys
-    pub fee_payer_private_key: String, //TODO: add seperate solana and evm private key
+    pub evm_fee_payer_private_key: String,
+    pub solana_fee_payer_private_key: String,
 }
 
 impl Config {
@@ -58,12 +59,16 @@ impl Config {
             .map(|s| s.trim().to_string())
             .collect();
 
-        let fee_payer_private_key =
-            std::env::var("FEE_PAYER_PRIVATE_KEY").context("FEE_PAYER_PRIVATE_KEY is required")?;
+        let evm_fee_payer_private_key = std::env::var("EVM_FEE_PAYER_PRIVATE_KEY")
+            .context("EVM_FEE_PAYER_PRIVATE_KEY is required")?;
+
+        let solana_fee_payer_private_key = std::env::var("SOLANA_FEE_PAYER_PRIVATE_KEY")
+            .context("SOLANA_FEE_PAYER_PRIVATE_KEY is required")?;
 
         Ok(Self {
             db_url,
-            fee_payer_private_key,
+            evm_fee_payer_private_key: evm_fee_payer_private_key,
+            solana_fee_payer_private_key: solana_fee_payer_private_key,
             solana_rpc_url,
             arbitrum_rpc_url,
             server_host,

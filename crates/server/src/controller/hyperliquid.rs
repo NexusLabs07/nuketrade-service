@@ -67,7 +67,7 @@ pub async fn bridge_to_hyperliquid(
     Json(payload): Json<DepositParams>,
 ) -> Result<Json<String>, AppError> {
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
-    let fee_payer_private_key = state.config.fee_payer_private_key;
+    let fee_payer_private_key = state.config.evm_fee_payer_private_key;
 
     let tx_hash = deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, payload).await?;
 

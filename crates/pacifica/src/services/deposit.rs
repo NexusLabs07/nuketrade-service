@@ -30,11 +30,12 @@ pub struct DepositParams {
 
 pub async fn deposit_to_pacifica(
     solana_rpc_url: String,
+    fee_payer_private_key: String,
     deposit_params: DepositParams,
 ) -> anyhow::Result<String> {
     let rpc = RpcClient::new(solana_rpc_url);
 
-    let fee_payer_keypair = Keypair::from_base58_string("FEE_PAYER_PRIVATE_KEY");
+    let fee_payer_keypair = Keypair::from_base58_string(&fee_payer_private_key);
     let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
     let user_pubkey = Pubkey::from_str(&deposit_params.user_address)?;
