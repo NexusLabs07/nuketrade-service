@@ -4,6 +4,7 @@ use perp_core::types::LiveMarketFeed;
 use crate::AppState;
 
 pub mod aggregated;
+pub mod bridge;
 pub mod hyperliquid;
 pub mod pacifica;
 pub mod user;

@@ -7,29 +7,30 @@ use crate::RELAY_API_URL;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QuoteRequest {
-    user: String,
+    pub user: String,
     #[serde(rename = "originChainId")]
-    origin_chain_id: u64,
+    pub origin_chain_id: u64,
     #[serde(rename = "destinationChainId")]
-    destination_chain_id: u64,
+    pub destination_chain_id: u64,
     #[serde(rename = "originCurrency")]
-    origin_currency: String,
+    pub origin_currency: String,
     #[serde(rename = "destinationCurrency")]
-    destination_currency: String,
-    amount: String,
+    pub destination_currency: String,
+    pub amount: String,
     #[serde(rename = "tradeType")]
-    trade_type: String,
+    pub trade_type: String,
     #[serde(rename = "usePermit")]
-    use_permit: bool,
+    pub use_permit: bool,
+    pub recipient: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PermitRequest {
-    signature: String,
-    kind: String,
+    pub signature: String,
+    pub kind: String,
     #[serde(rename = "requestId")]
-    request_id: String,
-    api: String,
+    pub request_id: String,
+    pub api: String,
 }
 
 pub type RelayResponse = Value;
