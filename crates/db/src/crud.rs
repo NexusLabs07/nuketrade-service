@@ -123,13 +123,8 @@ pub async fn insert_user_with_wallet_and_points(
 ) -> Result<uuid::Uuid, anyhow::Error> {
     let mut tx = db_conn.begin().await?;
 
-    let referred_by_user_id = match referred_by_user {
-        Some(user) => Some(user.id),
-        None => None,
-    };
-
-    if referred_by_user_id.is_some() {
-        update_points_with_executor(&mut *tx, referred_by_user_id.unwrap(), 25).await?;
+    if let Some(referred_user) = referred_by_user {
+        update_points_with_executor(&mut *tx, referred_user.id, 25).await?;
     }
 
     insert_wallet_with_executor(&mut *tx, &wallet).await?;
@@ -295,4 +290,18 @@ pub async fn get_user_position(
         .await?;
 
     Ok(row.0)
+}
+
+pub async fn get_token_chart_info(
+    db_conn: Arc<PgPool>,
+    symbol: String,
+) -> Result<Vec<FundingRate>, anyhow::Error> {
+    let query = r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY created_at ASC"#;
+
+    let rows = sqlx::query_as::<_, FundingRate>(query)
+        .bind(symbol)
+        .fetch_all(&*db_conn)
+        .await?;
+
+    Ok(rows)
 }

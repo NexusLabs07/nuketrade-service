@@ -4,6 +4,7 @@ use core::fmt;
 pub enum Dex {
     Hyperliquid,
     Lighter,
+    Pacifica,
 }
 
 impl fmt::Display for Dex {
@@ -11,6 +12,7 @@ impl fmt::Display for Dex {
         let s = match self {
             Dex::Hyperliquid => "hyperliquid",
             Dex::Lighter => "lighter",
+            Dex::Pacifica => "pacifica",
         };
 
         write!(f, "{}", s)

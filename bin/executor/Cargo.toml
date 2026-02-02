@@ -11,8 +11,7 @@ publish.workspace = true
 [dependencies]
 db = { path = "../../crates/db" }
 hyperliquid = { path = "../../crates/hyperliquid" }
-lighter = { path = "../../crates/lighter" }
-core = { path = "../../crates/core" }
+perp_core = { path = "../../crates/core" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
@@ -20,3 +19,4 @@ tracing-subscriber = { workspace = true }
 dotenv = { workspace = true }
 thiserror = { workspace = true }
 server = { path = "../../crates/server" }
+pacifica = { path = "../../crates/pacifica" }

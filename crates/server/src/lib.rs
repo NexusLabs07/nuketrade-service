@@ -1,4 +1,4 @@
-use core::types::PlatformsFundingRate;
+use perp_core::types::LiveMarketFeed;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -6,34 +6,38 @@ use axum::{
     Router,
     body::Body,
     http::{HeaderValue, Method, Request, StatusCode},
-    middleware::{self, Next},
+    middleware as axum__middleware,
     response::Response,
-    routing::{get, post},
+    routing::get,
 };
 use sqlx::PgPool;
 use std::net::{IpAddr, SocketAddr};
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-use crate::{
-    controller::{
-        add_to_waitlist, get_funding_rate, get_referral_count, get_total_points, get_total_users,
-        get_user_position, root,
-    },
-    types::AppState,
-};
+use crate::controller::root;
 
 pub mod controller;
 pub mod error;
+pub mod middleware;
+pub mod routes;
+pub mod services;
 pub mod types;
 
-// Helper function to extract real client IP from headers (for proxy/Railway support)
+const RATE_LIMIT_REQUESTS_PER_SECOND: usize = 20;
+const RATE_LIMIT_CLEANUP_THRESHOLD_SECS: u64 = 60;
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub db: Arc<PgPool>,
+    pub live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+}
+
 fn get_client_ip(request: &Request<Body>) -> IpAddr {
     // Try X-Forwarded-For header first (most common)
     if let Some(forwarded_for) = request.headers().get("x-forwarded-for") {
         if let Ok(forwarded_str) = forwarded_for.to_str() {
-            log::info!("X-Forwarded-For header: {}", forwarded_str);
-
             // X-Forwarded-For can contain multiple IPs, take the first one (original client)
             if let Some(first_ip) = forwarded_str.split(',').next() {
                 if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
@@ -45,7 +49,6 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
 
     // Try X-Real-IP header as fallback
     if let Some(real_ip) = request.headers().get("x-real-ip") {
-        log::info!("X-Real-IP header: {:?}", real_ip);
         if let Ok(real_ip_str) = real_ip.to_str() {
             if let Ok(ip) = real_ip_str.parse::<IpAddr>() {
                 return ip;
@@ -61,57 +64,66 @@ fn get_client_ip(request: &Request<Body>) -> IpAddr {
         .unwrap_or_else(|| IpAddr::from([0, 0, 0, 0]))
 }
 
-// Rate limiting middleware - allows 50 requests per second per IP
-async fn rate_limit_middleware(request: Request<Body>, next: Next) -> Result<Response, StatusCode> {
-    use std::time::{Duration, Instant};
-
-    // Track request timestamps per IP address
+async fn rate_limit_middleware(
+    request: Request<Body>,
+    next: axum__middleware::Next,
+) -> Result<Response, StatusCode> {
     static IP_REQUESTS: once_cell::sync::Lazy<RwLock<HashMap<IpAddr, Vec<Instant>>>> =
         once_cell::sync::Lazy::new(|| RwLock::new(HashMap::new()));
 
-    // Get the real client IP (handles proxy/Railway forwarded headers)
     let client_ip = get_client_ip(&request);
-
     let now = Instant::now();
     let one_second_ago = now - Duration::from_secs(1);
+    let cleanup_threshold = now - Duration::from_secs(RATE_LIMIT_CLEANUP_THRESHOLD_SECS);
 
-    // Check and update request timestamps
     let mut requests = IP_REQUESTS.write().await;
-    let timestamps = requests.entry(client_ip).or_insert_with(Vec::new);
+
+    // Periodically clean up stale IP entries to prevent memory leak
+    requests.retain(|_, timestamps| timestamps.last().is_some_and(|&t| t > cleanup_threshold));
+
+    let timestamps = requests.entry(client_ip).or_default();
 
     // Remove timestamps older than 1 second
     timestamps.retain(|&timestamp| timestamp > one_second_ago);
 
     // Check if limit exceeded
-    if timestamps.len() >= 20 {
+    if timestamps.len() >= RATE_LIMIT_REQUESTS_PER_SECOND {
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
-    // Add current request timestamp
     timestamps.push(now);
-    drop(requests); // Release the lock before proceeding
+    drop(requests);
 
     Ok(next.run(request).await)
 }
 
+fn get_cors_origins() -> Vec<HeaderValue> {
+    let default_origins = [
+        "https://nuketrade.xyz",
+        "https://arbitrage-funding-landing-page.vercel.app",
+        "http://localhost:3000",
+    ];
+
+    let origins_str =
+        std::env::var("CORS_ALLOWED_ORIGINS").unwrap_or_else(|_| default_origins.join(","));
+
+    origins_str
+        .split(',')
+        .filter_map(|s| s.trim().parse::<HeaderValue>().ok())
+        .collect()
+}
+
 pub async fn run_server(
     db: Arc<PgPool>,
-    platforms_funding_rate: Arc<RwLock<PlatformsFundingRate>>,
-) {
+    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+) -> anyhow::Result<()> {
     let app_state = AppState {
         db,
-        platforms_funding_rate,
+        live_market_feed,
     };
 
-    // Configure CORS to allow requests from specific frontend origins
     let cors = CorsLayer::new()
-        .allow_origin([
-            "https://nuketrade.xyz".parse::<HeaderValue>().unwrap(),
-            "https://arbitrage-funding-landing-page.vercel.app"
-                .parse::<HeaderValue>()
-                .unwrap(),
-            "http://localhost:3000".parse::<HeaderValue>().unwrap(), // For local development
-        ])
+        .allow_origin(get_cors_origins())
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
@@ -121,19 +133,20 @@ pub async fn run_server(
 
     let app = Router::new()
         .route("/", get(root))
-        .route("/funding-rate", get(get_funding_rate))
-        // .route("/add-to-waitlist", post(add_to_waitlist))
-        .route("/total-users", get(get_total_users))
-        .route("/total-points/{user_id}", get(get_total_points))
-        .route("/referral-count/{referral_code}", get(get_referral_count))
-        .route("/user-position/{user_id}", get(get_user_position))
+        .nest("/user", routes::user::routes())
+        .nest("/hyperliquid", routes::hyperliquid::routes())
+        .nest("/pacifica", routes::pacifica::routes())
+        .nest("/aggregated", routes::aggregated::routes())
         .layer(cors)
-        .layer(middleware::from_fn(rate_limit_middleware))
+        .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
+    let bind_addr = std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 
-    log::info!("Starting Server...");
+    log::info!("Starting Server on {}...", bind_addr);
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use sqlx::types::chrono;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
 pub struct FundingRate {
     pub id: uuid::Uuid,
     pub platform: String,
