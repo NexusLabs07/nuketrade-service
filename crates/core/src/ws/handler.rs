@@ -294,13 +294,6 @@ async fn handle_message<E: Exchange>(
                         funding_rate,
                         timestamp_ms,
                     } => {
-                        log::info!(
-                            "{}: Update for {} - mark: {}, funding: {}",
-                            exchange.name(),
-                            symbol,
-                            mark_price,
-                            funding_rate
-                        );
                         updates.push((symbol, mark_price, funding_rate, timestamp_ms));
                     }
 
