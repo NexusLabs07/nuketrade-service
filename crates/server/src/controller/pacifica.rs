@@ -4,7 +4,7 @@ use axum::{
 };
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse},
-    services::deposit::{DepositParams, deposit_to_pacifica},
+    services::deposit::{DepositPayload, deposit_to_pacifica},
 };
 
 use crate::{
@@ -97,7 +97,7 @@ pub async fn get_user_open_positions(
 
 pub async fn bridge_to_pacifica(
     State(state): State<AppState>,
-    Json(payload): Json<DepositParams>,
+    Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
     let solana_rpc_url = state.config.solana_rpc_url;
     let fee_payer_private_key = state.config.solana_fee_payer_private_key;

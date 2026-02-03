@@ -1,3 +1,4 @@
+pub mod chains;
 pub mod config;
 pub mod exchange;
 pub mod funding;
@@ -16,9 +17,9 @@ pub use utils::{parse_f64, parse_f64_or, parse_f64_or_zero};
 pub use ws::{WsConfig, run_funding_feed};
 
 // Solana program constants
-pub const SOLANA_USDC_MINT: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
-pub const ARBITRUM_USDC_ADDRESS: &str = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
-pub const ARBITRUM_CHAIN_ID: u64 = 42161;
+
+// Chain IDs are now in chains::Chain (e.g., Chain::ARBITRUM.id, Chain::BASE.id)
+pub use chains::Chain;

@@ -5,7 +5,7 @@ use axum::{
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
     perp_metadata::PERP_META,
-    services::{DepositParams, deposit_to_hyperliquid},
+    services::{DepositPayload, deposit_to_hyperliquid},
     spot_metadata::SPOT_META,
 };
 use perp_core::parse_f64_or_zero;
@@ -64,7 +64,7 @@ pub async fn get_user_open_positions(
 
 pub async fn bridge_to_hyperliquid(
     State(state): State<AppState>,
-    Json(payload): Json<DepositParams>,
+    Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
     let fee_payer_private_key = state.config.evm_fee_payer_private_key;

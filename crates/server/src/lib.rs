@@ -1,7 +1,4 @@
-use perp_core::{
-    config::{self, Config},
-    types::LiveMarketFeed,
-};
+use perp_core::{config::Config, types::LiveMarketFeed};
 use std::collections::HashMap;
 use std::sync::Arc;
 
