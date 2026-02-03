@@ -21,5 +21,4 @@ pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
 
-// Chain IDs are now in chains::Chain (e.g., Chain::ARBITRUM.id, Chain::BASE.id)
 pub use chains::Chain;

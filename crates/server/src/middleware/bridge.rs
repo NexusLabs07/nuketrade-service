@@ -3,6 +3,7 @@ use alloy::{
     providers::ProviderBuilder,
     sol,
 };
+use bridge::MIN_BRIDGE_AMOUNT;
 use perp_core::{Chain, chains::get_usdc_address};
 
 use crate::controller::bridge::QuotePayload;
@@ -40,7 +41,7 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         .parse()
         .map_err(|_| validator::ValidationError::new("invalid_amount"))?;
 
-    if amount < U256::from(10_000_000) {
+    if amount < U256::from(MIN_BRIDGE_AMOUNT) {
         return Err(validator::ValidationError::new("amount_less_than_10_usdc"));
     }
 

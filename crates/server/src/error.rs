@@ -73,7 +73,9 @@ impl std::fmt::Display for AppError {
             AppError::Validation(_) => write!(f, "Validation error"),
             AppError::Database(e) => write!(f, "Database error: {}", e),
             AppError::Exchange(e) => write!(f, "Exchange error: {}", e),
-            AppError::Parse { field, message } => write!(f, "Parse error in {}: {}", field, message),
+            AppError::Parse { field, message } => {
+                write!(f, "Parse error in {}: {}", field, message)
+            }
             AppError::Network(msg) => write!(f, "Network error: {}", msg),
             AppError::Config(msg) => write!(f, "Configuration error: {}", msg),
             AppError::NotFound(resource) => write!(f, "Not found: {}", resource),
@@ -128,11 +130,7 @@ impl IntoResponse for AppError {
 
             AppError::Exchange(err) => {
                 tracing::warn!("Exchange error: {:?}", err);
-                (
-                    StatusCode::BAD_GATEWAY,
-                    "exchange_error",
-                    err.to_string(),
-                )
+                (StatusCode::BAD_GATEWAY, "exchange_error", err.to_string())
             }
 
             AppError::Parse { field, message } => (
@@ -143,11 +141,7 @@ impl IntoResponse for AppError {
 
             AppError::Network(msg) => {
                 tracing::error!("Network error: {}", msg);
-                (
-                    StatusCode::BAD_GATEWAY,
-                    "network_error",
-                    msg.clone(),
-                )
+                (StatusCode::BAD_GATEWAY, "network_error", msg.clone())
             }
 
             AppError::Config(msg) => {
@@ -252,6 +246,10 @@ impl From<DepositError> for AppError {
             DepositError::ContractError(msg) | DepositError::SignerError(msg) => {
                 AppError::Internal(msg)
             }
+            DepositError::InvalidAmount(msg) => AppError::Parse {
+                field: "amount".to_string(),
+                message: msg,
+            },
         }
     }
 }
