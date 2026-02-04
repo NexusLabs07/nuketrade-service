@@ -6,7 +6,7 @@ use alloy::{
 use bridge::MIN_BRIDGE_AMOUNT;
 use perp_core::{Chain, chains::get_usdc_address};
 
-use crate::controller::bridge::QuotePayload;
+use crate::features::bridge::controller::QuotePayload;
 
 const BASE_RPC_URL: &str = "https://mainnet.base.org";
 

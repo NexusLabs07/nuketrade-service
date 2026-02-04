@@ -2,7 +2,7 @@ use axum::routing::post;
 
 use crate::{
     AppState,
-    controller::bridge::{execute_permits, get_quote},
+    features::bridge::controller::{execute_permits, get_quote},
 };
 
 pub fn routes() -> axum::Router<AppState> {

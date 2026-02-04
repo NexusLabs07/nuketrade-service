@@ -20,6 +20,9 @@ pub struct Config {
     // Arbitrum
     pub arbitrum_rpc_url: String,
 
+    // Base
+    pub base_rpc_url: String,
+
     // Server
     pub server_host: String,
     pub server_port: u16,
@@ -47,6 +50,9 @@ impl Config {
         let arbitrum_rpc_url = std::env::var("ARBITRUM_RPC_URL")
             .unwrap_or_else(|_| "https://arb1.arbitrum.io/rpc".to_string());
 
+        let base_rpc_url =
+            std::env::var("BASE_RPC_URL").unwrap_or_else(|_| "https://1rpc.io/base".to_string());
+
         // Server config
         let server_host = std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let server_port = std::env::var("SERVER_PORT")
@@ -71,6 +77,7 @@ impl Config {
             solana_fee_payer_private_key: solana_fee_payer_private_key,
             solana_rpc_url,
             arbitrum_rpc_url,
+            base_rpc_url,
             server_host,
             server_port,
             cors_allowed_origins,

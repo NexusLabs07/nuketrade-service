@@ -2,7 +2,7 @@ use axum::routing::{get, post};
 
 use crate::{
     AppState,
-    controller::hyperliquid::{
+    features::hyperliquid::controller::{
         bridge_to_hyperliquid, get_perp_metadata, get_spot_metadata, get_user_open_positions,
     },
 };

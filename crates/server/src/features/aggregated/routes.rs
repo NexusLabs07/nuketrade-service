@@ -2,7 +2,9 @@ use axum::routing::get;
 
 use crate::{
     AppState,
-    controller::aggregated::{get_live_market_feed, get_merged_open_positions, get_token_chart},
+    features::aggregated::controller::{
+        get_live_market_feed, get_merged_open_positions, get_token_chart,
+    },
 };
 
 pub fn routes() -> axum::Router<AppState> {
