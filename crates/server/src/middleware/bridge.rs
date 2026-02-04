@@ -4,11 +4,10 @@ use alloy::{
     sol,
 };
 use bridge::MIN_BRIDGE_AMOUNT;
-use perp_core::{Chain, chains::get_usdc_address};
+use perp_core::{Chain, chains::get_usdc_address, config::Config};
+use validator::ValidationError;
 
 use crate::features::bridge::controller::QuotePayload;
-
-const BASE_RPC_URL: &str = "https://mainnet.base.org";
 
 sol! {
     #[sol(rpc)]
@@ -31,6 +30,10 @@ pub fn validate_destination_usdc_address(
 
 /// Validates that the user has sufficient USDC balance on Base chain
 pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::ValidationError> {
+    let base_rpc_url = Config::from_env()
+        .map_err(|_| ValidationError::new("invalid base rpc url"))?
+        .base_rpc_url;
+
     let user_address: Address = payload
         .user
         .parse()
@@ -50,7 +53,7 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         .parse()
         .map_err(|_| validator::ValidationError::new("invalid_usdc_address"))?;
 
-    let provider = ProviderBuilder::new().connect_http(BASE_RPC_URL.parse().unwrap());
+    let provider = ProviderBuilder::new().connect_http(base_rpc_url.parse().unwrap());
 
     let usdc = IERC20::new(usdc_address, provider);
 

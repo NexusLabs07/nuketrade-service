@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 pub const DEPOSIT_CONTRACT_ADDRESS: &str = "0x0000000000000000000000000000000000000000"; //TODO: change that
 
 /// Minimum deposit amount: 10 USDC (6 decimals)
-pub const MIN_DEPOSIT_AMOUNT: u64 = 9_000_000;
+pub const MIN_DEPOSIT_AMOUNT: u64 = 10_000_000;
 
 /// Permit signature components
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,7 +84,7 @@ sol! {
 
     #[sol(rpc)]
     interface IDeposit {
-        function depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+        function deposit(address user, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
     }
 }
 
@@ -118,12 +118,14 @@ async fn check_user_balance(
     Ok(balance)
 }
 
-/// Encode the depositWithPermit call data
-fn encode_deposit_with_permit_call(
+/// Encode the deposit call data
+fn encode_deposit_call(
+    user: Address,
     amount: u64,
     permit: &PermitSignature,
 ) -> Result<Bytes, DepositError> {
-    let call = IDeposit::depositWithPermitCall {
+    let call = IDeposit::depositCall {
+        user,
         amount: U256::from(amount),
         deadline: U256::from(permit.deadline),
         v: permit.v,
@@ -146,7 +148,7 @@ async fn simulate_deposit(
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
-    let call_data = encode_deposit_with_permit_call(amount, permit)?;
+    let call_data = encode_deposit_call(user_address, amount, permit)?;
 
     let tx = TransactionRequest::default()
         .to(contract_address)
@@ -205,11 +207,11 @@ pub async fn deposit_to_hyperliquid(
     let fee_payer_address = signer.address();
     let wallet = EthereumWallet::from(signer);
 
-    let provider = ProviderBuilder::new().wallet(wallet).connect_http(
-        arbitrum_rpc_url
-            .parse()
-            .map_err(|e| DepositError::ProviderError(format!("{:?}", e)))?,
-    );
+    let provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect(arbitrum_rpc_url)
+        .await
+        .map_err(|e| DepositError::ProviderError(format!("{:?}", e)))?;
 
     // Step 1: Check user balance
     let balance = check_user_balance(&provider, user_addr, U256::from(amount)).await?;
@@ -235,7 +237,7 @@ pub async fn deposit_to_hyperliquid(
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
-    let call_data = encode_deposit_with_permit_call(amount, &payload.permit)?;
+    let call_data = encode_deposit_call(user_addr, amount, &payload.permit)?;
 
     let tx = TransactionRequest::default()
         .to(contract_address)
