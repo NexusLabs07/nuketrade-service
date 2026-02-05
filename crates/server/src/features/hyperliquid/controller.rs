@@ -1,12 +1,17 @@
-use axum::{Json, extract::Path};
-use perp_core::parse_f64_or_zero;
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
     perp_metadata::PERP_META,
+    services::{DepositPayload, deposit_to_hyperliquid},
     spot_metadata::SPOT_META,
 };
+use perp_core::parse_f64_or_zero;
 
 use crate::{
+    AppState,
     error::AppError,
     types::{OpenPositionsResponse, Side},
 };
@@ -55,4 +60,16 @@ pub async fn get_user_open_positions(
     }
 
     Ok(Json(open_position_response))
+}
+
+pub async fn bridge_to_hyperliquid(
+    State(state): State<AppState>,
+    Json(payload): Json<DepositPayload>,
+) -> Result<Json<String>, AppError> {
+    let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
+    let fee_payer_private_key = state.config.evm_fee_payer_private_key;
+
+    let tx_hash = deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, payload).await?;
+
+    Ok(Json(tx_hash))
 }

@@ -1,4 +1,4 @@
-use crate::controller::user::CreateUserPayload;
+use crate::features::user::controller::CreateUserPayload;
 
 pub fn validate_addresses_are_null(
     payload: &CreateUserPayload,

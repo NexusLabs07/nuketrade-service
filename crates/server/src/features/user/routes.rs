@@ -2,7 +2,9 @@ use axum::{Router, routing::get};
 
 use crate::{
     AppState,
-    controller::user::{get_referral_count, get_total_points, get_total_users, get_user_position},
+    features::user::controller::{
+        get_referral_count, get_total_points, get_total_users, get_user_position,
+    },
 };
 
 pub fn routes() -> Router<AppState> {
