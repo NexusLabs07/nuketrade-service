@@ -75,7 +75,7 @@ impl BridgeClient {
         let response = self
             .client
             .post(format!("{}{}", self.base_url, "/execute/permits"))
-            .json(&permit_request)
+            .query(&permit_request)
             .send()
             .await?;
 
