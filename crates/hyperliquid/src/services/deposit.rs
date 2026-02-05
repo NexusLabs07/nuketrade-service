@@ -10,8 +10,7 @@ use alloy::{
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
 
-/// Hyperliquid deposit contract address (replace with actual)
-pub const DEPOSIT_CONTRACT_ADDRESS: &str = "0x0000000000000000000000000000000000000000"; //TODO: change that
+use crate::HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS;
 
 /// Minimum deposit amount: 10 USDC (6 decimals)
 pub const MIN_DEPOSIT_AMOUNT: u64 = 10_000_000;
@@ -144,7 +143,7 @@ async fn simulate_deposit(
     amount: u64,
     permit: &PermitSignature,
 ) -> Result<(), DepositError> {
-    let contract_address: Address = DEPOSIT_CONTRACT_ADDRESS
+    let contract_address: Address = HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
@@ -233,7 +232,7 @@ pub async fn deposit_to_hyperliquid(
     .await?;
 
     // Step 3: Execute the contract call
-    let contract_address: Address = DEPOSIT_CONTRACT_ADDRESS
+    let contract_address: Address = HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS
         .parse()
         .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
 
