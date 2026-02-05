@@ -30,7 +30,16 @@ pub struct PermitRequest {
     pub kind: String,
     #[serde(rename = "requestId")]
     pub request_id: String,
-    pub api: String,
+    pub api: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct PermitRequestBody {
+    pub kind: String,
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
 }
 
 pub type RelayResponse = Value;
@@ -72,10 +81,17 @@ impl BridgeClient {
     }
 
     pub async fn execute_permit(&self, permit_request: PermitRequest) -> Result<RelayResponse> {
+        let body = PermitRequestBody {
+            kind: permit_request.kind,
+            request_id: permit_request.request_id,
+            api: permit_request.api,
+        };
+
         let response = self
             .client
             .post(format!("{}{}", self.base_url, "/execute/permits"))
-            .query(&permit_request)
+            .query(&[("signature", &permit_request.signature)])
+            .json(&body)
             .send()
             .await?;
 
