@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 refinery = { workspace = true }
+refinery-core = { workspace = true }
 sqlx = { workspace = true }
 dotenv = { workspace = true }
 log = { workspace = true }

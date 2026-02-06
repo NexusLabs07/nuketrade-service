@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use db::{crud::get_token_chart_info, types::FundingRate};
 use hyperliquid::{
@@ -48,6 +48,11 @@ pub struct LiveMarketFeedResponse {
     pub symbol: String,
     pub hyperliquid: Option<MarketFeedValueStruct>,
     pub pacifica: Option<MarketFeedValueStruct>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChartParams {
+    timeframe: String,
 }
 
 pub async fn get_merged_open_positions(
@@ -255,9 +260,10 @@ pub async fn get_live_market_feed(
 
 pub async fn get_token_chart(
     Path(symbol): Path<String>,
+    Query(params): Query<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
-    let rows = get_token_chart_info(state.db, symbol).await?;
+    let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
     for row in rows {
