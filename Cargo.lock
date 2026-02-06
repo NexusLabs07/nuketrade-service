@@ -1852,6 +1852,7 @@ dependencies = [
  "dotenv",
  "log",
  "refinery",
+ "refinery-core",
  "serde",
  "serde_json",
  "sqlx",

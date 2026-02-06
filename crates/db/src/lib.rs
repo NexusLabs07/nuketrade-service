@@ -1,16 +1,12 @@
 pub mod crud;
 pub mod types;
 
-use std::{env, sync::Arc};
+use std::{env, path::Path, sync::Arc};
 
 use anyhow::Error;
 use refinery::config::ConfigDbType;
+use refinery_core::{Runner, load_sql_migrations};
 use sqlx::PgPool;
-
-mod embedded {
-    use refinery::embed_migrations;
-    embed_migrations!("./migrations");
-}
 
 pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     dotenv::dotenv().ok();
@@ -37,8 +33,14 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
         .set_db_port(&db_port)
         .set_db_name(&db_name);
 
-    // Apply embedded migrations using sqlx pool
-    let _ = embedded::migrations::runner().run(&mut conf)?;
+    // Load migrations from directory at runtime
+    // Use MIGRATIONS_PATH env var if set, otherwise use the default path
+    let migrations_path = env::var("MIGRATIONS_PATH")
+        .map(|p| Path::new(&p).to_path_buf())
+        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations"));
+    let migrations = load_sql_migrations(&migrations_path)?;
+    let runner = Runner::new(&migrations);
+    runner.run(&mut conf)?;
 
     log::info!("✅ Migrations applied successfully.");
 

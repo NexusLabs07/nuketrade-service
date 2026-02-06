@@ -295,8 +295,77 @@ pub async fn get_user_position(
 pub async fn get_token_chart_info(
     db_conn: Arc<PgPool>,
     symbol: String,
+    timeframe: String,
 ) -> Result<Vec<FundingRate>, anyhow::Error> {
-    let query = r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY created_at ASC"#;
+    log::info!("i am here");
+    let query = match timeframe.as_str() {
+        "30m" => {
+            r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY timestamp ASC"#
+        }
+        "1h" => {
+            r#"
+            SELECT DISTINCT ON (platform, ts_hour)
+            id,
+            platform,
+            symbol,
+            rate,
+            mark_px,
+            timestamp
+            FROM funding_rate
+            WHERE symbol = $1
+            ORDER BY platform, ts_hour, timestamp DESC
+            "#
+        }
+        "24h" => {
+            r#"
+            SELECT DISTINCT ON (platform, ts_day)
+            id,
+            platform,
+            symbol,
+            rate,
+            mark_px,
+            timestamp
+            FROM funding_rate
+            WHERE symbol = $1
+            ORDER BY platform, ts_day, timestamp DESC
+            "#
+        }
+        "7d" => {
+            r#"
+            SELECT DISTINCT ON (platform, ts_week)
+            id,
+            platform,
+            symbol,
+            rate,
+            mark_px,
+            timestamp
+            FROM funding_rate
+            WHERE symbol = $1
+            ORDER BY platform, ts_week, timestamp DESC
+            "#
+        }
+        "30d" => {
+            r#"
+            SELECT DISTINCT ON (platform, ts_month)
+            id,
+            platform,
+            symbol,
+            rate,
+            mark_px,
+            timestamp
+            FROM funding_rate
+            WHERE symbol = $1
+            ORDER BY platform, ts_month, timestamp DESC
+            "#
+        }
+        _ => {
+            log::warn!(
+                "Invalid timeframe: {}, continuing with default timeframe",
+                timeframe
+            );
+            r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY timestamp ASC"#
+        }
+    };
 
     let rows = sqlx::query_as::<_, FundingRate>(query)
         .bind(symbol)
