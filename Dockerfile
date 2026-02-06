@@ -18,7 +18,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy the binary from builder
+# Copy the binary and migrations from builder
 COPY --from=builder /app/target/release/executor /app/executor
+COPY --from=builder /app/crates/db/migrations /app/migrations
+
+ENV MIGRATIONS_PATH=/app/migrations
 
 CMD ["./executor"]
