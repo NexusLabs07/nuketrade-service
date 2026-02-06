@@ -94,7 +94,7 @@ pub async fn deposit_to_pacifica(
     };
 
     let message = Message::new(&[gas_reimbursement_ix, deposit_ix], Some(&fee_payer_pubkey));
-    let transaction = Transaction::new_unsigned(message);
+    let mut transaction = Transaction::new_unsigned(message);
 
     let simulation_config = RpcSimulateTransactionConfig {
         sig_verify: false,
@@ -122,6 +122,9 @@ pub async fn deposit_to_pacifica(
             log::info!("Log: {}", log);
         }
     }
+
+    let recent_blockhash = rpc.get_latest_blockhash().await?;
+    transaction.partial_sign(&[&fee_payer_keypair], recent_blockhash);
 
     let serialized = serialize(&transaction)?;
     let encoded = STANDARD.encode(&serialized);
