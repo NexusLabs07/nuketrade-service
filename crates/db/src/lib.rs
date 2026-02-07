@@ -1,4 +1,5 @@
 pub mod crud;
+pub mod hedge;
 pub mod types;
 
 use std::{env, path::Path, sync::Arc};
