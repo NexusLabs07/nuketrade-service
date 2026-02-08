@@ -333,6 +333,8 @@ fn handle_failed(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput 
 // ============================= Action Builders =============================
 
 fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse {
+    let bridge_amount = compute_bridge_needed(leg);
+
     let (action_name, origin_chain_id, dest_chain_id, dest_usdc, user_address) =
         match leg.protocol.as_str() {
             protocol::HL => (
@@ -355,7 +357,7 @@ fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse
     NextActionResponse {
         action: action_name.to_string(),
         leg: Some(leg.protocol.clone()),
-        amount_usd: Some(leg.target_amount_usd),
+        amount_usd: Some(bridge_amount),
         params: Some(json!({
             "origin_chain_id": origin_chain_id,
             "destination_chain_id": dest_chain_id,
@@ -364,11 +366,15 @@ fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse
             "user_address": user_address,
             "recipient": user_address,
             "leg_id": leg.id.to_string(),
+            "existing_margin_usd": leg.existing_margin_usd,
+            "existing_onchain_usd": leg.existing_onchain_usd,
         })),
     }
 }
 
 fn deposit_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse {
+    let deposit_amount = compute_deposit_needed(leg);
+
     let (action_name, user_address) = match leg.protocol.as_str() {
         protocol::HL => (action::DEPOSIT_TO_HL, &intent.evm_address),
         protocol::PACIFICA => (action::DEPOSIT_TO_PACIFICA, &intent.solana_address),
@@ -378,13 +384,14 @@ fn deposit_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionRespons
     NextActionResponse {
         action: action_name.to_string(),
         leg: Some(leg.protocol.clone()),
-        amount_usd: Some(leg.target_amount_usd),
+        amount_usd: Some(deposit_amount),
         params: Some(json!({
             "protocol": leg.protocol,
             "chain": leg.chain,
             "user_address": user_address,
-            "amount_usd": leg.target_amount_usd,
+            "amount_usd": deposit_amount,
             "leg_id": leg.id.to_string(),
+            "existing_margin_usd": leg.existing_margin_usd,
         })),
     }
 }
@@ -442,4 +449,17 @@ pub fn protocol_to_deposit_action(protocol: &str) -> &'static str {
         protocol::PACIFICA => action::DEPOSIT_TO_PACIFICA,
         _ => action::NOOP,
     }
+}
+
+/// Compute how much USDC needs to be deposited into the protocol margin.
+/// deposit_needed = max(0, target - existing_margin)
+pub fn compute_deposit_needed(leg: &HedgeLeg) -> f64 {
+    (leg.target_amount_usd - leg.existing_margin_usd).max(0.0)
+}
+
+/// Compute how much USDC needs to be bridged from Base.
+/// bridge_needed = max(0, deposit_needed - existing_onchain)
+pub fn compute_bridge_needed(leg: &HedgeLeg) -> f64 {
+    let deposit_needed = compute_deposit_needed(leg);
+    (deposit_needed - leg.existing_onchain_usd).max(0.0)
 }

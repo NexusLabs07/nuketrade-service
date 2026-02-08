@@ -6,11 +6,12 @@ use serde::{Deserialize, Serialize};
 
 
 use crate::error::AppError;
+use crate::services::balance::{self, compute_funding_needs};
 use crate::services::hedge::{
     self, NextActionResponse, action, intent_status, leg_status, protocol, MAX_RETRIES,
 };
 use crate::state::AppState;
-use db::hedge::{self as hedge_db, NewHedgeIntent, NewHedgeLeg, NewTxReference};
+use db::hedge::{self as hedge_db, HedgeLeg, NewHedgeIntent, NewHedgeLeg, NewTxReference};
 
 // ============================= Request / Response Types =============================
 
@@ -156,7 +157,17 @@ pub async fn get_next_action(
         .await?
         .ok_or_else(|| AppError::not_found(format!("Hedge intent {}", intent_id)))?;
 
-    let legs = hedge_db::get_hedge_legs(state.db.clone(), intent_id).await?;
+    let mut legs = hedge_db::get_hedge_legs(state.db.clone(), intent_id).await?;
+
+    // ── Balance check on CREATED → FUNDING boundary ─────────────────────
+    // When the intent is fresh (CREATED), query existing balances on both
+    // protocols/chains and skip bridge/deposit steps for legs that are
+    // already funded (partially or fully).
+    if intent.status == intent_status::CREATED {
+        check_and_apply_existing_balances(&state, &intent, &mut legs).await?;
+        // Re-fetch legs with updated statuses/balances.
+        legs = hedge_db::get_hedge_legs(state.db.clone(), intent_id).await?;
+    }
 
     // Run the state machine.
     let output = hedge::evaluate(&intent, &legs);
@@ -178,6 +189,92 @@ pub async fn get_next_action(
     }
 
     Ok(Json(output.response))
+}
+
+/// Query existing balances for each leg and advance legs that don't need
+/// bridge and/or deposit. This is called exactly once per intent (on CREATED).
+async fn check_and_apply_existing_balances(
+    state: &AppState,
+    intent: &hedge_db::HedgeIntent,
+    legs: &mut [HedgeLeg],
+) -> Result<(), AppError> {
+    for leg in legs.iter_mut() {
+        // Query existing balances for this protocol.
+        let balances = balance::check_leg_balances(
+            &state.config,
+            &leg.protocol,
+            &intent.evm_address,
+            &intent.solana_address,
+        )
+        .await;
+
+        // Persist the raw balance snapshot for auditing.
+        hedge_db::update_hedge_leg_existing_balances(
+            state.db.clone(),
+            leg.id,
+            balances.protocol_margin_usd,
+            balances.onchain_usd,
+        )
+        .await?;
+
+        // Update in-memory leg too (so the state machine sees correct values).
+        leg.existing_margin_usd = balances.protocol_margin_usd;
+        leg.existing_onchain_usd = balances.onchain_usd;
+
+        // Compute funding needs.
+        let needs = compute_funding_needs(
+            leg.target_amount_usd,
+            balances.protocol_margin_usd,
+            balances.onchain_usd,
+        );
+
+        log::info!(
+            "Leg {} ({}) balance check: margin={:.2}, onchain={:.2} → deposit_needed={:.2}, bridge_needed={:.2}",
+            leg.id,
+            leg.protocol,
+            balances.protocol_margin_usd,
+            balances.onchain_usd,
+            needs.deposit_needed,
+            needs.bridge_needed,
+        );
+
+        if needs.deposit_needed <= 0.0 {
+            // Protocol margin already has enough — skip bridge AND deposit.
+            hedge_db::update_hedge_leg_status(state.db.clone(), leg.id, leg_status::FUNDED)
+                .await?;
+            hedge_db::update_hedge_leg_funded_amount(
+                state.db.clone(),
+                leg.id,
+                leg.target_amount_usd,
+            )
+            .await?;
+            log::info!(
+                "Leg {} ({}) already funded from existing margin ({:.2} >= {:.2})",
+                leg.id,
+                leg.protocol,
+                balances.protocol_margin_usd,
+                leg.target_amount_usd,
+            );
+        } else if needs.bridge_needed <= 0.0 {
+            // On-chain balance covers the deposit need — skip bridge, go straight to deposit.
+            hedge_db::update_hedge_leg_status(
+                state.db.clone(),
+                leg.id,
+                leg_status::BRIDGE_CONFIRMED,
+            )
+            .await?;
+            log::info!(
+                "Leg {} ({}) skipping bridge — on-chain balance ({:.2}) covers deposit need ({:.2})",
+                leg.id,
+                leg.protocol,
+                balances.onchain_usd,
+                needs.deposit_needed,
+            );
+        }
+        // else: stays PENDING — needs full bridge + deposit
+    }
+
+    Ok(())
 }
 
 /// POST /hedge-intents/:id/action-result — Client reports the outcome of an executed action.

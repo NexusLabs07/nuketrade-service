@@ -34,6 +34,10 @@ pub struct HedgeLeg {
     pub last_error: Option<String>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// USDC already inside the protocol's margin account (queried on CREATED→FUNDING).
+    pub existing_margin_usd: f64,
+    /// USDC sitting on the destination chain but not deposited (queried on CREATED→FUNDING).
+    pub existing_onchain_usd: f64,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
@@ -278,6 +282,31 @@ pub async fn get_tx_references(
     .await?;
 
     Ok(refs)
+}
+
+/// Update a leg's existing balance fields after querying on-chain/protocol balances.
+pub async fn update_hedge_leg_existing_balances(
+    db: Arc<PgPool>,
+    leg_id: uuid::Uuid,
+    existing_margin_usd: f64,
+    existing_onchain_usd: f64,
+) -> Result<(), anyhow::Error> {
+    sqlx::query(
+        r#"
+        UPDATE hedge_legs
+        SET existing_margin_usd = $1,
+            existing_onchain_usd = $2,
+            updated_at = now()
+        WHERE id = $3
+        "#,
+    )
+    .bind(existing_margin_usd)
+    .bind(existing_onchain_usd)
+    .bind(leg_id)
+    .execute(&*db)
+    .await?;
+
+    Ok(())
 }
 
 /// Check if a tx reference already exists for an action on a leg (idempotency guard).
