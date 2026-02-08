@@ -1,6 +1,6 @@
 use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
 use axum::Json;
-use bridge::client::{BridgeClient, PermitRequest, QuoteRequest};
+use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -21,7 +21,7 @@ pub struct QuotePayload {
     pub recipient: String,
 }
 
-pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<String>, AppError> {
+pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
 
     validate_balance(&payload).await.map_err(|e| {
@@ -50,9 +50,7 @@ pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<String>
 
     let quote = bridge_client.quote(quote_request).await?;
 
-    let serialized_response = serde_json::to_string(&quote)?;
-
-    Ok(Json(serialized_response))
+    Ok(Json(quote))
 }
 
 pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<String>, AppError> {

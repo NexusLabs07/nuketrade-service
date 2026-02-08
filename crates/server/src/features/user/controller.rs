@@ -47,7 +47,7 @@ pub struct CreateUserPayload {
 pub async fn get_total_users(
     State(state): State<AppState>,
 ) -> Result<Json<TotalUsersSuccessResponse>, AppError> {
-    let total_users = db::crud::get_total_users(state.db).await?;
+    let total_users = db::user::get_total_users(state.db).await?;
 
     Ok(Json(TotalUsersSuccessResponse { total_users }))
 }
@@ -56,7 +56,7 @@ pub async fn get_total_points(
     State(state): State<AppState>,
     Path(user_id): Path<uuid::Uuid>,
 ) -> Result<Json<TotalPointsSuccessResponse>, AppError> {
-    let total_points = db::crud::get_total_points(state.db, user_id).await?;
+    let total_points = db::points::get_total_points(state.db, user_id).await?;
 
     Ok(Json(TotalPointsSuccessResponse { total_points }))
 }
@@ -65,7 +65,7 @@ pub async fn get_referral_count(
     State(state): State<AppState>,
     Path(referral_code): Path<String>,
 ) -> Result<Json<i32>, AppError> {
-    let count = db::crud::get_referral_count_from_referral_code(state.db, referral_code).await?;
+    let count = db::user::get_referral_count_from_referral_code(state.db, referral_code).await?;
 
     Ok(Json(count))
 }
@@ -74,7 +74,7 @@ pub async fn get_user_position(
     State(state): State<AppState>,
     Path(user_id): Path<uuid::Uuid>,
 ) -> Result<Json<UserPositionSuccessResponse>, AppError> {
-    let position = db::crud::get_user_position(state.db, user_id).await?;
+    let position = db::user::get_user_position(state.db, user_id).await?;
 
     Ok(Json(UserPositionSuccessResponse { position }))
 }

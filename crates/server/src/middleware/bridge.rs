@@ -38,23 +38,17 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         })?
         .base_rpc_url;
 
-    let user_address: Address = payload
-        .user
-        .parse()
-        .map_err(|_| {
-            let mut err = ValidationError::new("invalid_user_address");
-            err.message = Some("Invalid user address format".into());
-            err
-        })?;
+    let user_address: Address = payload.user.parse().map_err(|_| {
+        let mut err = ValidationError::new("invalid_user_address");
+        err.message = Some("Invalid user address format".into());
+        err
+    })?;
 
-    let amount: U256 = payload
-        .amount
-        .parse()
-        .map_err(|_| {
-            let mut err = ValidationError::new("invalid_amount");
-            err.message = Some("Amount must be a valid numeric string".into());
-            err
-        })?;
+    let amount: U256 = payload.amount.parse().map_err(|_| {
+        let mut err = ValidationError::new("invalid_amount");
+        err.message = Some("Amount must be a valid numeric string".into());
+        err
+    })?;
 
     if amount < U256::from(MIN_BRIDGE_AMOUNT) {
         let mut err = ValidationError::new("amount_less_than_10_usdc");
@@ -62,38 +56,26 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         return Err(err);
     }
 
-    let usdc_address: Address = Chain::BASE
-        .usdc_address
-        .parse()
-        .map_err(|_| {
-            let mut err = ValidationError::new("invalid_usdc_address");
-            err.message = Some("Invalid USDC contract address".into());
-            err
-        })?;
+    let usdc_address: Address = Chain::BASE.usdc_address.parse().map_err(|_| {
+        let mut err = ValidationError::new("invalid_usdc_address");
+        err.message = Some("Invalid USDC contract address".into());
+        err
+    })?;
 
     let provider = ProviderBuilder::new().connect_http(base_rpc_url.parse().unwrap());
 
     let usdc = IERC20::new(usdc_address, provider);
 
-    let balance = usdc
-        .balanceOf(user_address)
-        .call()
-        .await
-        .map_err(|e| {
-            let mut err = ValidationError::new("rpc_error");
-            err.message = Some(format!("Failed to fetch balance from RPC: {}", e).into());
-            err
-        })?;
+    let balance = usdc.balanceOf(user_address).call().await.map_err(|e| {
+        let mut err = ValidationError::new("rpc_error");
+        err.message = Some(format!("Failed to fetch balance from RPC: {e}").into());
+        err
+    })?;
 
     if balance < amount {
         let mut err = validator::ValidationError::new("insufficient_balance");
-        err.message = Some(
-            format!(
-                "Insufficient USDC: required {}, available {}",
-                amount, balance
-            )
-            .into(),
-        );
+        err.message =
+            Some(format!("Insufficient USDC: required {amount}, available {balance}").into());
         return Err(err);
     }
 

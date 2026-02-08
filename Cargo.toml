@@ -61,3 +61,10 @@ solana-message = "2.2.1"
 solana-signer = "2.2.1"
 spl-associated-token-account-client = "2.0.0"
 alloy = { version = "1.0", features = ["sol-types", "contract", "provider-http", "rpc-types"] }
+
+
+[workspace.lints.clippy]
+all = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"

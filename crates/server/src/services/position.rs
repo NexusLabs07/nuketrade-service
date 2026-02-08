@@ -1,6 +1,6 @@
 //! Position-related business logic.
 
-use perp_core::{parse_f64_or_zero, PositionSide, UnifiedPosition};
+use perp_core::{PositionSide, UnifiedPosition, parse_f64_or_zero};
 use std::collections::HashMap;
 
 use crate::types::{MergedPositionResponse, OpenPositionsResponse, Side};

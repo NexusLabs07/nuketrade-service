@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use crate::RELAY_API_URL;
 
+const PROTOCOL_FEES: u64 = 200_000;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QuoteRequest {
     pub user: String,
@@ -42,11 +44,80 @@ struct PermitRequestBody {
     pub api: Option<String>,
 }
 
-pub type RelayResponse = Value;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QuoteResponse {
+    pub steps: Value,
+    #[serde(rename = "timeEstimate")]
+    pub time_estimate: u64,
+    #[serde(rename = "amountIn")]
+    pub amount_in: String,
+    #[serde(rename = "amountOut")]
+    pub amount_out: String,
+    #[serde(rename = "minimumReceived")]
+    pub minimum_received: String,
+    pub rate: String,
+    #[serde(rename = "gasFeeUsd")]
+    pub gas_fee_usd: String,
+    #[serde(rename = "relayFeeUsd")]
+    pub relay_fee_usd: String,
+    #[serde(rename = "protocolFees")]
+    pub protocol_fees: String,
+}
+
+fn parse_quote(data: &Value) -> Result<QuoteResponse> {
+    let details = &data["details"];
+    let fees = &data["fees"];
+
+    let amount_out = (details["currencyOut"]["amountFormatted"]
+        .as_str()
+        .unwrap_or("0")
+        .parse::<f64>()
+        .unwrap_or(0.0)
+        - (PROTOCOL_FEES as f64 / 1_000_000.0)) // Convert from micro units to standard units
+        .to_string();
+
+    let minimum_received = (((details["currencyOut"]["minimumAmount"]
+        .as_str()
+        .unwrap_or("0")
+        .parse::<f64>()
+        .unwrap_or(0.0))
+        - PROTOCOL_FEES as f64)
+        / 1_000_000.0)
+        .to_string();
+
+    let protocol_fees = (PROTOCOL_FEES as f64 / 1_000_000.0).to_string(); // Convert from micro units to standard units
+
+    Ok(QuoteResponse {
+        steps: data["steps"].clone(),
+        time_estimate: details["timeEstimate"].as_u64().unwrap_or(0),
+        amount_in: details["currencyIn"]["amountFormatted"]
+            .as_str()
+            .unwrap_or("0")
+            .to_string(),
+        amount_out,
+        minimum_received,
+        rate: details["rate"].as_str().unwrap_or("0").to_string(),
+        gas_fee_usd: fees["relayerGas"]["amountUsd"]
+            .as_str()
+            .unwrap_or("0")
+            .to_string(),
+        relay_fee_usd: fees["relayer"]["amountUsd"]
+            .as_str()
+            .unwrap_or("0")
+            .to_string(),
+        protocol_fees,
+    })
+}
 
 pub struct BridgeClient {
     pub client: Client,
     pub base_url: String,
+}
+
+impl Default for BridgeClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BridgeClient {
@@ -57,7 +128,7 @@ impl BridgeClient {
         }
     }
 
-    pub async fn quote(&self, quote_request: QuoteRequest) -> Result<RelayResponse> {
+    pub async fn quote(&self, quote_request: QuoteRequest) -> Result<QuoteResponse> {
         let response = self
             .client
             .post(format!("{}{}", self.base_url, "/quote/v2"))
@@ -65,22 +136,19 @@ impl BridgeClient {
             .send()
             .await?;
 
-        let data: RelayResponse = match response.json().await {
+        let data: Value = match response.json().await {
             Ok(d) => d,
             Err(err) => {
-                log::error!(
-                    "Failed to fetch quote using relay. Failed with error: {:?}",
-                    err
-                );
+                log::error!("Failed to fetch quote using relay. Failed with error: {err:?}");
 
-                return Err(anyhow::Error::msg("Failed to submit permit using relay"));
+                return Err(anyhow::Error::msg("Failed to fetch quote using relay"));
             }
         };
 
-        Ok(data)
+        parse_quote(&data)
     }
 
-    pub async fn execute_permit(&self, permit_request: PermitRequest) -> Result<RelayResponse> {
+    pub async fn execute_permit(&self, permit_request: PermitRequest) -> Result<Value> {
         let body = PermitRequestBody {
             kind: permit_request.kind,
             request_id: permit_request.request_id,
@@ -95,10 +163,10 @@ impl BridgeClient {
             .send()
             .await?;
 
-        let data: RelayResponse = match response.json().await {
+        let data: Value = match response.json().await {
             Ok(d) => d,
             Err(err) => {
-                log::error!("Failed to submit permit. Failed with error: {:?}", err);
+                log::error!("Failed to submit permit. Failed with error: {err:?}");
 
                 return Err(anyhow::Error::msg("Failed to submit permit using relay"));
             }

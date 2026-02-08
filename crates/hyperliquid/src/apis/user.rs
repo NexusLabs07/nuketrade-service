@@ -137,10 +137,7 @@ impl UserInfo {
         let data: HyperliquidResponse = match response.json().await {
             Ok(d) => d,
             Err(err) => {
-                log::error!(
-                    "Failed to fetch hyperliquid funding rate. Failed with error: {:?}",
-                    err
-                );
+                log::error!("Failed to fetch hyperliquid funding rate. Failed with error: {err:?}");
                 return Err(anyhow::Error::msg(
                     "Failed to fetch hyperliquid funding rate",
                 ));
@@ -167,14 +164,13 @@ impl UserInfo {
             .send()
             .await?;
 
-        log::info!("Response {:?}", response);
+        log::info!("Response {response:?}");
 
         let data: ClearinghouseState = match response.json().await {
             Ok(d) => d,
             Err(err) => {
                 log::error!(
-                    "Failed to fetch hyperliquid open positions. Failed with error: {:?}",
-                    err
+                    "Failed to fetch hyperliquid open positions. Failed with error: {err:?}"
                 );
                 return Err(anyhow::Error::msg(
                     "Failed to fetch hyperliquid open positions",

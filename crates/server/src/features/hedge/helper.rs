@@ -101,7 +101,7 @@ pub async fn handle_bridge_result(
     let leg = legs
         .iter()
         .find(|l| l.exchange == target_exchange.to_string())
-        .ok_or_else(|| AppError::not_found(format!("Leg for exchange {}", target_exchange)))?;
+        .ok_or_else(|| AppError::not_found(format!("Leg for exchange {target_exchange}")))?;
 
     if payload.success {
         // Record tx reference.
@@ -168,7 +168,7 @@ pub async fn handle_deposit_result(
     let leg = legs
         .iter()
         .find(|l| l.exchange == target_exchange.to_string())
-        .ok_or_else(|| AppError::not_found(format!("Leg for exchange {}", target_exchange)))?;
+        .ok_or_else(|| AppError::not_found(format!("Leg for exchange {target_exchange}")))?;
 
     if payload.success {
         // Record tx reference.

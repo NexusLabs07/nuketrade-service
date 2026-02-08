@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use db::hedge::{self as hedge_db, NewHedgeIntent, NewHedgeLeg};
-use perp_core::{config::Config, exchange::{PerpetualExchange, exchange_to_chain}};
+use perp_core::{
+    config::Config,
+    exchange::{PerpetualExchange, exchange_to_chain},
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -18,6 +21,12 @@ use crate::{
 };
 
 pub struct HedgeService;
+
+impl Default for HedgeService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl HedgeService {
     pub fn new() -> Self {
@@ -99,7 +108,7 @@ impl HedgeService {
     ) -> Result<NextActionResponse, AppError> {
         let intent = hedge_db::get_hedge_intent(db.clone(), intent_id)
             .await?
-            .ok_or_else(|| AppError::not_found(format!("Hedge intent {}", intent_id)))?;
+            .ok_or_else(|| AppError::not_found(format!("Hedge intent {intent_id}")))?;
 
         let mut legs = hedge_db::get_hedge_legs(db.clone(), intent_id).await?;
 
@@ -129,7 +138,7 @@ impl HedgeService {
 
         for (leg_id, new_status) in &output.leg_status_updates {
             hedge_db::update_hedge_leg_status(db.clone(), *leg_id, new_status).await?;
-            log::info!("Hedge leg {} status → {}", leg_id, new_status);
+            log::info!("Hedge leg {leg_id} status → {new_status}");
         }
 
         Ok(output.response)
@@ -142,7 +151,7 @@ impl HedgeService {
     ) -> Result<String, AppError> {
         let intent = hedge_db::get_hedge_intent(db.clone(), intent_id)
             .await?
-            .ok_or_else(|| AppError::not_found(format!("Hedge intent {}", intent_id)))?;
+            .ok_or_else(|| AppError::not_found(format!("Hedge intent {intent_id}")))?;
 
         let legs = hedge_db::get_hedge_legs(db.clone(), intent_id).await?;
 

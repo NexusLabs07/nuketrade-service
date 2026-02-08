@@ -69,12 +69,12 @@ async fn query_hl_margin_balance(evm_address: &str) -> Result<f64, anyhow::Error
 async fn query_arb_onchain_usdc(config: &Config, evm_address: &str) -> Result<f64, anyhow::Error> {
     let user_address: Address = evm_address
         .parse()
-        .map_err(|e| anyhow::anyhow!("Invalid EVM address: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Invalid EVM address: {e:?}"))?;
 
     let usdc_address: Address = Chain::ARBITRUM
         .usdc_address
         .parse()
-        .map_err(|e| anyhow::anyhow!("Invalid USDC address: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Invalid USDC address: {e:?}"))?;
 
     let provider = ProviderBuilder::new().connect_http(config.arbitrum_rpc_url.parse()?);
     let usdc = IERC20::new(usdc_address, provider);
@@ -83,7 +83,7 @@ async fn query_arb_onchain_usdc(config: &Config, evm_address: &str) -> Result<f6
         .balanceOf(user_address)
         .call()
         .await
-        .map_err(|e| anyhow::anyhow!("Arb balanceOf failed: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Arb balanceOf failed: {e:?}"))?;
 
     let balance_usd = balance.to::<u128>() as f64 / USDC_DECIMALS;
     Ok(balance_usd)
@@ -99,10 +99,7 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
     let client = reqwest::Client::new();
 
     // Try the collateral endpoint
-    let url = format!(
-        "https://api.pacifica.fi/api/v1/account/collateral?account={}",
-        solana_address
-    );
+    let url = format!("https://api.pacifica.fi/api/v1/account/collateral?account={solana_address}");
 
     let response = client.get(&url).send().await?;
 
@@ -186,26 +183,18 @@ pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalance
     let margin = query_hl_margin_balance(evm_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!("Failed to query HL margin balance: {}, defaulting to 0", e);
+            log::warn!("Failed to query HL margin balance: {e}, defaulting to 0");
             0.0
         });
 
     let onchain = query_arb_onchain_usdc(config, evm_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!(
-                "Failed to query Arb on-chain USDC balance: {}, defaulting to 0",
-                e
-            );
+            log::warn!("Failed to query Arb on-chain USDC balance: {e}, defaulting to 0");
             0.0
         });
 
-    log::info!(
-        "HL balance check for {}: margin={:.2}, on-chain={:.2}",
-        evm_address,
-        margin,
-        onchain
-    );
+    log::info!("HL balance check for {evm_address}: margin={margin:.2}, on-chain={onchain:.2}");
 
     LegBalances {
         exchange_margin_used: margin,
@@ -218,28 +207,19 @@ pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> L
     let margin = query_pacifica_margin_balance(solana_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!(
-                "Failed to query Pacifica margin balance: {}, defaulting to 0",
-                e
-            );
+            log::warn!("Failed to query Pacifica margin balance: {e}, defaulting to 0");
             0.0
         });
 
     let onchain = query_sol_onchain_usdc(config, solana_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!(
-                "Failed to query Solana on-chain USDC balance: {}, defaulting to 0",
-                e
-            );
+            log::warn!("Failed to query Solana on-chain USDC balance: {e}, defaulting to 0");
             0.0
         });
 
     log::info!(
-        "Pacifica balance check for {}: margin={:.2}, on-chain={:.2}",
-        solana_address,
-        margin,
-        onchain
+        "Pacifica balance check for {solana_address}: margin={margin:.2}, on-chain={onchain:.2}"
     );
 
     LegBalances {
@@ -259,7 +239,7 @@ pub async fn check_leg_balances(
         "HL" => check_hl_balances(config, evm_address).await,
         "PACIFICA" => check_pacifica_balances(config, solana_address).await,
         _ => {
-            log::warn!("Unknown protocol {}, returning zero balances", protocol);
+            log::warn!("Unknown protocol {protocol}, returning zero balances");
             LegBalances::default()
         }
     }
