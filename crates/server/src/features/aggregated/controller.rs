@@ -129,7 +129,7 @@ pub async fn get_merged_open_positions(
                             PACIFICA_MARKETS
                                 .iter()
                                 .find(|x| x.symbol == symbol)
-                                .map(|s| s.max_leverage as u32)
+                                .map(|s| s.max_leverage)
                                 .unwrap_or_default(),
                         );
 
@@ -145,14 +145,12 @@ pub async fn get_merged_open_positions(
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
                     } else {
-                        let value = match asset_position.amount.parse::<f64>().ok() {
+                        match asset_position.amount.parse::<f64>().ok() {
                             Some(amt) if leverage > 0 => {
                                 (amt * current_feed.0 / leverage as f64).to_string()
                             }
                             _ => "0".to_string(),
-                        };
-
-                        value
+                        }
                     };
 
                     let pnl: f64 = if current_feed.0 != 0.0 {

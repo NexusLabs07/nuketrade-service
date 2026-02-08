@@ -6,9 +6,9 @@
 
 use db::hedge::{HedgeIntent, HedgeLeg};
 use perp_core::{Chain, exchange::PerpetualExchange};
-use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::str::FromStr;
 
 /// Maximum retries per leg action before marking as FAILED.
 pub const MAX_RETRIES: i16 = 3;

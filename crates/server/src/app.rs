@@ -118,7 +118,7 @@ pub fn create_app(app_state: AppState) -> Router {
         ])
         .allow_credentials(true);
 
-    let app = Router::new()
+    Router::new()
         .route("/", get(root))
         .nest("/user", user::routes::routes())
         .nest("/hyperliquid", hyperliquid::routes::routes())
@@ -128,7 +128,5 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/hedge-intents", hedge::routes::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
-        .with_state(app_state);
-
-    app
+        .with_state(app_state)
 }

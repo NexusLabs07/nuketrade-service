@@ -14,10 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let config = match Config::from_env() {
         Ok(cfg) => cfg,
         Err(err) => {
-            log::error!(
-                "Error loading config from env. Failed with error: {:?}",
-                err
-            );
+            log::error!("Error loading config from env. Failed with error: {err:?}");
             std::process::exit(1);
         }
     };
@@ -28,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Running DB migrations....");
     tokio::task::spawn_blocking(|| {
         if let Err(err) = db::run_db_migrations() {
-            log::error!("Error running DB migrations. Failed with error: {:?}", err);
+            log::error!("Error running DB migrations. Failed with error: {err:?}");
             std::process::exit(1);
         };
     })

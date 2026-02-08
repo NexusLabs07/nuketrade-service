@@ -1,7 +1,11 @@
 //! Hyperliquid WebSocket funding feed.
 
 use crate::HyperliquidExchange;
-use perp_core::{token_list::TOKEN_LIST, types::LiveMarketFeed, ws::{run_funding_feed, WsConfig}};
+use perp_core::{
+    token_list::TOKEN_LIST,
+    types::LiveMarketFeed,
+    ws::{WsConfig, run_funding_feed},
+};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::RwLock;

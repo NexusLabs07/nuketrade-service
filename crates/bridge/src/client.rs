@@ -114,6 +114,12 @@ pub struct BridgeClient {
     pub base_url: String,
 }
 
+impl Default for BridgeClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BridgeClient {
     pub fn new() -> Self {
         Self {
@@ -133,10 +139,7 @@ impl BridgeClient {
         let data: Value = match response.json().await {
             Ok(d) => d,
             Err(err) => {
-                log::error!(
-                    "Failed to fetch quote using relay. Failed with error: {:?}",
-                    err
-                );
+                log::error!("Failed to fetch quote using relay. Failed with error: {err:?}");
 
                 return Err(anyhow::Error::msg("Failed to fetch quote using relay"));
             }
@@ -163,7 +166,7 @@ impl BridgeClient {
         let data: Value = match response.json().await {
             Ok(d) => d,
             Err(err) => {
-                log::error!("Failed to submit permit. Failed with error: {:?}", err);
+                log::error!("Failed to submit permit. Failed with error: {err:?}");
 
                 return Err(anyhow::Error::msg("Failed to submit permit using relay"));
             }

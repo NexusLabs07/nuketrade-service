@@ -114,7 +114,7 @@ impl std::str::FromStr for PerpetualExchange {
             "hyperliquid" => Ok(PerpetualExchange::Hyperliquid),
             "lighter" => Ok(PerpetualExchange::Lighter),
             "pacifica" => Ok(PerpetualExchange::Pacifica),
-            _ => Err(format!("Unknown exchange: {}", s)),
+            _ => Err(format!("Unknown exchange: {s}")),
         }
     }
 }

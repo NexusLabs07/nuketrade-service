@@ -43,7 +43,7 @@ pub async fn create_hedge_intent_with_legs(
         .bind(leg.id)
         .bind(leg.hedge_intent_id)
         .bind(&leg.exchange)
-        .bind(&leg.chain)
+        .bind(leg.chain)
         .bind(leg.target_amount_usd)
         .execute(&mut *tx)
         .await?;

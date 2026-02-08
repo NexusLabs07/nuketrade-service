@@ -81,12 +81,11 @@ pub async fn get_next_action(
 ) -> Result<Json<NextActionResponse>, AppError> {
     HedgeService::get_next_action(state.db.clone(), state.config, intent_id)
         .await
-        .map(|response| Json(response))
+        .map(Json)
 }
 
 /// Query existing balances for each leg and advance legs that don't need
 /// bridge and/or deposit. This is called exactly once per intent (on CREATED).
-
 /// POST /hedge-intents/:id/action-result — Client reports the outcome of an executed action.
 pub async fn report_action_result(
     State(state): State<AppState>,
@@ -98,7 +97,7 @@ pub async fn report_action_result(
         .map(|action| {
             Json(ActionResultResponse {
                 status: "accepted".to_string(),
-                message: format!("Action result for {} processed", action),
+                message: format!("Action result for {action} processed"),
             })
         })
 }
@@ -110,7 +109,7 @@ pub async fn get_hedge_intent_detail(
 ) -> Result<Json<HedgeIntentDetailResponse>, AppError> {
     let intent = hedge_db::get_hedge_intent(state.db.clone(), intent_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Hedge intent {}", intent_id)))?;
+        .ok_or_else(|| AppError::not_found(format!("Hedge intent {intent_id}")))?;
 
     let legs = hedge_db::get_hedge_legs(state.db.clone(), intent_id).await?;
 

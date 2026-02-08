@@ -47,7 +47,7 @@ where
         .bind(&user.connected_evm_address)
         .bind(&user.connected_solana_address)
         .bind(&user.referral_code)
-        .bind(&user.referred_by)
+        .bind(user.referred_by)
         .bind(user.wallet_id)
         .execute(executor)
         .await?;

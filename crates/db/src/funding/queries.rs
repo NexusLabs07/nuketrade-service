@@ -127,10 +127,7 @@ pub async fn get_token_chart_info(
             "#
         }
         _ => {
-            log::warn!(
-                "Invalid timeframe: {}, continuing with default timeframe",
-                timeframe
-            );
+            log::warn!("Invalid timeframe: {timeframe}, continuing with default timeframe");
             r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY timestamp ASC"#
         }
     };

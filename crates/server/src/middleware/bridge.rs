@@ -68,19 +68,14 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
 
     let balance = usdc.balanceOf(user_address).call().await.map_err(|e| {
         let mut err = ValidationError::new("rpc_error");
-        err.message = Some(format!("Failed to fetch balance from RPC: {}", e).into());
+        err.message = Some(format!("Failed to fetch balance from RPC: {e}").into());
         err
     })?;
 
     if balance < amount {
         let mut err = validator::ValidationError::new("insufficient_balance");
-        err.message = Some(
-            format!(
-                "Insufficient USDC: required {}, available {}",
-                amount, balance
-            )
-            .into(),
-        );
+        err.message =
+            Some(format!("Insufficient USDC: required {amount}, available {balance}").into());
         return Err(err);
     }
 

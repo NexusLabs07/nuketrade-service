@@ -108,8 +108,8 @@ pub async fn deposit_to_pacifica(
         .await?;
 
     if let Some(err) = simulation_result.value.err {
-        log::error!("Deposit simulation failed: {:?}", err);
-        anyhow::bail!("Deposit simulation failed: {:?}", err);
+        log::error!("Deposit simulation failed: {err:?}");
+        anyhow::bail!("Deposit simulation failed: {err:?}");
     }
 
     log::info!(
@@ -119,7 +119,7 @@ pub async fn deposit_to_pacifica(
 
     if let Some(logs) = simulation_result.value.logs {
         for log in logs {
-            log::info!("Log: {}", log);
+            log::info!("Log: {log}");
         }
     }
 
