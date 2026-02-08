@@ -60,7 +60,6 @@ pub struct HedgeIntentDetailResponse {
 }
 
 // ============================= Handlers =============================
-
 /// POST /hedge-intents — Create a new hedge intent with two legs.
 pub async fn create_hedge_intent(
     State(state): State<AppState>,

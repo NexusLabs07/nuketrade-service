@@ -72,17 +72,17 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         err
     })?;
 
-    // if balance < amount {
-    //     let mut err = validator::ValidationError::new("insufficient_balance");
-    //     err.message = Some(
-    //         format!(
-    //             "Insufficient USDC: required {}, available {}",
-    //             amount, balance
-    //         )
-    //         .into(),
-    //     );
-    //     return Err(err);
-    // }
+    if balance < amount {
+        let mut err = validator::ValidationError::new("insufficient_balance");
+        err.message = Some(
+            format!(
+                "Insufficient USDC: required {}, available {}",
+                amount, balance
+            )
+            .into(),
+        );
+        return Err(err);
+    }
 
     Ok(())
 }
