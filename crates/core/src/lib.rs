@@ -1,7 +1,6 @@
 pub mod chains;
 pub mod config;
 pub mod exchange;
-pub mod funding;
 pub mod token_list;
 pub mod types;
 pub mod utils;
@@ -11,7 +10,6 @@ pub mod ws;
 pub use exchange::{
     AccountSettings, Exchange, ExchangeError, MarketInfo, PositionSide, UnifiedPosition, WsMessage,
 };
-pub use funding::{Dex, FundingSnapshot};
 pub use types::LiveMarketFeed;
 pub use utils::{parse_f64, parse_f64_or, parse_f64_or_zero};
 pub use ws::{WsConfig, run_funding_feed};

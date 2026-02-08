@@ -1,6 +1,10 @@
 //! Generic WebSocket handler for exchange funding feeds.
 
-use crate::{Exchange, exchange::WsMessage, funding::Dex, types::LiveMarketFeed};
+use crate::{
+    Exchange,
+    exchange::{PerpetualExchange, WsMessage},
+    types::LiveMarketFeed,
+};
 use chrono::Utc;
 use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
@@ -40,7 +44,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
     config: WsConfig,
     symbols: &[&str],
 ) {
-    let dex = exchange.dex();
+    let perpetual_exchange = exchange.perpetual_exchange();
     let exchange_name = exchange.name();
 
     // Track state across reconnections: symbol -> (mark_price, funding_rate, timestamp_ms)
@@ -165,7 +169,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
                 // Update live state
                 _ = state_tick.tick() => {
-                    update_live_state(&live_market_feed, &dex, &last_snapshot).await;
+                    update_live_state(&live_market_feed, &perpetual_exchange, &last_snapshot).await;
                 }
 
                 // Write to database (aligned across all exchanges)
@@ -182,7 +186,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                         continue;
                     }
 
-                    write_funding_to_database(&db_conn, &dex, &last_snapshot).await;
+                    write_funding_to_database(&db_conn, &perpetual_exchange, &last_snapshot).await;
                 }
 
                 // Handle optional ping
@@ -322,21 +326,21 @@ async fn handle_message<E: Exchange>(
 /// Update the live market feed state.
 async fn update_live_state(
     live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
-    dex: &Dex,
+    perp_exchange: &PerpetualExchange,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
     let mut state = live_market_feed.write().await;
     for (symbol, (mark_px, funding, _)) in snapshot.iter() {
-        match dex {
-            Dex::Hyperliquid => {
+        match perp_exchange {
+            PerpetualExchange::Hyperliquid => {
                 state
                     .hyperliquid
                     .insert(symbol.clone(), (*mark_px, *funding));
             }
-            Dex::Pacifica => {
+            PerpetualExchange::Pacifica => {
                 state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
             }
-            Dex::Lighter => {
+            PerpetualExchange::Lighter => {
                 state.lighter.insert(symbol.clone(), (*mark_px, *funding));
             }
         }
@@ -346,14 +350,14 @@ async fn update_live_state(
 /// Write funding rates to the database.
 async fn write_funding_to_database(
     db_conn: &Arc<PgPool>,
-    dex: &Dex,
+    perp_exchange: &PerpetualExchange,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
     let funding_rates: Vec<FundingRate> = snapshot
         .iter()
         .map(|(symbol, (mark_px, funding, _))| FundingRate {
             id: Uuid::new_v4(),
-            platform: dex.to_string(),
+            platform: perp_exchange.to_string(),
             symbol: symbol.clone(),
             mark_px: *mark_px,
             rate: *funding,

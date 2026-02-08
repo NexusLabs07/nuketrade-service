@@ -5,7 +5,8 @@
 //! This module NEVER touches the database — the controller handles persistence.
 
 use db::hedge::{HedgeIntent, HedgeLeg};
-use perp_core::Chain;
+use perp_core::{Chain, exchange::PerpetualExchange};
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -39,24 +40,10 @@ pub mod leg_status {
 }
 
 pub mod action {
-    pub const BRIDGE_BASE_TO_ARB: &str = "BRIDGE_BASE_TO_ARB";
-    pub const BRIDGE_BASE_TO_SOL: &str = "BRIDGE_BASE_TO_SOL";
-    pub const DEPOSIT_TO_HL: &str = "DEPOSIT_TO_HL";
-    pub const DEPOSIT_TO_PACIFICA: &str = "DEPOSIT_TO_PACIFICA";
     pub const OPEN_HEDGE_POSITION: &str = "OPEN_HEDGE_POSITION";
     pub const CLOSE_POSITION: &str = "CLOSE_POSITION";
     pub const WAIT: &str = "WAIT";
     pub const NOOP: &str = "NOOP";
-}
-
-pub mod protocol {
-    pub const HL: &str = "HL";
-    pub const PACIFICA: &str = "PACIFICA";
-}
-
-pub mod chain {
-    pub const ARB: &str = "ARB";
-    pub const SOL: &str = "SOL";
 }
 
 // ============================= Response Types =============================
@@ -158,7 +145,7 @@ fn handle_funding(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput
                 params: Some(json!({
                     "error": "One or more legs permanently failed after max retries",
                     "legs": legs.iter().map(|l| json!({
-                        "protocol": l.protocol,
+                        "exchange": l.exchange,
                         "status": l.status,
                         "retry_count": l.retry_count,
                         "last_error": l.last_error,
@@ -225,7 +212,7 @@ fn handle_all_legs_funded(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachi
                 "leverage": intent.leverage,
                 "effective_margin_usd": effective_amount,
                 "legs": legs.iter().map(|l| json!({
-                    "protocol": l.protocol,
+                    "exchange": l.exchange,
                     "chain": l.chain,
                     "funded_amount_usd": l.funded_amount_usd,
                 })).collect::<Vec<_>>()
@@ -251,7 +238,7 @@ fn handle_ready(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput {
                 "leverage": intent.leverage,
                 "effective_margin_usd": effective_amount,
                 "legs": legs.iter().map(|l| json!({
-                    "protocol": l.protocol,
+                    "exchange": l.exchange,
                     "chain": l.chain,
                     "funded_amount_usd": l.funded_amount_usd,
                 })).collect::<Vec<_>>()
@@ -294,11 +281,11 @@ fn handle_failed(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput 
         return StateMachineOutput {
             response: NextActionResponse {
                 action: action::CLOSE_POSITION.to_string(),
-                leg: Some(leg_to_close.protocol.clone()),
+                leg: Some(leg_to_close.exchange.clone()),
                 amount_usd: Some(leg_to_close.funded_amount_usd),
                 params: Some(json!({
                     "asset": intent.asset,
-                    "protocol": leg_to_close.protocol,
+                    "exchange": leg_to_close.exchange,
                     "chain": leg_to_close.chain,
                     "reason": "safety_mode_partial_hedge",
                 })),
@@ -333,36 +320,28 @@ fn handle_failed(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput 
 // ============================= Action Builders =============================
 
 fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse {
-    let bridge_amount = compute_bridge_needed(leg);
+    let exchange = match PerpetualExchange::from_str(&leg.exchange) {
+        Ok(e) => e,
+        Err(_) => return NextActionResponse::noop(),
+    };
 
-    let (action_name, origin_chain_id, dest_chain_id, dest_usdc, user_address) =
-        match leg.protocol.as_str() {
-            protocol::HL => (
-                action::BRIDGE_BASE_TO_ARB,
-                Chain::BASE.id,
-                Chain::ARBITRUM.id,
-                Chain::ARBITRUM.usdc_address,
-                &intent.evm_address,
-            ),
-            protocol::PACIFICA => (
-                action::BRIDGE_BASE_TO_SOL,
-                Chain::BASE.id,
-                Chain::SOLANA.id,
-                Chain::SOLANA.usdc_address,
-                &intent.solana_address,
-            ),
-            _ => return NextActionResponse::noop(),
-        };
+    let (action_name, dest_chain) = match (exchange.bridge_action(), exchange.chain()) {
+        (Some(a), Some(c)) => (a, c),
+        _ => return NextActionResponse::noop(),
+    };
+
+    let bridge_amount = compute_bridge_needed(leg);
+    let user_address = exchange.resolve_address(&intent.evm_address, &intent.solana_address);
 
     NextActionResponse {
         action: action_name.to_string(),
-        leg: Some(leg.protocol.clone()),
+        leg: Some(leg.exchange.clone()),
         amount_usd: Some(bridge_amount),
         params: Some(json!({
-            "origin_chain_id": origin_chain_id,
-            "destination_chain_id": dest_chain_id,
+            "origin_chain_id": Chain::BASE.id,
+            "destination_chain_id": dest_chain.id,
             "origin_currency": Chain::BASE.usdc_address,
-            "destination_currency": dest_usdc,
+            "destination_currency": dest_chain.usdc_address,
             "user_address": user_address,
             "recipient": user_address,
             "leg_id": leg.id.to_string(),
@@ -373,20 +352,25 @@ fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse
 }
 
 fn deposit_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse {
-    let deposit_amount = compute_deposit_needed(leg);
-
-    let (action_name, user_address) = match leg.protocol.as_str() {
-        protocol::HL => (action::DEPOSIT_TO_HL, &intent.evm_address),
-        protocol::PACIFICA => (action::DEPOSIT_TO_PACIFICA, &intent.solana_address),
-        _ => return NextActionResponse::noop(),
+    let exchange = match PerpetualExchange::from_str(&leg.exchange) {
+        Ok(e) => e,
+        Err(_) => return NextActionResponse::noop(),
     };
+
+    let action_name = match exchange.deposit_action() {
+        Some(a) => a,
+        None => return NextActionResponse::noop(),
+    };
+
+    let deposit_amount = compute_deposit_needed(leg);
+    let user_address = exchange.resolve_address(&intent.evm_address, &intent.solana_address);
 
     NextActionResponse {
         action: action_name.to_string(),
-        leg: Some(leg.protocol.clone()),
+        leg: Some(leg.exchange.clone()),
         amount_usd: Some(deposit_amount),
         params: Some(json!({
-            "protocol": leg.protocol,
+            "protocol": leg.exchange,
             "chain": leg.chain,
             "user_address": user_address,
             "amount_usd": deposit_amount,
@@ -424,31 +408,14 @@ fn compute_effective_amount(legs: &[HedgeLeg]) -> f64 {
         .fold(f64::MAX, f64::min)
 }
 
-/// Map a protocol string to its chain.
-pub fn protocol_to_chain(protocol: &str) -> &'static str {
-    match protocol {
-        protocol::HL => chain::ARB,
-        protocol::PACIFICA => chain::SOL,
-        _ => "UNKNOWN",
-    }
-}
-
 /// Map a protocol to the bridge action name.
-pub fn protocol_to_bridge_action(protocol: &str) -> &'static str {
-    match protocol {
-        protocol::HL => action::BRIDGE_BASE_TO_ARB,
-        protocol::PACIFICA => action::BRIDGE_BASE_TO_SOL,
-        _ => action::NOOP,
-    }
+pub fn protocol_to_bridge_action(exchange: &PerpetualExchange) -> &'static str {
+    exchange.bridge_action().unwrap_or(action::NOOP)
 }
 
 /// Map a protocol to the deposit action name.
-pub fn protocol_to_deposit_action(protocol: &str) -> &'static str {
-    match protocol {
-        protocol::HL => action::DEPOSIT_TO_HL,
-        protocol::PACIFICA => action::DEPOSIT_TO_PACIFICA,
-        _ => action::NOOP,
-    }
+pub fn protocol_to_deposit_action(exchange: &PerpetualExchange) -> &'static str {
+    exchange.deposit_action().unwrap_or(action::NOOP)
 }
 
 /// Compute how much USDC needs to be deposited into the protocol margin.

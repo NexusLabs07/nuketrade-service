@@ -2,17 +2,13 @@
 
 use async_trait::async_trait;
 use perp_core::{
-    exchange::{AccountSettings, ExchangeError, MarketInfo, WsMessage},
-    funding::Dex,
-    parse_f64, Exchange, UnifiedPosition,
+    Exchange, UnifiedPosition,
+    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange, WsMessage},
+    parse_f64,
 };
 use serde_json::json;
 
-use crate::{
-    helpers::markets::MARKETS,
-    types::MarketStatsMsg,
-    LIGHTER_HTTP_URL, LIGHTER_WS_URL,
-};
+use crate::{LIGHTER_HTTP_URL, LIGHTER_WS_URL, helpers::markets::MARKETS, types::MarketStatsMsg};
 
 /// Lighter exchange client implementing the unified Exchange trait.
 pub struct LighterExchange {
@@ -38,14 +34,14 @@ impl LighterExchange {
 
     /// Create a new Lighter exchange client with custom URLs.
     pub fn with_urls(http_url: String, ws_url: String) -> Self {
-        Self {
-            http_url,
-            ws_url,
-        }
+        Self { http_url, ws_url }
     }
 
     /// Find a market by its market_index.
-    fn find_market_by_index(&self, market_id: u32) -> Option<&'static crate::helpers::markets::Market> {
+    fn find_market_by_index(
+        &self,
+        market_id: u32,
+    ) -> Option<&'static crate::helpers::markets::Market> {
         MARKETS.iter().find(|m| m.market_index == market_id)
     }
 }
@@ -56,18 +52,24 @@ impl Exchange for LighterExchange {
         "Lighter"
     }
 
-    fn dex(&self) -> Dex {
-        Dex::Lighter
+    fn perpetual_exchange(&self) -> PerpetualExchange {
+        PerpetualExchange::Lighter
     }
 
-    async fn get_positions(&self, _user_address: &str) -> Result<Vec<UnifiedPosition>, ExchangeError> {
+    async fn get_positions(
+        &self,
+        _user_address: &str,
+    ) -> Result<Vec<UnifiedPosition>, ExchangeError> {
         // Lighter uses a different account model (zkSync-based)
         // Position fetching requires signed authentication which is not implemented
         // Return empty positions for now - to be implemented with proper auth
         Ok(Vec::new())
     }
 
-    async fn get_account_settings(&self, _user_address: &str) -> Result<AccountSettings, ExchangeError> {
+    async fn get_account_settings(
+        &self,
+        _user_address: &str,
+    ) -> Result<AccountSettings, ExchangeError> {
         // Lighter uses a different account model
         // Return default settings for now
         Ok(AccountSettings {

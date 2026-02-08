@@ -12,7 +12,7 @@ use alloy::{
     providers::ProviderBuilder,
     sol,
 };
-use perp_core::{config::Config, Chain};
+use perp_core::{Chain, config::Config};
 use serde::Deserialize;
 
 sol! {
@@ -30,8 +30,8 @@ const USDC_DECIMALS: f64 = 1_000_000.0;
 /// Pre-existing balances for a single hedge leg.
 #[derive(Debug, Clone, Default)]
 pub struct LegBalances {
-    /// USDC already inside the protocol's margin account.
-    pub protocol_margin_usd: f64,
+    /// USDC already inside the exchange's margin account.
+    pub exchange_margin_used: f64,
     /// USDC on the destination chain (wallet balance, not yet deposited).
     pub onchain_usd: f64,
 }
@@ -60,10 +60,7 @@ async fn query_hl_margin_balance(evm_address: &str) -> Result<f64, anyhow::Error
     let state: HlClearinghouseResponse = response.json().await?;
 
     // `withdrawable` represents available USDC not locked in positions.
-    let withdrawable = state
-        .withdrawable
-        .parse::<f64>()
-        .unwrap_or(0.0);
+    let withdrawable = state.withdrawable.parse::<f64>().unwrap_or(0.0);
 
     Ok(withdrawable)
 }
@@ -136,7 +133,10 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
 /// Query on-chain USDC balance on Solana via RPC `getTokenAccountsByOwner`.
 ///
 /// Uses a raw JSON-RPC call so we don't need the full Solana SDK in the server crate.
-async fn query_sol_onchain_usdc(config: &Config, solana_address: &str) -> Result<f64, anyhow::Error> {
+async fn query_sol_onchain_usdc(
+    config: &Config,
+    solana_address: &str,
+) -> Result<f64, anyhow::Error> {
     let client = reqwest::Client::new();
 
     let body = serde_json::json!({
@@ -168,16 +168,9 @@ async fn query_sol_onchain_usdc(config: &Config, solana_address: &str) -> Result
         .value
         .iter()
         .filter_map(|account| {
-            let info = account
-                .account
-                .get("data")?
-                .get("parsed")?
-                .get("info")?;
+            let info = account.account.get("data")?.get("parsed")?.get("info")?;
 
-            let amount_str = info
-                .get("tokenAmount")?
-                .get("uiAmountString")?
-                .as_str()?;
+            let amount_str = info.get("tokenAmount")?.get("uiAmountString")?.as_str()?;
 
             amount_str.parse::<f64>().ok()
         })
@@ -190,15 +183,22 @@ async fn query_sol_onchain_usdc(config: &Config, solana_address: &str) -> Result
 
 /// Query all relevant balances for a Hyperliquid leg.
 pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalances {
-    let margin = query_hl_margin_balance(evm_address).await.unwrap_or_else(|e| {
-        log::warn!("Failed to query HL margin balance: {}, defaulting to 0", e);
-        0.0
-    });
+    let margin = query_hl_margin_balance(evm_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to query HL margin balance: {}, defaulting to 0", e);
+            0.0
+        });
 
-    let onchain = query_arb_onchain_usdc(config, evm_address).await.unwrap_or_else(|e| {
-        log::warn!("Failed to query Arb on-chain USDC balance: {}, defaulting to 0", e);
-        0.0
-    });
+    let onchain = query_arb_onchain_usdc(config, evm_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!(
+                "Failed to query Arb on-chain USDC balance: {}, defaulting to 0",
+                e
+            );
+            0.0
+        });
 
     log::info!(
         "HL balance check for {}: margin={:.2}, on-chain={:.2}",
@@ -208,22 +208,32 @@ pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalance
     );
 
     LegBalances {
-        protocol_margin_usd: margin,
+        exchange_margin_used: margin,
         onchain_usd: onchain,
     }
 }
 
 /// Query all relevant balances for a Pacifica leg.
 pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> LegBalances {
-    let margin = query_pacifica_margin_balance(solana_address).await.unwrap_or_else(|e| {
-        log::warn!("Failed to query Pacifica margin balance: {}, defaulting to 0", e);
-        0.0
-    });
+    let margin = query_pacifica_margin_balance(solana_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!(
+                "Failed to query Pacifica margin balance: {}, defaulting to 0",
+                e
+            );
+            0.0
+        });
 
-    let onchain = query_sol_onchain_usdc(config, solana_address).await.unwrap_or_else(|e| {
-        log::warn!("Failed to query Solana on-chain USDC balance: {}, defaulting to 0", e);
-        0.0
-    });
+    let onchain = query_sol_onchain_usdc(config, solana_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!(
+                "Failed to query Solana on-chain USDC balance: {}, defaulting to 0",
+                e
+            );
+            0.0
+        });
 
     log::info!(
         "Pacifica balance check for {}: margin={:.2}, on-chain={:.2}",
@@ -233,7 +243,7 @@ pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> L
     );
 
     LegBalances {
-        protocol_margin_usd: margin,
+        exchange_margin_used: margin,
         onchain_usd: onchain,
     }
 }
@@ -256,7 +266,11 @@ pub async fn check_leg_balances(
 }
 
 /// Compute how much needs to be bridged and deposited for a leg given its existing balances.
-pub fn compute_funding_needs(target_amount_usd: f64, existing_margin_usd: f64, existing_onchain_usd: f64) -> FundingNeeds {
+pub fn compute_funding_needs(
+    target_amount_usd: f64,
+    existing_margin_usd: f64,
+    existing_onchain_usd: f64,
+) -> FundingNeeds {
     let deposit_needed = (target_amount_usd - existing_margin_usd).max(0.0);
     let bridge_needed = (deposit_needed - existing_onchain_usd).max(0.0);
 

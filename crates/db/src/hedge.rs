@@ -25,7 +25,7 @@ pub struct HedgeIntent {
 pub struct HedgeLeg {
     pub id: uuid::Uuid,
     pub hedge_intent_id: uuid::Uuid,
-    pub protocol: String,
+    pub exchange: String,
     pub chain: String,
     pub target_amount_usd: f64,
     pub funded_amount_usd: f64,
@@ -57,8 +57,8 @@ pub struct NewHedgeIntent {
     pub id: uuid::Uuid,
     pub user_id: uuid::Uuid,
     pub asset: String,
-    pub protocol_a: String,
-    pub protocol_b: String,
+    pub exchange_a: String,
+    pub exchange_b: String,
     pub margin_usd: f64,
     pub leverage: f64,
     pub evm_address: String,
@@ -70,8 +70,8 @@ pub struct NewHedgeIntent {
 pub struct NewHedgeLeg {
     pub id: uuid::Uuid,
     pub hedge_intent_id: uuid::Uuid,
-    pub protocol: String,
-    pub chain: String,
+    pub exchange: String,
+    pub chain: i64,
     pub target_amount_usd: f64,
 }
 
@@ -98,15 +98,15 @@ pub async fn create_hedge_intent_with_legs(
 
     sqlx::query(
         r#"
-        INSERT INTO hedge_intents (id, user_id, asset, protocol_a, protocol_b, margin_usd, leverage, evm_address, solana_address, status)
+        INSERT INTO hedge_intents (id, user_id, asset, exchange_a, exchange_b, margin_usd, leverage, evm_address, solana_address, status)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'CREATED')
         "#,
     )
     .bind(intent.id)
     .bind(intent.user_id)
     .bind(&intent.asset)
-    .bind(&intent.protocol_a)
-    .bind(&intent.protocol_b)
+    .bind(&intent.exchange_a)
+    .bind(&intent.exchange_b)
     .bind(intent.margin_usd)
     .bind(intent.leverage)
     .bind(&intent.evm_address)
@@ -123,7 +123,7 @@ pub async fn create_hedge_intent_with_legs(
         )
         .bind(leg.id)
         .bind(leg.hedge_intent_id)
-        .bind(&leg.protocol)
+        .bind(&leg.exchange)
         .bind(&leg.chain)
         .bind(leg.target_amount_usd)
         .execute(&mut *tx)

@@ -3,8 +3,7 @@
 use async_trait::async_trait;
 use perp_core::{
     Exchange, PositionSide, UnifiedPosition,
-    exchange::{AccountSettings, ExchangeError, MarketInfo, WsMessage},
-    funding::Dex,
+    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange, WsMessage},
     parse_f64,
 };
 use reqwest::Client;
@@ -98,8 +97,8 @@ impl Exchange for PacificaExchange {
         "Pacifica"
     }
 
-    fn dex(&self) -> Dex {
-        Dex::Pacifica
+    fn perpetual_exchange(&self) -> PerpetualExchange {
+        PerpetualExchange::Pacifica
     }
 
     async fn get_positions(
