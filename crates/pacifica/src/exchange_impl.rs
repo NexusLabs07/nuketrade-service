@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 use perp_core::{
-    Exchange, PositionSide, UnifiedPosition,
-    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange, WsMessage},
+    Exchange, PositionSide, UnifiedPosition, WsMessage,
+    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange},
     parse_f64,
 };
 use reqwest::Client;
@@ -97,7 +97,7 @@ impl Exchange for PacificaExchange {
         "Pacifica"
     }
 
-    fn perpetual_exchange(&self) -> PerpetualExchange {
+    fn exchange(&self) -> PerpetualExchange {
         PerpetualExchange::Pacifica
     }
 

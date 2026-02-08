@@ -1,10 +1,6 @@
 //! Generic WebSocket handler for exchange funding feeds.
 
-use crate::{
-    Exchange,
-    exchange::{PerpetualExchange, WsMessage},
-    types::LiveMarketFeed,
-};
+use crate::{Exchange, WsMessage, exchange::PerpetualExchange, types::LiveMarketFeed};
 use chrono::Utc;
 use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
@@ -44,7 +40,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
     config: WsConfig,
     symbols: &[&str],
 ) {
-    let perpetual_exchange = exchange.perpetual_exchange();
+    let perpetual_exchange = exchange.exchange();
     let exchange_name = exchange.name();
 
     // Track state across reconnections: symbol -> (mark_price, funding_rate, timestamp_ms)

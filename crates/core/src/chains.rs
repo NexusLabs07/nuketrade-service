@@ -36,3 +36,15 @@ impl Chain {
 pub fn get_usdc_address(chain_id: u64) -> Option<&'static str> {
     Chain::from_id(chain_id).map(|c| c.usdc_address)
 }
+
+/// Which address family an exchange uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddressType {
+    Evm,
+    Solana,
+}
+
+// Solana program constants
+pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+pub const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";

@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 use perp_core::{
-    Exchange, UnifiedPosition,
-    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange, WsMessage},
+    Exchange, UnifiedPosition, WsMessage,
+    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange},
     parse_f64,
 };
 use serde_json::json;
@@ -52,7 +52,7 @@ impl Exchange for LighterExchange {
         "Lighter"
     }
 
-    fn perpetual_exchange(&self) -> PerpetualExchange {
+    fn exchange(&self) -> PerpetualExchange {
         PerpetualExchange::Lighter
     }
 
