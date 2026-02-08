@@ -5,7 +5,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use db::{crud::get_token_chart_info, types::FundingRate};
+use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
     helpers::markets::HL_MARKETS,

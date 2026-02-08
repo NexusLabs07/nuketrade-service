@@ -2,7 +2,7 @@
 
 use crate::{Exchange, WsMessage, exchange::PerpetualExchange, types::LiveMarketFeed};
 use chrono::Utc;
-use db::{crud::insert_funding_rates, types::FundingRate};
+use db::funding::{FundingRate, insert_funding_rates};
 use futures_util::{SinkExt, StreamExt};
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
