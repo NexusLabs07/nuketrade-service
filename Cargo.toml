@@ -68,9 +68,3 @@ all = "warn"
 unwrap_used = "warn"
 expect_used = "warn"
 panic = "warn"
-
-[workspace.dev-dependencies]
-cargo-husky = "1"
-
-[workspace.package.metadata.cargo-husky.hooks]
-pre-push = "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings"
