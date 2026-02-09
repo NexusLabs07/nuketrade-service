@@ -1,10 +1,12 @@
+use executor::{SevenDayApr, cron::calculate_best_pair};
 use perp_core::{config::Config, types::LiveMarketFeed};
 use std::{collections::HashMap, sync::Arc};
+use tokio_cron_scheduler::JobScheduler;
 
 use anyhow::Context;
 use db::connect_db;
 use server::run_server;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, watch};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,6 +39,14 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to connect with DB")?;
 
+    let (seven_day_apr_tx, seven_day_apr_rx) = watch::channel(SevenDayApr {
+        seven_day_avg_apr: HashMap::new(),
+        seven_day_spread_apr: HashMap::new(),
+    });
+
+    let scheduler = JobScheduler::new().await?;
+    calculate_best_pair(db.clone(), scheduler, seven_day_apr_tx).await?;
+
     let live_market_feed = Arc::new(RwLock::new(LiveMarketFeed {
         hyperliquid: HashMap::new(),
         lighter: HashMap::new(),
@@ -59,18 +69,7 @@ async fn main() -> anyhow::Result<()> {
             .await;
     });
 
-    // log::info!("Starting Lighter funding feed....");
-    // let db_clone_2 = db.clone();
-    // let platfroms_funding_rate_clone_2 = platforms_funding_rate.clone();
-    // tokio::spawn(async move {
-    //     lighter::start_lighter_funding_feed(
-    //         db_clone_2.clone(),
-    //         platfroms_funding_rate_clone_2.clone(),
-    //     )
-    //     .await;
-    // });
-
-    run_server(config, db, live_market_feed).await?;
+    run_server(config, db, live_market_feed, seven_day_apr_rx).await?;
 
     Ok(())
 }

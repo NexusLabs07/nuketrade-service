@@ -38,7 +38,7 @@ pub struct LegBalances {
 
 // ============================= HL Balance Checks =============================
 
-/// Query HL margin balance via clearinghouseState API (read-only, no signing).
+/// Query Hyperliquid margin balance via clearinghouseState API (read-only, no signing).
 async fn query_hl_margin_balance(evm_address: &str) -> Result<f64, anyhow::Error> {
     let client = reqwest::Client::new();
 
@@ -54,7 +54,10 @@ async fn query_hl_margin_balance(evm_address: &str) -> Result<f64, anyhow::Error
         .await?;
 
     if !response.status().is_success() {
-        anyhow::bail!("HL clearinghouseState returned HTTP {}", response.status());
+        anyhow::bail!(
+            "Hyperliquid clearinghouseState returned HTTP {}",
+            response.status()
+        );
     }
 
     let state: HlClearinghouseResponse = response.json().await?;
@@ -177,13 +180,12 @@ async fn query_sol_onchain_usdc(
 }
 
 // ============================= Public API =============================
-
 /// Query all relevant balances for a Hyperliquid leg.
 pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalances {
     let margin = query_hl_margin_balance(evm_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!("Failed to query HL margin balance: {e}, defaulting to 0");
+            log::warn!("Failed to query Hyperliquid margin balance: {e}, defaulting to 0");
             0.0
         });
 
@@ -194,7 +196,9 @@ pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalance
             0.0
         });
 
-    log::info!("HL balance check for {evm_address}: margin={margin:.2}, on-chain={onchain:.2}");
+    log::info!(
+        "Hyperliquid balance check for {evm_address}: margin={margin:.2}, on-chain={onchain:.2}"
+    );
 
     LegBalances {
         exchange_margin_used: margin,
@@ -228,18 +232,19 @@ pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> L
     }
 }
 
+//TODO: make this dynamic
 /// Query balances for a leg based on its protocol.
 pub async fn check_leg_balances(
     config: &Config,
-    protocol: &str,
+    exchange: &str,
     evm_address: &str,
     solana_address: &str,
 ) -> LegBalances {
-    match protocol {
-        "HL" => check_hl_balances(config, evm_address).await,
-        "PACIFICA" => check_pacifica_balances(config, solana_address).await,
+    match exchange {
+        "hyperliquid" => check_hl_balances(config, evm_address).await,
+        "pacifica" => check_pacifica_balances(config, solana_address).await,
         _ => {
-            log::warn!("Unknown protocol {protocol}, returning zero balances");
+            log::warn!("Unknown exchange {exchange}, returning zero balances");
             LegBalances::default()
         }
     }

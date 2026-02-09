@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use perp_core::{config::Config, types::LiveMarketFeed};
+use perp_core::{LiveMarketFeed, SevenDayApr, config::Config};
 use sqlx::PgPool;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, watch};
 
 use std::net::SocketAddr;
 
@@ -20,8 +20,9 @@ pub async fn run_server(
     config: Config,
     db: Arc<PgPool>,
     live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    seven_day_apr: watch::Receiver<SevenDayApr>,
 ) -> anyhow::Result<()> {
-    let app_state = AppState::new(config, db, live_market_feed);
+    let app_state = AppState::new(config, db, live_market_feed, seven_day_apr);
 
     let app = create_app(app_state);
 

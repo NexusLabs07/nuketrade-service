@@ -20,6 +20,7 @@ members = ["crates/*", "bin/*"]
 resolver = "3"
 
 [workspace.dependencies]
+tokio-cron-scheduler = "0.15.1"
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

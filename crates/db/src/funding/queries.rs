@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use refinery_core::postgres::row;
 use sqlx::PgPool;
 
-use crate::funding::models::FundingRate;
+use crate::funding::{AverageFundingStats, HourlyFundingRate, models::FundingRate};
 
 pub async fn insert_funding_rates(
     db_conn: Arc<PgPool>,
@@ -136,6 +137,54 @@ pub async fn get_token_chart_info(
         .bind(symbol)
         .fetch_all(&*db_conn)
         .await?;
+
+    Ok(rows)
+}
+
+pub async fn get_7d_funding_stats(
+    db: Arc<PgPool>,
+) -> Result<Vec<AverageFundingStats>, anyhow::Error> {
+    let query = r#"
+        SELECT
+            symbol,
+            platform,
+            MAX(rate) AS max_rate,
+            MIN(rate) AS min_rate,
+            AVG(rate) AS avg_rate
+        FROM funding_rate
+        WHERE timestamp >= NOW() - INTERVAL '7 days'
+        GROUP BY symbol, platform
+    "#;
+
+    let rows = sqlx::query_as::<_, AverageFundingStats>(query)
+        .fetch_all(&*db)
+        .await
+        .unwrap_or_else(|e| {
+            log::error!("Failed to query 7d funding stats: {e}");
+            vec![]
+        });
+
+    Ok(rows)
+}
+
+pub async fn get_7d_hourly_rates(
+    db: Arc<PgPool>,
+) -> Result<Vec<HourlyFundingRate>, anyhow::Error> {
+    let query = r#"
+        SELECT symbol, platform, ts_hour, AVG(rate) AS rate
+        FROM funding_rate
+        WHERE timestamp >= NOW() - INTERVAL '7 days'
+        GROUP BY symbol, platform, ts_hour
+        ORDER BY symbol, ts_hour
+    "#;
+
+    let rows = sqlx::query_as::<_, HourlyFundingRate>(query)
+        .fetch_all(&*db)
+        .await
+        .unwrap_or_else(|e| {
+            log::error!("Failed to query 7d hourly rates: {e}");
+            vec![]
+        });
 
     Ok(rows)
 }

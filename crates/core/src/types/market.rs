@@ -24,3 +24,18 @@ pub struct LiveMarketFeed {
     pub lighter: HashMap<String, (f64, f64)>,
     pub pacifica: HashMap<String, (f64, f64)>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SevenDayApr {
+    /// symbol -> platform -> avg_rate
+    pub seven_day_avg_apr: HashMap<String, HashMap<String, f64>>,
+    /// symbol -> vec of pairwise spreads between platforms
+    pub seven_day_spread_apr: HashMap<String, Vec<PairSpread>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PairSpread {
+    pub long_platform: String,
+    pub short_platform: String,
+    pub total_spread: f64,
+}

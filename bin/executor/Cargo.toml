@@ -9,6 +9,9 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+tokio-cron-scheduler = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
 db = { path = "../../crates/db" }
 hyperliquid = { path = "../../crates/hyperliquid" }
 perp_core = { path = "../../crates/core" }

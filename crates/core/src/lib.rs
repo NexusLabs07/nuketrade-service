@@ -12,7 +12,7 @@ pub use exchange::{
 };
 
 // pub use types::LiveMarketFeed;
-pub use types::LiveMarketFeed;
+pub use types::{LiveMarketFeed, PairSpread, SevenDayApr};
 pub use utils::{parse_f64, parse_f64_or, parse_f64_or_zero};
 pub use ws::{WsConfig, WsMessage, run_funding_feed};
 

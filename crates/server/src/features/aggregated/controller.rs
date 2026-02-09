@@ -14,7 +14,7 @@ use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
     helpers::markets::PACIFICA_MARKETS,
 };
-use perp_core::parse_f64_or_zero;
+use perp_core::{SevenDayApr, parse_f64_or_zero};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -269,4 +269,9 @@ pub async fn get_token_chart(
     }
 
     Ok(Json(grouped))
+}
+
+pub async fn get_average_apr(State(state): State<AppState>) -> Result<Json<SevenDayApr>, AppError> {
+    let seven_day_apr = state.seven_day_apr.borrow().clone();
+    Ok(Json(seven_day_apr))
 }
