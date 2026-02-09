@@ -1,6 +1,7 @@
 use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
+use crate::middleware::user::validate_evm_address;
 use axum::Json;
-use bridge::client::{BridgeClient, PermitRequest, QuoteRequest};
+use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -10,18 +11,21 @@ use crate::error::AppError;
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_destination_usdc_address"))]
 pub struct QuotePayload {
+    #[validate(custom(function = "validate_evm_address"))]
     pub user: String,
     #[serde(rename = "destinationChainId")]
     pub destination_chain_id: u64,
+    #[validate(length(min = 1, message = "Amount must not be empty"))]
     pub amount: String,
     #[serde(rename = "tradeType")]
     pub trade_type: String,
     #[serde(rename = "usePermit")]
     pub use_permit: bool,
+    #[validate(length(min = 1, message = "Recipient must not be empty"))]
     pub recipient: String,
 }
 
-pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<String>, AppError> {
+pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
 
     validate_balance(&payload).await.map_err(|e| {
@@ -50,12 +54,32 @@ pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<String>
 
     let quote = bridge_client.quote(quote_request).await?;
 
-    let serialized_response = serde_json::to_string(&quote)?;
-
-    Ok(Json(serialized_response))
+    Ok(Json(quote))
 }
 
 pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<String>, AppError> {
+    let mut errors = validator::ValidationErrors::new();
+
+    if payload.signature.is_empty() {
+        let mut err = validator::ValidationError::new("required");
+        err.message = Some("Signature must not be empty".into());
+        errors.add("signature", err);
+    }
+    if payload.kind.is_empty() {
+        let mut err = validator::ValidationError::new("required");
+        err.message = Some("Kind must not be empty".into());
+        errors.add("kind", err);
+    }
+    if payload.request_id.is_empty() {
+        let mut err = validator::ValidationError::new("required");
+        err.message = Some("Request ID must not be empty".into());
+        errors.add("request_id", err);
+    }
+
+    if !errors.is_empty() {
+        return Err(AppError::Validation(errors));
+    }
+
     let bridge_client = BridgeClient::new();
 
     let result = bridge_client.execute_permit(payload).await?;

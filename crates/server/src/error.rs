@@ -71,16 +71,16 @@ impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppError::Validation(_) => write!(f, "Validation error"),
-            AppError::Database(e) => write!(f, "Database error: {}", e),
-            AppError::Exchange(e) => write!(f, "Exchange error: {}", e),
+            AppError::Database(e) => write!(f, "Database error: {e}"),
+            AppError::Exchange(e) => write!(f, "Exchange error: {e}"),
             AppError::Parse { field, message } => {
-                write!(f, "Parse error in {}: {}", field, message)
+                write!(f, "Parse error in {field}: {message}")
             }
-            AppError::Network(msg) => write!(f, "Network error: {}", msg),
-            AppError::Config(msg) => write!(f, "Configuration error: {}", msg),
-            AppError::NotFound(resource) => write!(f, "Not found: {}", resource),
+            AppError::Network(msg) => write!(f, "Network error: {msg}"),
+            AppError::Config(msg) => write!(f, "Configuration error: {msg}"),
+            AppError::NotFound(resource) => write!(f, "Not found: {resource}"),
             AppError::RateLimited => write!(f, "Rate limit exceeded"),
-            AppError::Internal(msg) => write!(f, "Internal error: {}", msg),
+            AppError::Internal(msg) => write!(f, "Internal error: {msg}"),
         }
     }
 }
@@ -136,7 +136,7 @@ impl IntoResponse for AppError {
             AppError::Parse { field, message } => (
                 StatusCode::BAD_REQUEST,
                 "parse_error",
-                format!("Invalid value for {}: {}", field, message),
+                format!("Invalid value for {field}: {message}"),
             ),
 
             AppError::Network(msg) => {
@@ -156,7 +156,7 @@ impl IntoResponse for AppError {
             AppError::NotFound(resource) => (
                 StatusCode::NOT_FOUND,
                 "not_found",
-                format!("Resource not found: {}", resource),
+                format!("Resource not found: {resource}"),
             ),
 
             AppError::RateLimited => (

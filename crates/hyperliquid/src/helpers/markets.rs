@@ -27,7 +27,7 @@ pub static HL_MARKETS: Lazy<Vec<PerpAsset>> = Lazy::new(|| {
     let parsed: Vec<Value> = match serde_json::from_str(PERP_META) {
         Ok(p) => p,
         Err(e) => {
-            panic!("Failed to parse PERP_META as array: {}", e);
+            panic!("Failed to parse PERP_META as array: {e}");
         }
     };
 
@@ -40,7 +40,7 @@ pub static HL_MARKETS: Lazy<Vec<PerpAsset>> = Lazy::new(|| {
     let meta: PerpMetaInner = match serde_json::from_value(first_element) {
         Ok(m) => m,
         Err(e) => {
-            panic!("Failed to parse universe from PERP_META: {}", e);
+            panic!("Failed to parse universe from PERP_META: {e}");
         }
     };
 

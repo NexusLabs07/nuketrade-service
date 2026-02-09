@@ -1,4 +1,4 @@
-use crate::features::{aggregated, bridge, hyperliquid, pacifica, user};
+use crate::features::{aggregated, bridge, hedge, hyperliquid, pacifica, user};
 use crate::state::AppState;
 use axum::extract::State;
 use axum::routing::get;
@@ -118,16 +118,15 @@ pub fn create_app(app_state: AppState) -> Router {
         ])
         .allow_credentials(true);
 
-    let app = Router::new()
+    Router::new()
         .route("/", get(root))
         .nest("/user", user::routes::routes())
         .nest("/hyperliquid", hyperliquid::routes::routes())
         .nest("/pacifica", pacifica::routes::routes())
         .nest("/aggregated", aggregated::routes::routes())
         .nest("/bridge", bridge::routes::routes())
+        .nest("/hedge-intents", hedge::routes::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
-        .with_state(app_state);
-
-    app
+        .with_state(app_state)
 }

@@ -13,6 +13,7 @@ use perp_core::parse_f64_or_zero;
 use crate::{
     AppState,
     error::AppError,
+    middleware::user::validate_evm_address,
     types::{OpenPositionsResponse, Side},
 };
 
@@ -28,6 +29,12 @@ pub async fn get_perp_metadata() -> &'static str {
 pub async fn get_user_open_positions(
     Path(user_evm_address): Path<String>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
+    validate_evm_address(&user_evm_address).map_err(|e| {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("user_evm_address", e);
+        AppError::Validation(errors)
+    })?;
+
     let user_info_client = UserInfo::new(Some(user_evm_address), None);
 
     let open_positions: ClearinghouseState = user_info_client.get_open_positions().await?;
@@ -66,6 +73,12 @@ pub async fn bridge_to_hyperliquid(
     State(state): State<AppState>,
     Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
+    validate_evm_address(&payload.user).map_err(|e| {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("user", e);
+        AppError::Validation(errors)
+    })?;
+
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
     let fee_payer_private_key = state.config.evm_fee_payer_private_key;
 

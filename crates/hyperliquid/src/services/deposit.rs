@@ -52,23 +52,18 @@ impl std::fmt::Display for DepositError {
             } => {
                 write!(
                     f,
-                    "Insufficient USDC balance: required {}, available {}",
-                    required, available
+                    "Insufficient USDC balance: required {required}, available {available}"
                 )
             }
             DepositError::BelowMinimumDeposit { amount, minimum } => {
-                write!(
-                    f,
-                    "Deposit amount {} is below minimum {} USDC",
-                    amount, minimum
-                )
+                write!(f, "Deposit amount {amount} is below minimum {minimum} USDC")
             }
-            DepositError::SimulationFailed(msg) => write!(f, "Simulation failed: {}", msg),
-            DepositError::ContractError(msg) => write!(f, "Contract error: {}", msg),
-            DepositError::ProviderError(msg) => write!(f, "Provider error: {}", msg),
-            DepositError::InvalidAddress(msg) => write!(f, "Invalid address: {}", msg),
-            DepositError::SignerError(msg) => write!(f, "Signer error: {}", msg),
-            DepositError::InvalidAmount(msg) => write!(f, "Invalid amount: {}", msg),
+            DepositError::SimulationFailed(msg) => write!(f, "Simulation failed: {msg}"),
+            DepositError::ContractError(msg) => write!(f, "Contract error: {msg}"),
+            DepositError::ProviderError(msg) => write!(f, "Provider error: {msg}"),
+            DepositError::InvalidAddress(msg) => write!(f, "Invalid address: {msg}"),
+            DepositError::SignerError(msg) => write!(f, "Signer error: {msg}"),
+            DepositError::InvalidAmount(msg) => write!(f, "Invalid amount: {msg}"),
         }
     }
 }
@@ -97,7 +92,7 @@ async fn check_user_balance(
     let usdc_address: Address = Chain::ARBITRUM
         .usdc_address
         .parse()
-        .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::InvalidAddress(format!("{e:?}")))?;
 
     let usdc = IERC20::new(usdc_address, provider);
 
@@ -105,7 +100,7 @@ async fn check_user_balance(
         .balanceOf(user_address)
         .call()
         .await
-        .map_err(|e| DepositError::ContractError(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::ContractError(format!("{e:?}")))?;
 
     if balance < required_amount {
         return Err(DepositError::InsufficientBalance {
@@ -145,7 +140,7 @@ async fn simulate_deposit(
 ) -> Result<(), DepositError> {
     let contract_address: Address = HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS
         .parse()
-        .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::InvalidAddress(format!("{e:?}")))?;
 
     let call_data = encode_deposit_call(user_address, amount, permit)?;
 
@@ -157,13 +152,10 @@ async fn simulate_deposit(
     provider
         .call(tx)
         .await
-        .map_err(|e| DepositError::SimulationFailed(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::SimulationFailed(format!("{e:?}")))?;
 
     log::info!(
-        "Deposit simulation passed for user {} amount {} (fee payer: {})",
-        user_address,
-        amount,
-        fee_payer
+        "Deposit simulation passed for user {user_address} amount {amount} (fee payer: {fee_payer})"
     );
 
     Ok(())
@@ -188,7 +180,7 @@ pub async fn deposit_to_hyperliquid(
     let user_addr: Address = payload
         .user
         .parse()
-        .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::InvalidAddress(format!("{e:?}")))?;
 
     // Check minimum deposit
     if amount < MIN_DEPOSIT_AMOUNT {
@@ -201,7 +193,7 @@ pub async fn deposit_to_hyperliquid(
     // Parse fee payer wallet
     let signer: PrivateKeySigner = fee_payer_private_key
         .parse()
-        .map_err(|e| DepositError::SignerError(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::SignerError(format!("{e:?}")))?;
 
     let fee_payer_address = signer.address();
     let wallet = EthereumWallet::from(signer);
@@ -210,7 +202,7 @@ pub async fn deposit_to_hyperliquid(
         .wallet(wallet)
         .connect(arbitrum_rpc_url)
         .await
-        .map_err(|e| DepositError::ProviderError(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::ProviderError(format!("{e:?}")))?;
 
     // Step 1: Check user balance
     let balance = check_user_balance(&provider, user_addr, U256::from(amount)).await?;
@@ -234,7 +226,7 @@ pub async fn deposit_to_hyperliquid(
     // Step 3: Execute the contract call
     let contract_address: Address = HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS
         .parse()
-        .map_err(|e| DepositError::InvalidAddress(format!("{:?}", e)))?;
+        .map_err(|e| DepositError::InvalidAddress(format!("{e:?}")))?;
 
     let call_data = encode_deposit_call(user_addr, amount, &payload.permit)?;
 
@@ -246,16 +238,16 @@ pub async fn deposit_to_hyperliquid(
     let pending_tx = provider
         .send_transaction(tx)
         .await
-        .map_err(|e| DepositError::ContractError(format!("Failed to send tx: {:?}", e)))?;
+        .map_err(|e| DepositError::ContractError(format!("Failed to send tx: {e:?}")))?;
 
     let tx_hash = *pending_tx.tx_hash();
 
     let receipt = pending_tx
         .get_receipt()
         .await
-        .map_err(|e| DepositError::ContractError(format!("Tx failed: {:?}", e)))?;
+        .map_err(|e| DepositError::ContractError(format!("Tx failed: {e:?}")))?;
 
-    log::info!("Deposit successful! Tx hash: {}", tx_hash);
+    log::info!("Deposit successful! Tx hash: {tx_hash}");
 
     Ok(format!("{:?}", receipt.transaction_hash))
 }

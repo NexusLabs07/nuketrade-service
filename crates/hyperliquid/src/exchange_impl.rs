@@ -2,9 +2,8 @@
 
 use async_trait::async_trait;
 use perp_core::{
-    Exchange, PositionSide, UnifiedPosition,
-    exchange::{AccountSettings, ExchangeError, MarketInfo, WsMessage},
-    funding::Dex,
+    Exchange, PositionSide, UnifiedPosition, WsMessage,
+    exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange},
     parse_f64,
 };
 use reqwest::Client;
@@ -92,8 +91,8 @@ impl Exchange for HyperliquidExchange {
         "Hyperliquid"
     }
 
-    fn dex(&self) -> Dex {
-        Dex::Hyperliquid
+    fn exchange(&self) -> PerpetualExchange {
+        PerpetualExchange::Hyperliquid
     }
 
     async fn get_positions(

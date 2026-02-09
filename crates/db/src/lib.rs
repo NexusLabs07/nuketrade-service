@@ -1,5 +1,10 @@
-pub mod crud;
-pub mod types;
+pub mod funding;
+pub mod hedge;
+pub mod points;
+pub mod user;
+pub mod wallet;
+
+// use {funding, points, user, wallet};
 
 use std::{env, path::Path, sync::Arc};
 
@@ -18,12 +23,7 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     let db_name = env::var("DB_NAME")?;
 
     log::info!(
-        "db_host: {:?}, db_post {:?}, db_user {:?}, db_pass {:?}, db_name {:?}",
-        db_host,
-        db_pass,
-        db_user,
-        db_pass,
-        db_name
+        "db_host: {db_host:?}, db_port: {db_port:?}, db_user: {db_user:?}, db_pass: {db_pass:?}, db_name: {db_name:?}"
     );
 
     let mut conf = refinery::config::Config::new(ConfigDbType::Postgres)
@@ -51,7 +51,7 @@ pub async fn connect_db(db_url: &str) -> Result<Arc<PgPool>, Error> {
     let db = match sqlx::postgres::PgPool::connect(db_url).await {
         Ok(connection) => connection,
         Err(err) => {
-            log::error!("Error connecting to DB: {:?}", err);
+            log::error!("Error connecting to DB: {err:?}");
             return Err(Error::msg("Error connecting to DB"));
         }
     };

@@ -73,8 +73,8 @@ impl Config {
 
         Ok(Self {
             db_url,
-            evm_fee_payer_private_key: evm_fee_payer_private_key,
-            solana_fee_payer_private_key: solana_fee_payer_private_key,
+            evm_fee_payer_private_key,
+            solana_fee_payer_private_key,
             solana_rpc_url,
             arbitrum_rpc_url,
             base_rpc_url,

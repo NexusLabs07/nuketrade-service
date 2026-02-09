@@ -1,8 +1,8 @@
 //! Generic WebSocket handler for exchange funding feeds.
 
-use crate::{Exchange, exchange::WsMessage, funding::Dex, types::LiveMarketFeed};
+use crate::{Exchange, WsMessage, exchange::PerpetualExchange, types::LiveMarketFeed};
 use chrono::Utc;
-use db::{crud::insert_funding_rates, types::FundingRate};
+use db::funding::{FundingRate, insert_funding_rates};
 use futures_util::{SinkExt, StreamExt};
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -40,7 +40,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
     config: WsConfig,
     symbols: &[&str],
 ) {
-    let dex = exchange.dex();
+    let perpetual_exchange = exchange.exchange();
     let exchange_name = exchange.name();
 
     // Track state across reconnections: symbol -> (mark_price, funding_rate, timestamp_ms)
@@ -93,7 +93,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
             }
         };
 
-        log::info!("Connected to {} WS", exchange_name);
+        log::info!("Connected to {exchange_name} WS");
 
         // Set up intervals - align DB writes to wall-clock time so all exchanges write simultaneously
         let aligned_start = config.next_aligned_db_write();
@@ -117,9 +117,9 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
         let subscribe_messages = exchange.build_subscribe_message(symbols);
         for msg in subscribe_messages {
             match write.send(Message::Text(msg.clone().into())).await {
-                Ok(_) => log::info!("{}: Sent subscription message", exchange_name),
+                Ok(_) => log::info!("{exchange_name}: Sent subscription message"),
                 Err(e) => {
-                    log::error!("{}: Error sending subscription: {}", exchange_name, e);
+                    log::error!("{exchange_name}: Error sending subscription: {e}");
                     tokio::time::sleep(config.reconnect_delay()).await;
                     continue;
                 }
@@ -148,16 +148,16 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                             }
 
                             if !keep_alive {
-                                log::warn!("{} WS connection closed. Reconnecting...", exchange_name);
+                                log::warn!("{exchange_name} WS connection closed. Reconnecting...");
                                 break true;
                             }
                         }
                         Some(Err(e)) => {
-                            log::error!("{} WS read error: {}. Reconnecting...", exchange_name, e);
+                            log::error!("{exchange_name} WS read error: {e}. Reconnecting...");
                             break true;
                         }
                         None => {
-                            log::warn!("{} WS stream ended. Reconnecting...", exchange_name);
+                            log::warn!("{exchange_name} WS stream ended. Reconnecting...");
                             break true;
                         }
                     }
@@ -165,7 +165,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
                 // Update live state
                 _ = state_tick.tick() => {
-                    update_live_state(&live_market_feed, &dex, &last_snapshot).await;
+                    update_live_state(&live_market_feed, &perpetual_exchange, &last_snapshot).await;
                 }
 
                 // Write to database (aligned across all exchanges)
@@ -178,11 +178,11 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     );
 
                     if last_update.elapsed() > config.stale_threshold() {
-                        log::warn!("{}: Skipping DB write - data is stale", exchange_name);
+                        log::warn!("{exchange_name}: Skipping DB write - data is stale");
                         continue;
                     }
 
-                    write_funding_to_database(&db_conn, &dex, &last_snapshot).await;
+                    write_funding_to_database(&db_conn, &perpetual_exchange, &last_snapshot).await;
                 }
 
                 // Handle optional ping
@@ -196,10 +196,10 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                 } => {
                     let ping_msg = serde_json::json!({"method": "ping"}).to_string();
                     if let Err(e) = write.send(Message::Text(ping_msg.into())).await {
-                        log::error!("{}: Failed to send ping: {}. Reconnecting...", exchange_name, e);
+                        log::error!("{exchange_name}: Failed to send ping: {e}. Reconnecting...");
                         break true;
                     } else {
-                        log::info!("{}: Sent heartbeat ping", exchange_name);
+                        log::info!("{exchange_name}: Sent heartbeat ping");
                     }
                 }
             }
@@ -236,7 +236,7 @@ async fn handle_message<E: Exchange>(
         Message::Ping(p) => {
             log::info!("Received ping, sending pong");
             if let Err(e) = write.send(Message::Pong(p)).await {
-                log::error!("Failed to send pong: {}", e);
+                log::error!("Failed to send pong: {e}");
             }
             (true, vec![])
         }
@@ -246,7 +246,7 @@ async fn handle_message<E: Exchange>(
             // Send any pong response messages (e.g., re-subscribe)
             for msg in exchange.on_pong_messages(symbols) {
                 if let Err(e) = write.send(Message::Text(msg.into())).await {
-                    log::error!("Failed to send pong response: {}", e);
+                    log::error!("Failed to send pong response: {e}");
                 }
             }
             (true, vec![])
@@ -274,7 +274,7 @@ async fn handle_message<E: Exchange>(
                         // Send text-based pong
                         let pong = r#"{"type":"pong"}"#;
                         if let Err(e) = write.send(Message::Text(pong.into())).await {
-                            log::error!("Failed to send text pong: {}", e);
+                            log::error!("Failed to send text pong: {e}");
                         }
                     }
 
@@ -283,7 +283,7 @@ async fn handle_message<E: Exchange>(
                         // Send any pong response messages (e.g., re-subscribe)
                         for msg in exchange.on_pong_messages(symbols) {
                             if let Err(e) = write.send(Message::Text(msg.into())).await {
-                                log::error!("Failed to send pong response: {}", e);
+                                log::error!("Failed to send pong response: {e}");
                             }
                         }
                     }
@@ -322,21 +322,21 @@ async fn handle_message<E: Exchange>(
 /// Update the live market feed state.
 async fn update_live_state(
     live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
-    dex: &Dex,
+    perp_exchange: &PerpetualExchange,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
     let mut state = live_market_feed.write().await;
     for (symbol, (mark_px, funding, _)) in snapshot.iter() {
-        match dex {
-            Dex::Hyperliquid => {
+        match perp_exchange {
+            PerpetualExchange::Hyperliquid => {
                 state
                     .hyperliquid
                     .insert(symbol.clone(), (*mark_px, *funding));
             }
-            Dex::Pacifica => {
+            PerpetualExchange::Pacifica => {
                 state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
             }
-            Dex::Lighter => {
+            PerpetualExchange::Lighter => {
                 state.lighter.insert(symbol.clone(), (*mark_px, *funding));
             }
         }
@@ -346,14 +346,14 @@ async fn update_live_state(
 /// Write funding rates to the database.
 async fn write_funding_to_database(
     db_conn: &Arc<PgPool>,
-    dex: &Dex,
+    perp_exchange: &PerpetualExchange,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
     let funding_rates: Vec<FundingRate> = snapshot
         .iter()
         .map(|(symbol, (mark_px, funding, _))| FundingRate {
             id: Uuid::new_v4(),
-            platform: dex.to_string(),
+            platform: perp_exchange.to_string(),
             symbol: symbol.clone(),
             mark_px: *mark_px,
             rate: *funding,
@@ -368,7 +368,7 @@ async fn write_funding_to_database(
     let db = db_conn.clone();
     tokio::spawn(async move {
         if let Err(e) = insert_funding_rates(db, funding_rates).await {
-            log::warn!("DB insert failed: {:?}", e);
+            log::warn!("DB insert failed: {e:?}");
         }
     });
 }

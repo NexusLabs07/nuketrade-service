@@ -20,6 +20,7 @@ members = ["crates/*", "bin/*"]
 resolver = "3"
 
 [workspace.dependencies]
+tokio-cron-scheduler = "0.15.1"
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -61,3 +62,10 @@ solana-message = "2.2.1"
 solana-signer = "2.2.1"
 spl-associated-token-account-client = "2.0.0"
 alloy = { version = "1.0", features = ["sol-types", "contract", "provider-http", "rpc-types"] }
+
+
+[workspace.lints.clippy]
+all = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"

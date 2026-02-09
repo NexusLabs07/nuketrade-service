@@ -5,7 +5,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use db::{crud::get_token_chart_info, types::FundingRate};
+use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
     helpers::markets::HL_MARKETS,
@@ -14,18 +14,22 @@ use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
     helpers::markets::PACIFICA_MARKETS,
 };
-use perp_core::parse_f64_or_zero;
+use perp_core::{SevenDayApr, parse_f64_or_zero};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
+    middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
     types::{MergedPositionResponse, OpenPositionsResponse, Side},
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct MergedPositionsParams {
+    #[validate(custom(function = "validate_evm_address"))]
     pub user_evm_address: String,
+    #[validate(custom(function = "validate_solana_address"))]
     pub user_solana_address: String,
 }
 
@@ -50,8 +54,9 @@ pub struct LiveMarketFeedResponse {
     pub pacifica: Option<MarketFeedValueStruct>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct ChartParams {
+    #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
 }
 
@@ -59,6 +64,8 @@ pub async fn get_merged_open_positions(
     Path(params): Path<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
+    params.validate()?;
+
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
@@ -129,7 +136,7 @@ pub async fn get_merged_open_positions(
                             PACIFICA_MARKETS
                                 .iter()
                                 .find(|x| x.symbol == symbol)
-                                .map(|s| s.max_leverage as u32)
+                                .map(|s| s.max_leverage)
                                 .unwrap_or_default(),
                         );
 
@@ -145,14 +152,12 @@ pub async fn get_merged_open_positions(
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
                     } else {
-                        let value = match asset_position.amount.parse::<f64>().ok() {
+                        match asset_position.amount.parse::<f64>().ok() {
                             Some(amt) if leverage > 0 => {
                                 (amt * current_feed.0 / leverage as f64).to_string()
                             }
                             _ => "0".to_string(),
-                        };
-
-                        value
+                        }
                     };
 
                     let pnl: f64 = if current_feed.0 != 0.0 {
@@ -263,6 +268,8 @@ pub async fn get_token_chart(
     Query(params): Query<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
+    params.validate()?;
+
     let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
@@ -271,4 +278,9 @@ pub async fn get_token_chart(
     }
 
     Ok(Json(grouped))
+}
+
+pub async fn get_average_apr(State(state): State<AppState>) -> Result<Json<SevenDayApr>, AppError> {
+    let seven_day_apr = state.seven_day_apr.borrow().clone();
+    Ok(Json(seven_day_apr))
 }
