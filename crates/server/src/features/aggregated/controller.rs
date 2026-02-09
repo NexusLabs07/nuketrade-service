@@ -16,16 +16,20 @@ use pacifica::{
 };
 use perp_core::{SevenDayApr, parse_f64_or_zero};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
+    middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
     types::{MergedPositionResponse, OpenPositionsResponse, Side},
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct MergedPositionsParams {
+    #[validate(custom(function = "validate_evm_address"))]
     pub user_evm_address: String,
+    #[validate(custom(function = "validate_solana_address"))]
     pub user_solana_address: String,
 }
 
@@ -50,8 +54,9 @@ pub struct LiveMarketFeedResponse {
     pub pacifica: Option<MarketFeedValueStruct>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct ChartParams {
+    #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
 }
 
@@ -59,6 +64,8 @@ pub async fn get_merged_open_positions(
     Path(params): Path<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
+    params.validate()?;
+
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
@@ -261,6 +268,8 @@ pub async fn get_token_chart(
     Query(params): Query<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
+    params.validate()?;
+
     let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();

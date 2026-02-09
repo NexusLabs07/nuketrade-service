@@ -4,7 +4,9 @@ use axum::{
 };
 use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
+use crate::middleware::user::{validate_evm_address, validate_solana_address};
 use crate::services::hedge::NextActionResponse;
 use crate::state::AppState;
 use crate::{error::AppError, features::hedge::services::HedgeService};
@@ -12,14 +14,19 @@ use db::hedge::{self as hedge_db};
 
 // ============================= Request / Response Types =============================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CreateHedgeIntentRequest {
     pub user_id: uuid::Uuid,
+    #[validate(length(min = 1, message = "Asset must not be empty"))]
     pub asset: String,
     pub exchanges: [PerpetualExchange; 2],
+    #[validate(range(exclusive_min = 0.0, message = "Margin must be greater than 0"))]
     pub margin_usd: f64,
+    #[validate(range(exclusive_min = 0.0, message = "Leverage must be greater than 0"))]
     pub leverage: f64,
+    #[validate(custom(function = "validate_evm_address"))]
     pub evm_address: String,
+    #[validate(custom(function = "validate_solana_address"))]
     pub solana_address: String,
 }
 
@@ -28,8 +35,9 @@ pub struct CreateHedgeIntentResponse {
     pub hedge_intent_id: uuid::Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ActionResultRequest {
+    #[validate(length(min = 1, message = "Action must not be empty"))]
     pub action: String,
     #[serde(default)]
     pub success: bool,
@@ -65,6 +73,8 @@ pub async fn create_hedge_intent(
     State(state): State<AppState>,
     Json(payload): Json<CreateHedgeIntentRequest>,
 ) -> Result<Json<CreateHedgeIntentResponse>, AppError> {
+    payload.validate()?;
+
     HedgeService::create_hedge_intent(state.db.clone(), payload)
         .await
         .map(|id| {
@@ -92,6 +102,8 @@ pub async fn report_action_result(
     Path(intent_id): Path<uuid::Uuid>,
     Json(payload): Json<ActionResultRequest>,
 ) -> Result<Json<ActionResultResponse>, AppError> {
+    payload.validate()?;
+
     HedgeService::report_action_result(state.db, intent_id, payload)
         .await
         .map(|action| {

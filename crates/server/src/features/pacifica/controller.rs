@@ -10,6 +10,7 @@ use pacifica::{
 use crate::{
     AppState,
     error::AppError,
+    middleware::user::validate_solana_address,
     types::{OpenPositionsResponse, Side},
 };
 
@@ -17,6 +18,12 @@ pub async fn get_user_open_positions(
     Path(user_solana_address): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
+    validate_solana_address(&user_solana_address).map_err(|e| {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("user_solana_address", e);
+        AppError::Validation(errors)
+    })?;
+
     let user_info_client = UserInfo::new(user_solana_address);
 
     let open_positions: UserPositionsResponse = user_info_client.get_open_positions().await?;
@@ -97,6 +104,16 @@ pub async fn bridge_to_pacifica(
     State(state): State<AppState>,
     Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
+    validate_solana_address(&payload.user_address).map_err(|e| {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("user_address", e);
+        AppError::Validation(errors)
+    })?;
+
+    if payload.amount == 0 {
+        return Err(AppError::parse("amount", "Amount must be greater than 0"));
+    }
+
     let solana_rpc_url = state.config.solana_rpc_url;
     let fee_payer_private_key = state.config.solana_fee_payer_private_key;
 
