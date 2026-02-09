@@ -10,19 +10,17 @@ publish.workspace = true
 [dependencies]
 tokio-tungstenite = { workspace = true }
 uuid = { workspace = true }
-serde_with = { version = "3.16.1", features = ["base64"] }
+serde_with = { workspace = true, features = ["base64"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
-perp_core = { path = "../core" }
-db = { path = "../db" }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { workspace = true }
 anyhow = { workspace = true }
 solana-transaction = { workspace = true }
 solana-keypair = { workspace = true }
@@ -33,4 +31,7 @@ solana-pubkey = { workspace = true }
 solana-message = { workspace = true }
 solana-signer = { workspace = true }
 spl-associated-token-account-client = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
+
+perp_core = { path = "../core" }
+db = { path = "../db" }

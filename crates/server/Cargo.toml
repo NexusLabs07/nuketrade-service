@@ -10,23 +10,23 @@ publish.workspace = true
 [dependencies]
 axum = { workspace = true }
 tokio = { workspace = true }
-perp_core = { path = "../core" }
-hyperliquid = { path = "../hyperliquid" }
-pacifica = { path = "../pacifica" }
-bridge = { path = "../bridge" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-db = { path = "../db" }
 sqlx = { workspace = true }
 nanoid = { workspace = true }
 validator = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
 governor = { workspace = true }
 once_cell = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
+tower-http = { workspace = true }
+reqwest = { workspace = true }
 alloy = { workspace = true }
+
+db = { path = "../db" }
+bridge = { path = "../bridge" }
+perp_core = { path = "../core" }
+pacifica = { path = "../pacifica" }
+hyperliquid = { path = "../hyperliquid" }
