@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use refinery_core::postgres::row;
 use sqlx::PgPool;
 
 use crate::funding::{AverageFundingStats, HourlyFundingRate, models::FundingRate};
@@ -167,9 +166,7 @@ pub async fn get_7d_funding_stats(
     Ok(rows)
 }
 
-pub async fn get_7d_hourly_rates(
-    db: Arc<PgPool>,
-) -> Result<Vec<HourlyFundingRate>, anyhow::Error> {
+pub async fn get_7d_hourly_rates(db: Arc<PgPool>) -> Result<Vec<HourlyFundingRate>, anyhow::Error> {
     let query = r#"
         SELECT symbol, platform, ts_hour, AVG(rate) AS rate
         FROM funding_rate
