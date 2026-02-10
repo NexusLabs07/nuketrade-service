@@ -44,24 +44,25 @@ async fn compute_seven_day_apr(db: Arc<PgPool>) -> Option<SevenDayApr> {
             .insert(rate.platform, rate.rate);
     }
 
-    // For each (symbol, hour), compute pairwise spreads and accumulate
+    // For each (symbol, hour), compute pairwise spreads and accumulate.
+    // short_p = platform with higher rate (you receive funding by shorting)
+    // long_p  = platform with lower rate  (you pay less funding by longing)
     let mut spread_acc: HashMap<(String, String, String), f64> = HashMap::new();
     for ((symbol, _ts_hour), platforms) in &hourly_grouped {
-        //Vec<Hyperliquid, Lighter, Pacifica>
         let platform_list: Vec<&String> = platforms.keys().collect();
         for i in 0..platform_list.len() {
-            for j in 0..platform_list.len() {
-                if i == j {
-                    //i = hyperliquid, j = hyperliquid
-                    continue;
-                }
-                //Hyperliquid
-                let long_p = platform_list[i];
-                //Pacifica
-                let short_p = platform_list[j];
+            for j in (i + 1)..platform_list.len() {
+                let p_a = platform_list[i];
+                let p_b = platform_list[j];
 
-                //platforms[Hyperliquid] - platforms[Pacifica]
-                let spread = (platforms[long_p] - platforms[short_p]) * 100.0;
+                let (short_p, long_p) = if platforms[p_a] >= platforms[p_b] {
+                    (p_a, p_b)
+                } else {
+                    (p_b, p_a)
+                };
+
+                // always positive: rate received (short) - rate paid (long)
+                let spread = (platforms[short_p] - platforms[long_p]) * 100.0;
                 *spread_acc
                     .entry((symbol.clone(), long_p.clone(), short_p.clone()))
                     .or_default() += spread;
@@ -72,9 +73,6 @@ async fn compute_seven_day_apr(db: Arc<PgPool>) -> Option<SevenDayApr> {
     // Convert to spread_apr: symbol -> Vec<PairSpread>
     let mut seven_day_spread_apr: HashMap<String, Vec<PairSpread>> = HashMap::new();
     for ((symbol, long_platform, short_platform), total_spread) in spread_acc {
-        if total_spread <= 0.0 {
-            continue;
-        }
         seven_day_spread_apr
             .entry(symbol)
             .or_default()
