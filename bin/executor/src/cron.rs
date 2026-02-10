@@ -72,6 +72,9 @@ async fn compute_seven_day_apr(db: Arc<PgPool>) -> Option<SevenDayApr> {
     // Convert to spread_apr: symbol -> Vec<PairSpread>
     let mut seven_day_spread_apr: HashMap<String, Vec<PairSpread>> = HashMap::new();
     for ((symbol, long_platform, short_platform), total_spread) in spread_acc {
+        if total_spread <= 0.0 {
+            continue;
+        }
         seven_day_spread_apr
             .entry(symbol)
             .or_default()
