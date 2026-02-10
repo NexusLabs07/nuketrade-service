@@ -68,7 +68,7 @@ pub async fn get_token_chart_info(
     log::info!("i am here");
     let query = match timeframe.as_str() {
         "30m" => {
-            r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 ORDER BY timestamp ASC"#
+            r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 AND timestamp >= NOW() - INTERVAL '7 days' ORDER BY timestamp ASC"#
         }
         "1h" => {
             r#"
@@ -80,7 +80,7 @@ pub async fn get_token_chart_info(
             mark_px,
             timestamp
             FROM funding_rate
-            WHERE symbol = $1
+            WHERE symbol = $1 AND timestamp >= NOW() - INTERVAL '7 days'
             ORDER BY platform, ts_hour, timestamp DESC
             "#
         }
@@ -94,7 +94,7 @@ pub async fn get_token_chart_info(
             mark_px,
             timestamp
             FROM funding_rate
-            WHERE symbol = $1
+            WHERE symbol = $1 AND timestamp >= NOW() - INTERVAL '30 days'
             ORDER BY platform, ts_day, timestamp DESC
             "#
         }
@@ -108,7 +108,7 @@ pub async fn get_token_chart_info(
             mark_px,
             timestamp
             FROM funding_rate
-            WHERE symbol = $1
+            WHERE symbol = $1 AND timestamp >= NOW() - INTERVAL '3 months'
             ORDER BY platform, ts_week, timestamp DESC
             "#
         }
