@@ -102,7 +102,7 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
     let client = reqwest::Client::new();
 
     // Try the collateral endpoint
-    let url = format!("https://api.pacifica.fi/api/v1/account/collateral?account={solana_address}");
+    let url = format!("https://api.pacifica.fi/api/v1/account?account={solana_address}");
 
     let response = client.get(&url).send().await?;
 
@@ -126,7 +126,7 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
 
     Ok(data
         .data
-        .and_then(|d| d.collateral.parse::<f64>().ok())
+        .and_then(|d| d.balance.parse::<f64>().ok())
         .unwrap_or(0.0))
 }
 
@@ -291,7 +291,7 @@ struct PacificaCollateralResponse {
 
 #[derive(Debug, Deserialize)]
 struct PacificaCollateralData {
-    collateral: String,
+    balance: String,
 }
 
 /// Solana JSON-RPC response for getTokenAccountsByOwner.
