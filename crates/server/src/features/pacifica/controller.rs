@@ -1,9 +1,12 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse},
+    perp_metadata::PERP_META,
     services::deposit::{DepositPayload, deposit_to_pacifica},
 };
 
@@ -13,6 +16,11 @@ use crate::{
     middleware::user::validate_solana_address,
     types::{OpenPositionsResponse, Side},
 };
+
+//TODO: make them dynamic using cron later
+pub async fn get_perp_metadata() -> impl IntoResponse {
+    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], PERP_META)
+}
 
 pub async fn get_user_open_positions(
     Path(user_solana_address): Path<String>,

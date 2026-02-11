@@ -1,6 +1,8 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
@@ -18,12 +20,12 @@ use crate::{
 };
 
 //TODO: make them dynamic using cron later
-pub async fn get_spot_metadata() -> &'static str {
-    SPOT_META
+pub async fn get_spot_metadata() -> impl IntoResponse {
+    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], SPOT_META)
 }
 
-pub async fn get_perp_metadata() -> &'static str {
-    PERP_META
+pub async fn get_perp_metadata() -> impl IntoResponse {
+    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], PERP_META)
 }
 
 pub async fn get_user_open_positions(

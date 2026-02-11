@@ -1,6 +1,7 @@
 pub mod apis;
 mod exchange_impl;
 pub mod helpers;
+pub mod perp_metadata;
 pub mod services;
 pub mod ws;
 
