@@ -36,7 +36,7 @@ pub async fn create_hedge_intent_with_legs(
     for leg in legs {
         sqlx::query(
             r#"
-            INSERT INTO hedge_legs (id, hedge_intent_id, protocol, chain, target_amount_usd, funded_amount_usd, status)
+            INSERT INTO hedge_legs (id, hedge_intent_id, exchange, chain, target_amount_usd, funded_amount_usd, status)
             VALUES ($1, $2, $3, $4, $5, 0, 'PENDING')
             "#,
         )
