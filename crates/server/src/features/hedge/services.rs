@@ -78,14 +78,14 @@ impl HedgeService {
                 id: uuid::Uuid::new_v4(),
                 hedge_intent_id: intent_id,
                 exchange: exchange_a_str.clone(),
-                chain: exchange_to_chain(exchange_a) as i64,
+                chain: exchange_to_chain(exchange_a) as i32,
                 target_amount_usd: half_margin,
             },
             NewHedgeLeg {
                 id: uuid::Uuid::new_v4(),
                 hedge_intent_id: intent_id,
                 exchange: exchange_b_str.clone(),
-                chain: exchange_to_chain(exchange_b) as i64,
+                chain: exchange_to_chain(exchange_b) as i32,
                 target_amount_usd: half_margin,
             },
         ];

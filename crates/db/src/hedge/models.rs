@@ -25,7 +25,7 @@ pub struct HedgeLeg {
     pub id: Uuid,
     pub hedge_intent_id: Uuid,
     pub exchange: String,
-    pub chain: String,
+    pub chain: i32,
     pub target_amount_usd: f64,
     pub funded_amount_usd: f64,
     pub status: String,
@@ -45,7 +45,7 @@ pub struct TxReference {
     pub hedge_leg_id: Uuid,
     pub action: String,
     pub tx_hash: Option<String>,
-    pub chain: String,
+    pub chain: i32,
     pub status: String,
     pub created_at: NaiveDateTime,
 }
@@ -70,7 +70,7 @@ pub struct NewHedgeLeg {
     pub id: Uuid,
     pub hedge_intent_id: Uuid,
     pub exchange: String,
-    pub chain: i64,
+    pub chain: i32,
     pub target_amount_usd: f64,
 }
 
@@ -81,6 +81,6 @@ pub struct NewTxReference {
     pub hedge_leg_id: Uuid,
     pub action: String,
     pub tx_hash: Option<String>,
-    pub chain: String,
+    pub chain: i32,
     pub status: String,
 }
