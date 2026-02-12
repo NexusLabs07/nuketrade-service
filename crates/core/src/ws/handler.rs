@@ -1,13 +1,13 @@
 //! Generic WebSocket handler for exchange funding feeds.
 
-use crate::{Exchange, exchange::WsMessage, funding::Dex, types::LiveMarketFeed};
+use crate::{Exchange, exchange::WsMessage, funding::Dex, types::MarketFeedUpdate};
 use chrono::Utc;
 use db::{crud::insert_funding_rates, types::FundingRate};
 use futures_util::{SinkExt, StreamExt};
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
-    sync::RwLock,
+    sync::mpsc,
     time::{Instant, interval, interval_at},
 };
 use tokio_tungstenite::{
@@ -30,13 +30,13 @@ use super::WsConfig;
 /// # Arguments
 /// * `exchange` - The exchange implementation
 /// * `db_conn` - Database connection pool
-/// * `live_market_feed` - Shared state for live market data
+/// * `feed_tx` - Bounded mspc sender to the central FeedManager
 /// * `config` - WebSocket configuration
 /// * `symbols` - List of symbols to subscribe to
 pub async fn run_funding_feed<E: Exchange + 'static>(
     exchange: Arc<E>,
     db_conn: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    feed_tx: mpsc::Sender<MarketFeedUpdate>,
     config: WsConfig,
     symbols: &[&str],
 ) {
@@ -165,7 +165,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
                 // Update live state
                 _ = state_tick.tick() => {
-                    update_live_state(&live_market_feed, &dex, &last_snapshot).await;
+                    send_live_update(&feed_tx, &dex, &last_snapshot).await;
                 }
 
                 // Write to database (aligned across all exchanges)
@@ -326,27 +326,28 @@ async fn handle_message<E: Exchange>(
     }
 }
 
-/// Update the live market feed state.
-async fn update_live_state(
-    live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
+/// Send a live update to the FeedManager via bounded mpsc.
+///
+/// Uses `send().await` to apply backpressure instead of `try_send`,
+/// ensuring no silent data loss. The bounded channel (capacity 256)
+/// naturally rate-limits producers if the FeedManager falls behind.
+async fn send_live_update(
+    feed_tx: &mpsc::Sender<MarketFeedUpdate>,
     dex: &Dex,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
-    let mut state = live_market_feed.write().await;
-    for (symbol, (mark_px, funding, _)) in snapshot.iter() {
-        match dex {
-            Dex::Hyperliquid => {
-                state
-                    .hyperliquid
-                    .insert(symbol.clone(), (*mark_px, *funding));
-            }
-            Dex::Pacifica => {
-                state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
-            }
-            Dex::Lighter => {
-                state.lighter.insert(symbol.clone(), (*mark_px, *funding));
-            }
-        }
+    let data: HashMap<String, (f64, f64)> = snapshot
+        .iter()
+        .map(|(sym, (mark, fund, _))| (sym.clone(), (*mark, *fund)))
+        .collect();
+
+    let update = MarketFeedUpdate {
+        dex: dex.clone(),
+        data,
+    };
+
+    if let Err(e) = feed_tx.send(update).await {
+        log::error!("FeedManager receiver dropped, cannot send update: {}", e);
     }
 }
 

@@ -1,4 +1,4 @@
-use perp_core::types::LiveMarketFeed;
+use perp_core::types::RawMarketData;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,10 +13,10 @@ use axum::{
 use sqlx::PgPool;
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, watch};
 use tower_http::cors::CorsLayer;
 
-use crate::controller::root;
+use crate::controller::{aggregated::LiveMarketFeedResponse, root};
 
 pub mod controller;
 pub mod error;
@@ -28,10 +28,20 @@ pub mod types;
 const RATE_LIMIT_REQUESTS_PER_SECOND: usize = 20;
 const RATE_LIMIT_CLEANUP_THRESHOLD_SECS: u64 = 60;
 
+/// Atomic snapshot published by FeedManager.
+/// Both `raw` and `formatted` are always from the same computation pass,
+/// so readers can never observer a mismatch.
+#[derive(Clone, Debug)]
+pub struct FeedSnapshot {
+    pub raw: RawMarketData,
+    pub formatted: Vec<LiveMarketFeedResponse>,
+}
+
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub db: Arc<PgPool>,
-    pub live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    /// Single watch channel - raw + formatted are always in sync.
+    pub feed: watch::Receiver<Arc<FeedSnapshot>>,
 }
 
 fn get_client_ip(request: &Request<Body>) -> IpAddr {
@@ -115,12 +125,9 @@ fn get_cors_origins() -> Vec<HeaderValue> {
 
 pub async fn run_server(
     db: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    feed_rx: watch::Receiver<Arc<FeedSnapshot>>,
 ) -> anyhow::Result<()> {
-    let app_state = AppState {
-        db,
-        live_market_feed,
-    };
+    let app_state = AppState { db, feed: feed_rx };
 
     let cors = CorsLayer::new()
         .allow_origin(get_cors_origins())
@@ -141,7 +148,8 @@ pub async fn run_server(
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .with_state(app_state);
 
-    let bind_addr = std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
+    let bind_addr =
+        std::env::var("SERVER_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 
     log::info!("Starting Server on {}...", bind_addr);

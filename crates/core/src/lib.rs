@@ -10,7 +10,7 @@ pub use exchange::{
     AccountSettings, Exchange, ExchangeError, MarketInfo, PositionSide, UnifiedPosition, WsMessage,
 };
 pub use funding::{Dex, FundingSnapshot};
-pub use types::LiveMarketFeed;
+pub use types::{LiveMarketFeed, MarketFeedUpdate, RawMarketData};
 pub use utils::{parse_f64, parse_f64_or, parse_f64_or_zero};
 pub use ws::{WsConfig, run_funding_feed};
 
