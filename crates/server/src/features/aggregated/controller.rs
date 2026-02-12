@@ -22,7 +22,10 @@ use crate::{
     AppState,
     error::AppError,
     middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
-    types::{MergedPositionResponse, OpenPositionsResponse, Side},
+    types::{
+        LiveMarketFeedResponse, MarketFeedValueStruct, MergedPositionResponse,
+        OpenPositionsResponse, Side,
+    },
 };
 
 #[derive(Deserialize, Validate)]
@@ -33,25 +36,11 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct MarketFeedValueStruct {
-    pub mark_px: Option<f64>,
-    pub funding: Option<f64>,
-    pub max_leverage: Option<u32>,
-}
-
 //Market feeed with price and funding rate
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct MarketFeedStruct {
     hyperliquid: MarketFeedValueStruct,
     pacifica: MarketFeedValueStruct,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LiveMarketFeedResponse {
-    pub symbol: String,
-    pub hyperliquid: Option<MarketFeedValueStruct>,
-    pub pacifica: Option<MarketFeedValueStruct>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -125,6 +114,9 @@ pub async fn get_merged_open_positions(
             if pacifica_positions.success {
                 let account_settings = pacifica_account_result.ok().and_then(|r| r.data);
 
+                let snapshot = state.feed.borrow().clone();
+                let raw = &snapshot.raw;
+
                 for asset_position in positions_data.iter() {
                     let symbol = asset_position.symbol.clone();
 
@@ -140,10 +132,7 @@ pub async fn get_merged_open_positions(
                                 .unwrap_or_default(),
                         );
 
-                    let current_feed = state
-                        .live_market_feed
-                        .read()
-                        .await
+                    let current_feed = raw
                         .pacifica
                         .get(&asset_position.symbol)
                         .cloned()
@@ -209,58 +198,62 @@ pub async fn get_merged_open_positions(
 pub async fn get_live_market_feed(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
-    let live_market_feed = state.live_market_feed.read().await.clone();
+    // let live_market_feed = state.live_market_feed.read().await.clone();
 
-    let mut market_feed: HashMap<String, MarketFeedStruct> = HashMap::new();
+    // let mut market_feed: HashMap<String, MarketFeedStruct> = HashMap::new();
 
-    for (symbol, (mark_px, funding_rate)) in live_market_feed.hyperliquid.iter() {
-        let max_leverage = HL_MARKETS
-            .iter()
-            .find(|x| x.name == *symbol)
-            .map(|x| x.max_leverage);
+    // for (symbol, (mark_px, funding_rate)) in live_market_feed.hyperliquid.iter() {
+    //     let max_leverage = HL_MARKETS
+    //         .iter()
+    //         .find(|x| x.name == *symbol)
+    //         .map(|x| x.max_leverage);
 
-        market_feed.entry(symbol.clone()).or_default().hyperliquid = MarketFeedValueStruct {
-            mark_px: Some(*mark_px),
-            funding: Some(*funding_rate),
-            max_leverage,
-        };
-    }
+    //     market_feed.entry(symbol.clone()).or_default().hyperliquid = MarketFeedValueStruct {
+    //         mark_px: Some(*mark_px),
+    //         funding: Some(*funding_rate),
+    //         max_leverage,
+    //     };
+    // }
 
-    for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
-        let max_leverage = PACIFICA_MARKETS
-            .iter()
-            .find(|x| x.symbol == symbol)
-            .map(|x| x.max_leverage);
+    // for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
+    //     let max_leverage = PACIFICA_MARKETS
+    //         .iter()
+    //         .find(|x| x.symbol == symbol)
+    //         .map(|x| x.max_leverage);
 
-        market_feed.entry(symbol.clone()).or_default().pacifica = MarketFeedValueStruct {
-            mark_px: Some(*mark_px),
-            funding: Some(*funding_rate),
-            max_leverage,
-        };
-    }
+    //     market_feed.entry(symbol.clone()).or_default().pacifica = MarketFeedValueStruct {
+    //         mark_px: Some(*mark_px),
+    //         funding: Some(*funding_rate),
+    //         max_leverage,
+    //     };
+    // }
 
-    let response: Vec<LiveMarketFeedResponse> = market_feed
-        .into_iter()
-        .map(|(symbol, market_feed)| {
-            let hyperliquid = if market_feed.hyperliquid.mark_px.is_some() {
-                Some(market_feed.hyperliquid)
-            } else {
-                None
-            };
-            let pacifica = if market_feed.pacifica.mark_px.is_some() {
-                Some(market_feed.pacifica)
-            } else {
-                None
-            };
-            LiveMarketFeedResponse {
-                symbol,
-                hyperliquid,
-                pacifica,
-            }
-        })
-        .collect();
+    // let response: Vec<LiveMarketFeedResponse> = market_feed
+    //     .into_iter()
+    //     .map(|(symbol, market_feed)| {
+    //         let hyperliquid = if market_feed.hyperliquid.mark_px.is_some() {
+    //             Some(market_feed.hyperliquid)
+    //         } else {
+    //             None
+    //         };
+    //         let pacifica = if market_feed.pacifica.mark_px.is_some() {
+    //             Some(market_feed.pacifica)
+    //         } else {
+    //             None
+    //         };
+    //         LiveMarketFeedResponse {
+    //             symbol,
+    //             hyperliquid,
+    //             pacifica,
+    //         }
+    //     })
+    //     .collect();
 
-    Ok(Json(response))
+    // Ok(Json(response))
+
+    // clone the formatted snapshot from FeedManager
+    let snapshot = state.feed.borrow().clone();
+    Ok(Json(snapshot.formatted.clone()))
 }
 
 pub async fn get_token_chart(

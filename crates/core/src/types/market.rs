@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::exchange::PerpetualExchange;
+
 /// Market metadata that varies per exchange.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketInfo {
@@ -18,11 +20,20 @@ pub struct MarketInfo {
 }
 
 /// Live feed to store current token price and funding rate.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LiveMarketFeed {
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct RawMarketData {
     pub hyperliquid: HashMap<String, (f64, f64)>,
     pub lighter: HashMap<String, (f64, f64)>,
     pub pacifica: HashMap<String, (f64, f64)>,
+}
+
+pub type LiveMarketFeed = RawMarketData;
+
+/// Message sent from WS tasks
+#[derive(Clone, Debug)]
+pub struct MarketFeedUpdate {
+    pub exchange: PerpetualExchange,
+    pub data: HashMap<String, (f64, f64)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

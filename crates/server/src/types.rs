@@ -1,3 +1,4 @@
+use perp_core::RawMarketData;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -24,4 +25,24 @@ pub struct MergedPositionResponse {
     pub symbol: String,
     pub hyperliquid: Option<OpenPositionsResponse>,
     pub pacifica: Option<OpenPositionsResponse>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct MarketFeedValueStruct {
+    pub mark_px: Option<f64>,
+    pub funding: Option<f64>,
+    pub max_leverage: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveMarketFeedResponse {
+    pub symbol: String,
+    pub hyperliquid: Option<MarketFeedValueStruct>,
+    pub pacifica: Option<MarketFeedValueStruct>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FeedSnapshot {
+    pub raw: RawMarketData,
+    pub formatted: Vec<LiveMarketFeedResponse>,
 }

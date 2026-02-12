@@ -19,7 +19,11 @@ use crate::{
 
 //TODO: make them dynamic using cron later
 pub async fn get_perp_metadata() -> impl IntoResponse {
-    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], PERP_META)
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        PERP_META,
+    )
 }
 
 pub async fn get_user_open_positions(
@@ -50,6 +54,9 @@ pub async fn get_user_open_positions(
         return Ok(Json(open_position_response));
     }
 
+    let snapshot = state.feed.borrow().clone();
+    let raw = &snapshot.raw;
+
     for asset_position in positions_data.iter() {
         let leverage: u32 = account_setting_data
             .iter()
@@ -57,10 +64,7 @@ pub async fn get_user_open_positions(
             .and_then(|s| s.leverage.try_into().ok())
             .unwrap_or(0);
 
-        let current_feed = state
-            .live_market_feed
-            .read()
-            .await
+        let current_feed = raw
             .pacifica
             .get(&asset_position.symbol)
             .cloned()

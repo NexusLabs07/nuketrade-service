@@ -1,13 +1,13 @@
 //! Generic WebSocket handler for exchange funding feeds.
 
-use crate::{Exchange, WsMessage, exchange::PerpetualExchange, types::LiveMarketFeed};
+use crate::{Exchange, MarketFeedUpdate, WsMessage, exchange::PerpetualExchange};
 use chrono::Utc;
 use db::funding::{FundingRate, insert_funding_rates};
 use futures_util::{SinkExt, StreamExt};
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
-    sync::RwLock,
+    sync::mpsc,
     time::{Instant, interval, interval_at},
 };
 use tokio_tungstenite::{
@@ -36,7 +36,7 @@ use super::WsConfig;
 pub async fn run_funding_feed<E: Exchange + 'static>(
     exchange: Arc<E>,
     db_conn: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    feed_tx: mpsc::Sender<MarketFeedUpdate>,
     config: WsConfig,
     symbols: &[&str],
 ) {
@@ -165,7 +165,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
                 // Update live state
                 _ = state_tick.tick() => {
-                    update_live_state(&live_market_feed, &perpetual_exchange, &last_snapshot).await;
+                    send_live_update(&feed_tx, &perpetual_exchange, &last_snapshot).await;
                 }
 
                 // Write to database (aligned across all exchanges)
@@ -319,27 +319,48 @@ async fn handle_message<E: Exchange>(
     }
 }
 
-/// Update the live market feed state.
-async fn update_live_state(
-    live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
+// /// Update the live market feed state.
+// async fn update_live_state(
+//     live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
+//     perp_exchange: &PerpetualExchange,
+//     snapshot: &HashMap<String, (f64, f64, i64)>,
+// ) {
+//     let mut state = live_market_feed.write().await;
+//     for (symbol, (mark_px, funding, _)) in snapshot.iter() {
+//         match perp_exchange {
+//             PerpetualExchange::Hyperliquid => {
+//                 state
+//                     .hyperliquid
+//                     .insert(symbol.clone(), (*mark_px, *funding));
+//             }
+//             PerpetualExchange::Pacifica => {
+//                 state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
+//             }
+//             PerpetualExchange::Lighter => {
+//                 state.lighter.insert(symbol.clone(), (*mark_px, *funding));
+//             }
+//         }
+//     }
+// }
+
+/// Send a live update to the FeedManager via bounded mpsc.
+async fn send_live_update(
+    feed_tx: &mpsc::Sender<MarketFeedUpdate>,
     perp_exchange: &PerpetualExchange,
     snapshot: &HashMap<String, (f64, f64, i64)>,
 ) {
-    let mut state = live_market_feed.write().await;
-    for (symbol, (mark_px, funding, _)) in snapshot.iter() {
-        match perp_exchange {
-            PerpetualExchange::Hyperliquid => {
-                state
-                    .hyperliquid
-                    .insert(symbol.clone(), (*mark_px, *funding));
-            }
-            PerpetualExchange::Pacifica => {
-                state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
-            }
-            PerpetualExchange::Lighter => {
-                state.lighter.insert(symbol.clone(), (*mark_px, *funding));
-            }
-        }
+    let data: HashMap<String, (f64, f64)> = snapshot
+        .iter()
+        .map(|(sym, (mark, fund, _))| (sym.clone(), (*mark, *fund)))
+        .collect();
+
+    let update = MarketFeedUpdate {
+        exchange: perp_exchange.clone(),
+        data,
+    };
+
+    if let Err(e) = feed_tx.send(update).await {
+        log::error!("FeedManager receiver dropped, cannot send update: {e}");
     }
 }
 

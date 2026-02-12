@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use perp_core::{LiveMarketFeed, SevenDayApr, config::Config};
+use perp_core::{SevenDayApr, config::Config};
 use sqlx::PgPool;
-use tokio::sync::{RwLock, watch};
+use tokio::sync::watch;
 
 use std::net::SocketAddr;
 
-use crate::{app::create_app, state::AppState};
+use crate::{app::create_app, state::AppState, types::FeedSnapshot};
 
 pub mod app;
 pub mod error;
@@ -19,10 +19,10 @@ pub mod types;
 pub async fn run_server(
     config: Config,
     db: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    feed_rx: watch::Receiver<Arc<FeedSnapshot>>,
     seven_day_apr: watch::Receiver<SevenDayApr>,
 ) -> anyhow::Result<()> {
-    let app_state = AppState::new(config, db, live_market_feed, seven_day_apr);
+    let app_state = AppState::new(config, db, feed_rx, seven_day_apr);
 
     let app = create_app(app_state);
 

@@ -103,10 +103,10 @@ pub async fn root() -> &'static str {
     "Perpetual Aggregator Server is running."
 }
 
-pub async fn get_live_market_feed(State(state): State<AppState>) -> Json<LiveMarketFeed> {
-    let snapshot = state.live_market_feed.read().await;
-    Json(snapshot.clone())
-}
+// pub async fn get_live_market_feed(State(state): State<AppState>) -> Json<LiveMarketFeed> {
+//     let snapshot = state.live_market_feed.read().await;
+//     Json(snapshot.clone())
+// }
 
 pub fn create_app(app_state: AppState) -> Router {
     let cors = CorsLayer::new()

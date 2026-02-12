@@ -3,17 +3,17 @@
 use crate::LighterExchange;
 use perp_core::{
     token_list::TOKEN_LIST,
-    types::LiveMarketFeed,
+    types::MarketFeedUpdate,
     ws::{WsConfig, run_funding_feed},
 };
 use sqlx::PgPool;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 
 /// Start the Lighter funding rate feed using the generic WebSocket handler.
 pub async fn start_lighter_funding_feed(
     db_conn: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
+    feed_tx: mpsc::Sender<MarketFeedUpdate>,
 ) {
     let exchange = Arc::new(LighterExchange::new());
 
@@ -29,5 +29,5 @@ pub async fn start_lighter_funding_feed(
 
     let symbols: Vec<&str> = TOKEN_LIST.iter().map(|s| &**s).collect();
 
-    run_funding_feed(exchange, db_conn, live_market_feed, config, &symbols).await;
+    run_funding_feed(exchange, db_conn, feed_tx, config, &symbols).await;
 }
