@@ -109,7 +109,7 @@ pub async fn handle_bridge_result(
             hedge_leg_id: leg.id,
             action: payload.action.clone(),
             tx_hash: payload.tx_hash.clone(),
-            chain: leg.chain as i32,
+            chain: leg.chain,
             status: "CONFIRMED".to_string(),
         };
         hedge_db::insert_tx_reference(db.clone(), &tx_ref).await?;
@@ -176,7 +176,7 @@ pub async fn handle_deposit_result(
             hedge_leg_id: leg.id,
             action: payload.action.clone(),
             tx_hash: payload.tx_hash.clone(),
-            chain: leg.chain as i32,
+            chain: leg.chain,
             status: "CONFIRMED".to_string(),
         };
         hedge_db::insert_tx_reference(db.clone(), &tx_ref).await?;
@@ -262,7 +262,7 @@ pub async fn handle_open_position_result(
                     hedge_leg_id: leg.id,
                     action: action::OPEN_HEDGE_POSITION.to_string(),
                     tx_hash: lr.tx_hash.clone(),
-                    chain: leg.chain as i32,
+                    chain: leg.chain,
                     status: "CONFIRMED".to_string(),
                 };
                 hedge_db::insert_tx_reference(db.clone(), &tx_ref).await?;
@@ -319,7 +319,7 @@ pub async fn handle_open_position_result(
                     hedge_leg_id: leg.id,
                     action: action::OPEN_HEDGE_POSITION.to_string(),
                     tx_hash: Some(tx.clone()),
-                    chain: leg.chain as i32,
+                    chain: leg.chain,
                     status: "CONFIRMED".to_string(),
                 };
                 hedge_db::insert_tx_reference(db.clone(), &tx_ref).await?;
@@ -362,7 +362,7 @@ pub async fn handle_close_position_result(
             hedge_leg_id: closing_leg.id,
             action: action::CLOSE_POSITION.to_string(),
             tx_hash: payload.tx_hash.clone(),
-            chain: closing_leg.chain as i32,
+            chain: closing_leg.chain,
             status: "CONFIRMED".to_string(),
         };
         hedge_db::insert_tx_reference(db.clone(), &tx_ref).await?;

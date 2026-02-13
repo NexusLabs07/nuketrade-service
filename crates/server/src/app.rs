@@ -1,8 +1,8 @@
 use crate::features::{aggregated, bridge, hedge, hyperliquid, pacifica, user};
 use crate::state::AppState;
 // use axum::extract::State;
+use axum::Router;
 use axum::routing::get;
-use axum::{Json, Router};
 // use perp_core::LiveMarketFeed;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
@@ -102,11 +102,6 @@ fn get_cors_origins() -> Vec<HeaderValue> {
 pub async fn root() -> &'static str {
     "Perpetual Aggregator Server is running."
 }
-
-// pub async fn get_live_market_feed(State(state): State<AppState>) -> Json<LiveMarketFeed> {
-//     let snapshot = state.live_market_feed.read().await;
-//     Json(snapshot.clone())
-// }
 
 pub fn create_app(app_state: AppState) -> Router {
     let cors = CorsLayer::new()

@@ -180,7 +180,7 @@ pub async fn insert_tx_reference(
     .bind(tx_ref.hedge_leg_id)
     .bind(&tx_ref.action)
     .bind(&tx_ref.tx_hash)
-    .bind(&tx_ref.chain)
+    .bind(tx_ref.chain)
     .bind(&tx_ref.status)
     .execute(&*db)
     .await?;
