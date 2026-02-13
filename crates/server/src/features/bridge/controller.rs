@@ -25,6 +25,7 @@ pub struct QuotePayload {
     pub recipient: String,
 }
 
+//* Bridge only supports base to other chains for now */
 pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
 

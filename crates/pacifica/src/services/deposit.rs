@@ -96,21 +96,46 @@ pub async fn deposit_to_pacifica(
     let message = Message::new(&[gas_reimbursement_ix, deposit_ix], Some(&fee_payer_pubkey));
     let mut transaction = Transaction::new_unsigned(message);
 
-    let simulation_config = RpcSimulateTransactionConfig {
-        sig_verify: false,
-        replace_recent_blockhash: true,
-        commitment: Some(rpc.commitment()),
-        ..Default::default()
-    };
+    const MAX_SIMULATION_RETRIES: u64 = 3;
 
-    let simulation_result = rpc
-        .simulate_transaction_with_config(&transaction, simulation_config)
-        .await?;
+    let mut simulation_result = None;
+    let mut last_err = None;
 
-    if let Some(err) = simulation_result.value.err {
-        log::error!("Deposit simulation failed: {err:?}");
-        anyhow::bail!("Deposit simulation failed: {err:?}");
+    for attempt in 1..=MAX_SIMULATION_RETRIES {
+        let config = RpcSimulateTransactionConfig {
+            sig_verify: false,
+            replace_recent_blockhash: true,
+            commitment: Some(rpc.commitment()),
+            ..Default::default()
+        };
+
+        let result = rpc
+            .simulate_transaction_with_config(&transaction, config)
+            .await?;
+
+        if let Some(err) = result.value.err {
+            log::warn!(
+                "Deposit simulation attempt {attempt}/{MAX_SIMULATION_RETRIES} failed: {err:?}"
+            );
+            last_err = Some(err);
+            if attempt < MAX_SIMULATION_RETRIES {
+                tokio::time::sleep(std::time::Duration::from_millis(500 * attempt)).await;
+            }
+            continue;
+        }
+
+        simulation_result = Some(result);
+        break;
     }
+
+    let simulation_result = match simulation_result {
+        Some(result) => result,
+        None => {
+            let err = last_err.expect("last_err must be set after failed retries");
+            log::error!("Deposit simulation failed after {MAX_SIMULATION_RETRIES} attempts: {err:?}");
+            anyhow::bail!("Deposit simulation failed: {err:?}");
+        }
+    };
 
     log::info!(
         "Deposit simulation successful. Units consumed: {:?}",
