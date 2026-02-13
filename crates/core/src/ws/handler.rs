@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     sync::mpsc,
-    time::{Instant, interval, interval_at},
+    time::{Instant, interval_at},
 };
 use tokio_tungstenite::{
     connect_async, connect_async_with_config,
@@ -103,7 +103,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
             aligned_start.duration_since(Instant::now()).as_secs()
         );
         let mut db_tick = interval_at(aligned_start, config.db_write_interval());
-        let mut state_tick = interval(config.state_update_interval());
+        // let mut state_tick = interval(config.state_update_interval());
         let mut last_update = Instant::now();
 
         // Optional ping interval
@@ -142,9 +142,15 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
                             if !updates.is_empty() {
                                 last_update = Instant::now();
+
+                                let mut delta: HashMap<String, (f64, f64)> = HashMap::with_capacity(updates.len());
+
                                 for (symbol, mark_px, funding, ts) in updates {
-                                    last_snapshot.insert(symbol, (mark_px, funding, ts));
+                                    last_snapshot.insert(symbol.clone(), (mark_px, funding, ts));
+                                    delta.insert(symbol, (mark_px, funding));
                                 }
+
+                                send_live_update(&feed_tx, &perpetual_exchange, delta).await;
                             }
 
                             if !keep_alive {
@@ -163,10 +169,10 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     }
                 }
 
-                // Update live state
-                _ = state_tick.tick() => {
-                    send_live_update(&feed_tx, &perpetual_exchange, &last_snapshot).await;
-                }
+                // // Update live state
+                // _ = state_tick.tick() => {
+                //     send_live_update(&feed_tx, &perpetual_exchange, &last_snapshot).await;
+                // }
 
                 // Write to database (aligned across all exchanges)
                 _ = db_tick.tick() => {
@@ -347,12 +353,11 @@ async fn handle_message<E: Exchange>(
 async fn send_live_update(
     feed_tx: &mpsc::Sender<MarketFeedUpdate>,
     perp_exchange: &PerpetualExchange,
-    snapshot: &HashMap<String, (f64, f64, i64)>,
+    data: HashMap<String, (f64, f64)>,
 ) {
-    let data: HashMap<String, (f64, f64)> = snapshot
-        .iter()
-        .map(|(sym, (mark, fund, _))| (sym.clone(), (*mark, *fund)))
-        .collect();
+    if data.is_empty() {
+        return;
+    }
 
     let update = MarketFeedUpdate {
         exchange: perp_exchange.clone(),

@@ -1,5 +1,5 @@
-use perp_core::RawMarketData;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Side {
@@ -43,6 +43,7 @@ pub struct LiveMarketFeedResponse {
 
 #[derive(Clone, Debug)]
 pub struct FeedSnapshot {
-    pub raw: RawMarketData,
+    // pub raw: RawMarketData,
+    pub by_symbol: HashMap<String, LiveMarketFeedResponse>,
     pub formatted: Vec<LiveMarketFeedResponse>,
 }

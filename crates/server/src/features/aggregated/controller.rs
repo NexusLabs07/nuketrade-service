@@ -8,7 +8,7 @@ use axum::{
 use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
-    helpers::markets::HL_MARKETS,
+    // helpers::markets::HL_MARKETS,
 };
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
@@ -70,7 +70,6 @@ pub async fn get_merged_open_positions(
 
     let mut positions_map: HashMap<String, MergedPositionResponse> = HashMap::new();
 
-    // Process Hyperliquid positions
     if let Ok(hl_positions) = hl_result {
         for asset_position in hl_positions.asset_positions.iter() {
             let pos = &asset_position.position;
@@ -108,14 +107,11 @@ pub async fn get_merged_open_positions(
         }
     }
 
-    // Process Pacifica positions
     if let Ok(pacifica_positions) = pacifica_result {
         if let Some(positions_data) = pacifica_positions.data {
             if pacifica_positions.success {
                 let account_settings = pacifica_account_result.ok().and_then(|r| r.data);
-
                 let snapshot = state.feed.borrow().clone();
-                let raw = &snapshot.raw;
 
                 for asset_position in positions_data.iter() {
                     let symbol = asset_position.symbol.clone();
@@ -132,28 +128,28 @@ pub async fn get_merged_open_positions(
                                 .unwrap_or_default(),
                         );
 
-                    let current_feed = raw
-                        .pacifica
+                    let current_mark_px = snapshot
+                        .by_symbol
                         .get(&asset_position.symbol)
-                        .cloned()
-                        .unwrap_or_default();
+                        .and_then(|feed| feed.pacifica.as_ref())
+                        .and_then(|value| value.mark_px)
+                        .unwrap_or(0.0);
 
                     let margin = if asset_position.isolated {
                         asset_position.margin.clone().unwrap_or_default()
                     } else {
                         match asset_position.amount.parse::<f64>().ok() {
                             Some(amt) if leverage > 0 => {
-                                (amt * current_feed.0 / leverage as f64).to_string()
+                                (amt * current_mark_px / leverage as f64).to_string()
                             }
                             _ => "0".to_string(),
                         }
                     };
 
-                    let pnl: f64 = if current_feed.0 != 0.0 {
+                    let pnl: f64 = if current_mark_px != 0.0 {
                         let entry_price = asset_position.entry_price.parse::<f64>().unwrap_or(0.0);
                         let amount = asset_position.amount.parse::<f64>().unwrap_or(0.0);
-
-                        (current_feed.0 - entry_price) * amount
+                        (current_mark_px - entry_price) * amount
                     } else {
                         0.0
                     };
@@ -191,7 +187,6 @@ pub async fn get_merged_open_positions(
     }
 
     let merged_positions: Vec<MergedPositionResponse> = positions_map.into_values().collect();
-
     Ok(Json(merged_positions))
 }
 
