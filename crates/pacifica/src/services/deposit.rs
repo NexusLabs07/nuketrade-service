@@ -132,7 +132,9 @@ pub async fn deposit_to_pacifica(
         Some(result) => result,
         None => {
             let err = last_err.expect("last_err must be set after failed retries");
-            log::error!("Deposit simulation failed after {MAX_SIMULATION_RETRIES} attempts: {err:?}");
+            log::error!(
+                "Deposit simulation failed after {MAX_SIMULATION_RETRIES} attempts: {err:?}"
+            );
             anyhow::bail!("Deposit simulation failed: {err:?}");
         }
     };

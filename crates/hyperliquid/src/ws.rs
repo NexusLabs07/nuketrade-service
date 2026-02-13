@@ -3,18 +3,15 @@
 use crate::HyperliquidExchange;
 use perp_core::{
     token_list::TOKEN_LIST,
-    types::LiveMarketFeed,
+    types::MarketFeedUpdate,
     ws::{WsConfig, run_funding_feed},
 };
 use sqlx::PgPool;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 
 /// Start the Hyperliquid funding rate feed using the generic WebSocket handler.
-pub async fn start_hl_funding_feed(
-    db_conn: Arc<PgPool>,
-    live_market_feed: Arc<RwLock<LiveMarketFeed>>,
-) {
+pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>, feed_tx: mpsc::Sender<MarketFeedUpdate>) {
     let exchange = Arc::new(HyperliquidExchange::new());
 
     let config = WsConfig {
@@ -29,5 +26,5 @@ pub async fn start_hl_funding_feed(
 
     let symbols: Vec<&str> = TOKEN_LIST.iter().map(|s| &**s).collect();
 
-    run_funding_feed(exchange, db_conn, live_market_feed, config, &symbols).await;
+    run_funding_feed(exchange, db_conn, feed_tx, config, &symbols).await;
 }

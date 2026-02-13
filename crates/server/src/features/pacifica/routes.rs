@@ -2,7 +2,9 @@ use axum::routing::{get, post};
 
 use crate::{
     AppState,
-    features::pacifica::controller::{bridge_to_pacifica, get_perp_metadata, get_user_open_positions},
+    features::pacifica::controller::{
+        bridge_to_pacifica, get_perp_metadata, get_user_open_positions,
+    },
 };
 
 pub fn routes() -> axum::Router<AppState> {

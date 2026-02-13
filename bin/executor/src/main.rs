@@ -1,12 +1,15 @@
-use executor::{SevenDayApr, cron::calculate_best_pair};
-use perp_core::{config::Config, types::LiveMarketFeed};
 use std::{collections::HashMap, sync::Arc};
-use tokio_cron_scheduler::JobScheduler;
 
 use anyhow::Context;
+use tokio::sync::{mpsc, watch};
+use tokio_cron_scheduler::JobScheduler;
+
 use db::connect_db;
-use server::run_server;
-use tokio::sync::{RwLock, watch};
+use executor::{SevenDayApr, cron::calculate_best_pair, feed_manager::run_feed_manager};
+use hyperliquid::helpers::markets::HL_MARKETS;
+use pacifica::helpers::markets::PACIFICA_MARKETS;
+use perp_core::{MarketFeedUpdate, config::Config};
+use server::{run_server, types::FeedSnapshot};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,7 +24,6 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    //wrap these in a single function that runs the node
     log::info!("Engine starting....");
 
     log::info!("Running DB migrations....");
@@ -47,29 +49,48 @@ async fn main() -> anyhow::Result<()> {
     let scheduler = JobScheduler::new().await?;
     calculate_best_pair(db.clone(), scheduler, seven_day_apr_tx).await?;
 
-    let live_market_feed = Arc::new(RwLock::new(LiveMarketFeed {
-        hyperliquid: HashMap::new(),
-        lighter: HashMap::new(),
-        pacifica: HashMap::new(),
-    }));
+    let hl_leverage: HashMap<String, u32> = HL_MARKETS
+        .iter()
+        .map(|m| (m.name.clone(), m.max_leverage))
+        .collect();
+
+    let pacifica_leverage: HashMap<String, u32> = PACIFICA_MARKETS
+        .iter()
+        .map(|m| (m.symbol.to_string(), m.max_leverage))
+        .collect();
+
+    let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
+
+    let initial_snapshot = Arc::new(FeedSnapshot {
+        by_symbol: HashMap::new(),
+        formatted: Vec::new(),
+    });
+    let (watch_tx, watch_rx) = watch::channel(initial_snapshot);
+
+    tokio::spawn(run_feed_manager(
+        feed_rx,
+        watch_tx,
+        hl_leverage,
+        pacifica_leverage,
+    ));
 
     log::info!("Starting Hyperliquid live feed....");
     let db_clone_1 = db.clone();
-    let live_market_feed_clone = live_market_feed.clone();
+    let feed_tx_clone = feed_tx.clone();
     tokio::spawn(async move {
-        hyperliquid::start_hl_funding_feed(db_clone_1.clone(), live_market_feed_clone.clone())
-            .await;
+        hyperliquid::start_hl_funding_feed(db_clone_1, feed_tx_clone).await;
     });
 
     log::info!("Starting Pacifica live feed....");
     let db_clone_2 = db.clone();
-    let live_market_feed_clone_2 = live_market_feed.clone();
+    let feed_tx_clone_2 = feed_tx.clone();
     tokio::spawn(async move {
-        pacifica::start_pacifica_funding_feed(db_clone_2.clone(), live_market_feed_clone_2.clone())
-            .await;
+        pacifica::start_pacifica_funding_feed(db_clone_2, feed_tx_clone_2).await;
     });
 
-    run_server(config, db, live_market_feed, seven_day_apr_rx).await?;
+    drop(feed_tx);
+
+    run_server(config, db, watch_rx, seven_day_apr_rx).await?;
 
     Ok(())
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Side {
@@ -24,4 +25,24 @@ pub struct MergedPositionResponse {
     pub symbol: String,
     pub hyperliquid: Option<OpenPositionsResponse>,
     pub pacifica: Option<OpenPositionsResponse>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct MarketFeedValueStruct {
+    pub mark_px: Option<f64>,
+    pub funding: Option<f64>,
+    pub max_leverage: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveMarketFeedResponse {
+    pub symbol: String,
+    pub hyperliquid: Option<MarketFeedValueStruct>,
+    pub pacifica: Option<MarketFeedValueStruct>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FeedSnapshot {
+    pub by_symbol: HashMap<String, LiveMarketFeedResponse>,
+    pub formatted: Vec<LiveMarketFeedResponse>,
 }

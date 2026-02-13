@@ -5,5 +5,7 @@ mod market;
 mod position;
 
 pub use account::AccountSettings;
-pub use market::{LiveMarketFeed, MarketInfo, PairSpread, SevenDayApr};
+pub use market::{
+    LiveMarketFeed, MarketFeedUpdate, MarketInfo, PairSpread, RawMarketData, SevenDayApr,
+};
 pub use position::{PositionSide, UnifiedPosition};
