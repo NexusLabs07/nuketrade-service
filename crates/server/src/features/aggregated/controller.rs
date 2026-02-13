@@ -193,59 +193,6 @@ pub async fn get_merged_open_positions(
 pub async fn get_live_market_feed(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
-    // let live_market_feed = state.live_market_feed.read().await.clone();
-
-    // let mut market_feed: HashMap<String, MarketFeedStruct> = HashMap::new();
-
-    // for (symbol, (mark_px, funding_rate)) in live_market_feed.hyperliquid.iter() {
-    //     let max_leverage = HL_MARKETS
-    //         .iter()
-    //         .find(|x| x.name == *symbol)
-    //         .map(|x| x.max_leverage);
-
-    //     market_feed.entry(symbol.clone()).or_default().hyperliquid = MarketFeedValueStruct {
-    //         mark_px: Some(*mark_px),
-    //         funding: Some(*funding_rate),
-    //         max_leverage,
-    //     };
-    // }
-
-    // for (symbol, (mark_px, funding_rate)) in live_market_feed.pacifica.iter() {
-    //     let max_leverage = PACIFICA_MARKETS
-    //         .iter()
-    //         .find(|x| x.symbol == symbol)
-    //         .map(|x| x.max_leverage);
-
-    //     market_feed.entry(symbol.clone()).or_default().pacifica = MarketFeedValueStruct {
-    //         mark_px: Some(*mark_px),
-    //         funding: Some(*funding_rate),
-    //         max_leverage,
-    //     };
-    // }
-
-    // let response: Vec<LiveMarketFeedResponse> = market_feed
-    //     .into_iter()
-    //     .map(|(symbol, market_feed)| {
-    //         let hyperliquid = if market_feed.hyperliquid.mark_px.is_some() {
-    //             Some(market_feed.hyperliquid)
-    //         } else {
-    //             None
-    //         };
-    //         let pacifica = if market_feed.pacifica.mark_px.is_some() {
-    //             Some(market_feed.pacifica)
-    //         } else {
-    //             None
-    //         };
-    //         LiveMarketFeedResponse {
-    //             symbol,
-    //             hyperliquid,
-    //             pacifica,
-    //         }
-    //     })
-    //     .collect();
-
-    // Ok(Json(response))
-
     // clone the formatted snapshot from FeedManager
     let snapshot = state.feed.borrow().clone();
     Ok(Json(snapshot.formatted.clone()))

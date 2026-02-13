@@ -103,7 +103,6 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
             aligned_start.duration_since(Instant::now()).as_secs()
         );
         let mut db_tick = interval_at(aligned_start, config.db_write_interval());
-        // let mut state_tick = interval(config.state_update_interval());
         let mut last_update = Instant::now();
 
         // Optional ping interval
@@ -168,11 +167,6 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                         }
                     }
                 }
-
-                // // Update live state
-                // _ = state_tick.tick() => {
-                //     send_live_update(&feed_tx, &perpetual_exchange, &last_snapshot).await;
-                // }
 
                 // Write to database (aligned across all exchanges)
                 _ = db_tick.tick() => {
@@ -324,30 +318,6 @@ async fn handle_message<E: Exchange>(
         Message::Frame(_) => (true, vec![]),
     }
 }
-
-// /// Update the live market feed state.
-// async fn update_live_state(
-//     live_market_feed: &Arc<RwLock<LiveMarketFeed>>,
-//     perp_exchange: &PerpetualExchange,
-//     snapshot: &HashMap<String, (f64, f64, i64)>,
-// ) {
-//     let mut state = live_market_feed.write().await;
-//     for (symbol, (mark_px, funding, _)) in snapshot.iter() {
-//         match perp_exchange {
-//             PerpetualExchange::Hyperliquid => {
-//                 state
-//                     .hyperliquid
-//                     .insert(symbol.clone(), (*mark_px, *funding));
-//             }
-//             PerpetualExchange::Pacifica => {
-//                 state.pacifica.insert(symbol.clone(), (*mark_px, *funding));
-//             }
-//             PerpetualExchange::Lighter => {
-//                 state.lighter.insert(symbol.clone(), (*mark_px, *funding));
-//             }
-//         }
-//     }
-// }
 
 /// Send a live update to the FeedManager via bounded mpsc.
 async fn send_live_update(

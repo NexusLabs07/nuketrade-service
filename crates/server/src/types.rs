@@ -43,7 +43,6 @@ pub struct LiveMarketFeedResponse {
 
 #[derive(Clone, Debug)]
 pub struct FeedSnapshot {
-    // pub raw: RawMarketData,
     pub by_symbol: HashMap<String, LiveMarketFeedResponse>,
     pub formatted: Vec<LiveMarketFeedResponse>,
 }
