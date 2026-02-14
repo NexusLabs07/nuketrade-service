@@ -74,9 +74,9 @@ impl PositionService {
             side,
             margin: pos.margin.clone().unwrap_or_default(),
             pnl: "0".to_string(), // PnL not in position response
-            funding: pos.funding.clone(),
+            funding: pos.funding.clone().unwrap_or_default(),
             leverage,
-            liquidation_price: pos.liquidation_price.clone(),
+            liquidation_price: pos.liquidation_price.clone().unwrap_or_default(),
         }
     }
 

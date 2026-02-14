@@ -167,10 +167,13 @@ pub async fn get_merged_open_positions(
                         } else {
                             pnl.to_string()
                         },
-                        funding: asset_position.funding.clone(),
+                        funding: asset_position.funding.clone().unwrap_or_default(),
                         leverage,
                         margin,
-                        liquidation_price: asset_position.liquidation_price.clone(),
+                        liquidation_price: asset_position
+                            .liquidation_price
+                            .clone()
+                            .unwrap_or_default(),
                     };
 
                     positions_map

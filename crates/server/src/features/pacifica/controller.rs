@@ -100,9 +100,9 @@ pub async fn get_user_open_positions(
                 pnl.to_string()
             },
             margin,
-            funding: asset_position.funding.clone(),
+            funding: asset_position.funding.clone().unwrap_or_default(),
             leverage,
-            liquidation_price: asset_position.liquidation_price.clone(),
+            liquidation_price: asset_position.liquidation_price.clone().unwrap_or_default(),
         });
     }
 

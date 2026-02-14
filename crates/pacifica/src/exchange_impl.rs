@@ -77,14 +77,14 @@ impl PacificaExchange {
                     entry_price: parse_f64(&pos.entry_price).unwrap_or(0.0),
                     mark_price: 0.0,     // Not available in this response
                     unrealized_pnl: 0.0, // Not provided in position response
-                    cumulative_funding: parse_f64(&pos.funding).unwrap_or(0.0),
+                    cumulative_funding: pos.funding.as_ref().and_then(|f| parse_f64(f)).unwrap_or(0.0),
                     leverage: 0, // Per-position leverage, need account settings
                     margin_used: pos
                         .margin
                         .as_ref()
                         .and_then(|m| parse_f64(m))
                         .unwrap_or(0.0),
-                    liquidation_price: parse_f64(&pos.liquidation_price),
+                    liquidation_price: pos.liquidation_price.as_ref().and_then(|lp| parse_f64(lp)),
                 })
             })
             .collect()

@@ -21,8 +21,10 @@ pub struct UserPosition {
     pub entry_price: String,
     #[serde(default)]
     pub margin: Option<String>,
-    pub liquidation_price: String,
-    pub funding: String,
+    #[serde(default)]
+    pub liquidation_price: Option<String>,
+    #[serde(default)]
+    pub funding: Option<String>,
     pub isolated: bool,
     pub created_at: u64,
     pub updated_at: u64,
