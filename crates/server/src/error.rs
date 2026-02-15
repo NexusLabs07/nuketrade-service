@@ -24,7 +24,10 @@ pub enum AppError {
     Exchange(ExchangeError),
 
     /// Parse errors for specific fields.
-    Parse { field: String, message: String },
+    Parse {
+        field: String,
+        message: String,
+    },
 
     /// Network/HTTP errors when calling external services.
     Network(String),
@@ -40,9 +43,15 @@ pub enum AppError {
 
     /// Generic internal server error.
     Internal(String),
+
+    Unauthorised(String),
 }
 
 impl AppError {
+    pub fn unauthorised(message: impl Into<String>) -> Self {
+        Self::Unauthorised(message.into())
+    }
+
     /// Create a parse error with field context.
     pub fn parse(field: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Parse {
@@ -76,6 +85,7 @@ impl std::fmt::Display for AppError {
             AppError::Parse { field, message } => {
                 write!(f, "Parse error in {field}: {message}")
             }
+            AppError::Unauthorised(msg) => write!(f, "Unauthorized: {msg}"),
             AppError::Network(msg) => write!(f, "Network error: {msg}"),
             AppError::Config(msg) => write!(f, "Configuration error: {msg}"),
             AppError::NotFound(resource) => write!(f, "Not found: {resource}"),
@@ -138,6 +148,8 @@ impl IntoResponse for AppError {
                 "parse_error",
                 format!("Invalid value for {field}: {message}"),
             ),
+
+            AppError::Unauthorised(msg) => (StatusCode::UNAUTHORIZED, "unauthorized", msg.clone()),
 
             AppError::Network(msg) => {
                 tracing::error!("Network error: {}", msg);

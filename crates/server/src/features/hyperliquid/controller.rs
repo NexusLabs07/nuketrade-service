@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::{StatusCode, header},
     response::IntoResponse,
@@ -15,6 +15,7 @@ use perp_core::parse_f64_or_zero;
 use crate::{
     AppState,
     error::AppError,
+    features::auth::types::AuthClaims,
     middleware::user::validate_evm_address,
     types::{OpenPositionsResponse, Side},
 };
@@ -80,6 +81,7 @@ pub async fn get_user_open_positions(
 }
 
 pub async fn bridge_to_hyperliquid(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
@@ -88,6 +90,12 @@ pub async fn bridge_to_hyperliquid(
         errors.add("user", e);
         AppError::Validation(errors)
     })?;
+
+    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
+        return Err(AppError::unauthorised(
+            "payload.user does not match authenticated EVM address",
+        ));
+    }
 
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
     let fee_payer_private_key = state.config.evm_fee_payer_private_key;

@@ -1,12 +1,14 @@
+use crate::features::auth::types::AuthClaims;
 use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
 use crate::middleware::user::validate_evm_address;
-use axum::Json;
+use axum::{Extension, Json, extract::State};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use validator::Validate;
 
-use crate::error::AppError;
+use crate::{error::AppError, state::AppState};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_destination_usdc_address"))]
@@ -26,8 +28,18 @@ pub struct QuotePayload {
 }
 
 //* Bridge only supports base to other chains for now */
-pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteResponse>, AppError> {
+pub async fn get_quote(
+    State(state): State<AppState>,
+    Extension(claims): Extension<AuthClaims>,
+    Json(payload): Json<QuotePayload>,
+) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
+
+    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
+        return Err(AppError::unauthorised(
+            "payload.user does not match authenticated EVM address",
+        ));
+    }
 
     validate_balance(&payload).await.map_err(|e| {
         let mut errors = validator::ValidationErrors::new();
@@ -54,11 +66,20 @@ pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteRe
     let bridge_client = BridgeClient::new();
 
     let quote = bridge_client.quote(quote_request).await?;
+    let request_ids = extract_request_ids(&quote.steps);
+    state
+        .auth
+        .bind_permit_request_ids(&claims.evm_address, &request_ids)
+        .await?;
 
     Ok(Json(quote))
 }
 
-pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<String>, AppError> {
+pub async fn execute_permits(
+    State(state): State<AppState>,
+    Extension(claims): Extension<AuthClaims>,
+    Json(payload): Json<PermitRequest>,
+) -> Result<Json<String>, AppError> {
     let mut errors = validator::ValidationErrors::new();
 
     if payload.signature.is_empty() {
@@ -81,6 +102,11 @@ pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<
         return Err(AppError::Validation(errors));
     }
 
+    state
+        .auth
+        .verify_permit_request_owner(&payload.request_id, &claims.evm_address)
+        .await?;
+
     let bridge_client = BridgeClient::new();
 
     let result = bridge_client.execute_permit(payload).await?;
@@ -88,4 +114,35 @@ pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<
     let serialized_response = serde_json::to_string(&result)?;
 
     Ok(Json(serialized_response))
+}
+
+fn extract_request_ids(value: &Value) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_request_ids(value, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn collect_request_ids(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, nested) in map {
+                if (key == "requestId" || key == "request_id")
+                    && let Some(request_id) = nested.as_str()
+                    && !request_id.is_empty()
+                {
+                    out.push(request_id.to_string());
+                }
+
+                collect_request_ids(nested, out);
+            }
+        }
+        Value::Array(values) => {
+            for nested in values {
+                collect_request_ids(nested, out);
+            }
+        }
+        _ => {}
+    }
 }
