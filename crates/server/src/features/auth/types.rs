@@ -14,21 +14,6 @@ pub struct AuthClaims {
 
 #[derive(Debug, Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateChallengeRequest {
-    #[validate(length(min = 1, max = 128, message = "suborgId must not be empty"))]
-    pub suborg_id: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateChallengeResponse {
-    pub message: String,
-    pub nonce: String,
-    pub expires_at_unix: u64,
-}
-
-#[derive(Debug, Clone, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     #[validate(length(min = 1, max = 128, message = "suborgId must not be empty"))]
     pub suborg_id: String,

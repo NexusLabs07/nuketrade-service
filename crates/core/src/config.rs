@@ -39,7 +39,6 @@ pub struct Config {
     pub turnkey_api_private_key: String,
     pub auth_jwt_secret: String,
     pub auth_jwt_ttl_days: u64,
-    pub auth_challenge_ttl_secs: u64,
 }
 
 impl Config {
@@ -102,11 +101,6 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(15);
 
-        let auth_challenge_ttl_secs = std::env::var("AUTH_CHALLENGE_TTL_SECS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(300);
-
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -123,7 +117,6 @@ impl Config {
             turnkey_api_private_key,
             auth_jwt_secret,
             auth_jwt_ttl_days,
-            auth_challenge_ttl_secs,
         })
     }
 
