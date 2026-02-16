@@ -10,6 +10,7 @@ use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use p256::ecdsa::{Signature as P256signature, SigningKey, signature::Signer};
+use perp_core::config::Config;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::sync::RwLock;
@@ -17,8 +18,6 @@ use uuid::Uuid;
 
 use crate::{error::AppError, features::auth::types::AuthClaims};
 
-const DEFAULT_JWT_TTL_DAYS: u64 = 15;
-const DEFAULT_CHALLENGE_TTL_SECS: u64 = 5 * 60;
 const DEFAULT_PERMIT_BINDING_TTL_SECS: u64 = 15 * 60;
 const ALLOWED_CLOCK_SKEW_SECS: u64 = 60;
 
@@ -89,34 +88,7 @@ pub struct AuthLoginResult {
 }
 
 impl AuthService {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let turnkey_base_url = std::env::var("TURNKEY_API_BASE_URL")
-            .unwrap_or_else(|_| "https://api.turnkey.com".to_string());
-
-        let turnkey_parent_org_id = std::env::var("TURNKEY_PARENT_ORG_ID")
-            .or_else(|_| std::env::var("TURNKEY_ORGANIZATION_ID"))
-            .context("TURNKEY_PARENT_ORG_ID (or TURNKEY_ORGANIZATION_ID) is required")?;
-
-        let turnkey_api_public_key = std::env::var("TURNKEY_API_PUBLIC_KEY")
-            .context("TURNKEY_API_PUBLIC_KEY is required")?;
-
-        let turnkey_api_private_key = std::env::var("TURNKEY_API_PRIVATE_KEY")
-            .context("TURNKEY_API_PRIVATE_KEY is required")?;
-
-        let jwt_secret = std::env::var("AUTH_JWT_SECRET")
-            .or_else(|_| std::env::var("JWT_SECRET"))
-            .context("AUTH_JWT_SECRET (or JWT_SECRET) is required")?;
-
-        let jwt_ttl_days = std::env::var("AUTH_JWT_TTL_DAYS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(DEFAULT_JWT_TTL_DAYS);
-
-        let challenge_ttl_secs = std::env::var("AUTH_CHALLENGE_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(DEFAULT_CHALLENGE_TTL_SECS);
-
+    pub fn from_config(config: &Config) -> anyhow::Result<Self> {
         let http = Client::builder()
             .timeout(Duration::from_secs(15))
             .build()
@@ -124,13 +96,13 @@ impl AuthService {
 
         Ok(Self {
             http,
-            turnkey_base_url,
-            turnkey_parent_org_id,
-            turnkey_api_public_key,
-            turnkey_api_private_key,
-            jwt_secret,
-            jwt_ttl_secs: jwt_ttl_days.saturating_mul(24 * 60 * 60),
-            challenge_ttl_secs,
+            turnkey_base_url: config.turnkey_api_base_url.clone(),
+            turnkey_parent_org_id: config.turnkey_parent_org_id.clone(),
+            turnkey_api_public_key: config.turnkey_api_public_key.clone(),
+            turnkey_api_private_key: config.turnkey_api_private_key.clone(),
+            jwt_secret: config.auth_jwt_secret.clone(),
+            jwt_ttl_secs: config.auth_jwt_ttl_days.saturating_mul(24 * 60 * 60),
+            challenge_ttl_secs: config.auth_challenge_ttl_secs,
             challenges: Arc::new(RwLock::new(HashMap::new())),
             permit_bindings: Arc::new(RwLock::new(HashMap::new())),
         })

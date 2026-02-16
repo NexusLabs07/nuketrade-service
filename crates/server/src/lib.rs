@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Context;
 use perp_core::{SevenDayApr, config::Config};
 use sqlx::PgPool;
 use tokio::sync::watch;
@@ -23,7 +22,7 @@ pub async fn run_server(
     feed_rx: watch::Receiver<Arc<FeedSnapshot>>,
     seven_day_apr: watch::Receiver<SevenDayApr>,
 ) -> anyhow::Result<()> {
-    let auth = AuthService::from_env().context("failed to initialize auth service")?;
+    let auth = AuthService::from_config(&config)?;
     let app_state = AppState::new(config, db, feed_rx, seven_day_apr, auth);
 
     let app = create_app(app_state);
