@@ -1,15 +1,18 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
 };
 use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::middleware::user::{validate_evm_address, validate_solana_address};
 use crate::services::hedge::NextActionResponse;
 use crate::state::AppState;
 use crate::{error::AppError, features::hedge::services::HedgeService};
+use crate::{
+    features::auth::types::AuthClaims,
+    middleware::user::{validate_evm_address, validate_solana_address},
+};
 use db::hedge::{self as hedge_db};
 
 // ============================= Request / Response Types =============================
@@ -70,10 +73,32 @@ pub struct HedgeIntentDetailResponse {
 // ============================= Handlers =============================
 /// POST /hedge-intents — Create a new hedge intent with two legs.
 pub async fn create_hedge_intent(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Json(payload): Json<CreateHedgeIntentRequest>,
 ) -> Result<Json<CreateHedgeIntentResponse>, AppError> {
     payload.validate()?;
+
+    if !payload
+        .evm_address
+        .eq_ignore_ascii_case(&claims.evm_address)
+    {
+        return Err(AppError::unauthorised(
+            "payload.evm_address does not match authenticated EVM address",
+        ));
+    }
+
+    if payload.solana_address != claims.solana_address {
+        return Err(AppError::unauthorised(
+            "payload.solana_address does not match authenticated Solana address",
+        ));
+    }
+
+    let user_id = uuid::Uuid::parse_str(&claims.suborg_id)
+        .map_err(|_| AppError::unauthorised("authenticated suborg_id is not a valid UUID"))?;
+
+    let mut payload = payload;
+    payload.user_id = user_id;
 
     HedgeService::create_hedge_intent(state.db.clone(), payload)
         .await
@@ -98,11 +123,24 @@ pub async fn get_next_action(
 /// bridge and/or deposit. This is called exactly once per intent (on CREATED).
 /// POST /hedge-intents/:id/action-result — Client reports the outcome of an executed action.
 pub async fn report_action_result(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Path(intent_id): Path<uuid::Uuid>,
     Json(payload): Json<ActionResultRequest>,
 ) -> Result<Json<ActionResultResponse>, AppError> {
     payload.validate()?;
+
+    let intent = hedge_db::get_hedge_intent(state.db.clone(), intent_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Hedge intent {intent_id}")))?;
+
+    if !intent.evm_address.eq_ignore_ascii_case(&claims.evm_address)
+        || intent.solana_address != claims.solana_address
+    {
+        return Err(AppError::unauthorised(
+            "hedge intent does not belong to authenticated user",
+        ));
+    }
 
     HedgeService::report_action_result(state.db, intent_id, payload)
         .await

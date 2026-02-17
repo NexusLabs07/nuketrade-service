@@ -1,4 +1,5 @@
-use crate::features::{aggregated, bridge, hedge, hyperliquid, pacifica, user};
+use crate::features::{aggregated, auth, bridge, hedge, hyperliquid, pacifica, user};
+use crate::middleware::auth::require_post_auth;
 use crate::state::AppState;
 // use axum::extract::State;
 use axum::Router;
@@ -113,8 +114,11 @@ pub fn create_app(app_state: AppState) -> Router {
         ])
         .allow_credentials(true);
 
+    let auth_state = app_state.clone();
+
     Router::new()
         .route("/", get(root))
+        .nest("/auth", auth::routes::routes())
         .nest("/user", user::routes::routes())
         .nest("/hyperliquid", hyperliquid::routes::routes())
         .nest("/pacifica", pacifica::routes::routes())
@@ -123,5 +127,9 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/hedge-intents", hedge::routes::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
+        .layer(axum__middleware::from_fn_with_state(
+            auth_state,
+            require_post_auth,
+        ))
         .with_state(app_state)
 }

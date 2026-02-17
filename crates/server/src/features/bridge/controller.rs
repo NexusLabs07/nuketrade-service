@@ -1,6 +1,7 @@
+use crate::features::auth::types::AuthClaims;
 use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
 use crate::middleware::user::validate_evm_address;
-use axum::Json;
+use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
@@ -26,8 +27,17 @@ pub struct QuotePayload {
 }
 
 //* Bridge only supports base to other chains for now */
-pub async fn get_quote(Json(payload): Json<QuotePayload>) -> Result<Json<QuoteResponse>, AppError> {
+pub async fn get_quote(
+    Extension(claims): Extension<AuthClaims>,
+    Json(payload): Json<QuotePayload>,
+) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
+
+    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
+        return Err(AppError::unauthorised(
+            "payload.user does not match authenticated EVM address",
+        ));
+    }
 
     validate_balance(&payload).await.map_err(|e| {
         let mut errors = validator::ValidationErrors::new();

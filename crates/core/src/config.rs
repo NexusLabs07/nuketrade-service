@@ -31,6 +31,14 @@ pub struct Config {
     //Private keys
     pub evm_fee_payer_private_key: String,
     pub solana_fee_payer_private_key: String,
+
+    // Auth / Turnkey
+    pub turnkey_api_base_url: String,
+    pub turnkey_parent_org_id: String,
+    pub turnkey_api_public_key: String,
+    pub turnkey_api_private_key: String,
+    pub auth_jwt_secret: String,
+    pub auth_jwt_ttl_days: u64,
 }
 
 impl Config {
@@ -71,6 +79,28 @@ impl Config {
         let solana_fee_payer_private_key = std::env::var("SOLANA_FEE_PAYER_PRIVATE_KEY")
             .context("SOLANA_FEE_PAYER_PRIVATE_KEY is required")?;
 
+        let turnkey_api_base_url = std::env::var("TURNKEY_API_BASE_URL")
+            .unwrap_or_else(|_| "https://api.turnkey.com".to_string());
+
+        let turnkey_parent_org_id = std::env::var("TURNKEY_PARENT_ORG_ID")
+            .or_else(|_| std::env::var("TURNKEY_ORGANIZATION_ID"))
+            .context("TURNKEY_PARENT_ORG_ID (or TURNKEY_ORGANIZATION_ID) is required")?;
+
+        let turnkey_api_public_key = std::env::var("TURNKEY_API_PUBLIC_KEY")
+            .context("TURNKEY_API_PUBLIC_KEY is required")?;
+
+        let turnkey_api_private_key = std::env::var("TURNKEY_API_PRIVATE_KEY")
+            .context("TURNKEY_API_PRIVATE_KEY is required")?;
+
+        let auth_jwt_secret = std::env::var("AUTH_JWT_SECRET")
+            .or_else(|_| std::env::var("JWT_SECRET"))
+            .context("AUTH_JWT_SECRET (or JWT_SECRET) is required")?;
+
+        let auth_jwt_ttl_days = std::env::var("AUTH_JWT_TTL_DAYS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(15);
+
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -81,6 +111,12 @@ impl Config {
             server_host,
             server_port,
             cors_allowed_origins,
+            turnkey_api_base_url,
+            turnkey_parent_org_id,
+            turnkey_api_public_key,
+            turnkey_api_private_key,
+            auth_jwt_secret,
+            auth_jwt_ttl_days,
         })
     }
 

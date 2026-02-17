@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
 };
 use pacifica::{
@@ -10,6 +10,7 @@ use pacifica::{
 use crate::{
     AppState,
     error::AppError,
+    features::auth::types::AuthClaims,
     types::{OpenPositionsResponse, Side},
 };
 
@@ -91,9 +92,16 @@ pub async fn get_user_open_positions(
 }
 
 pub async fn bridge_to_pacifica(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
+    if payload.user_address != claims.solana_address {
+        return Err(AppError::unauthorised(
+            "payload.userAddress does not match authenticated Solana address",
+        ));
+    }
+
     let solana_rpc_url = state.config.solana_rpc_url;
     let fee_payer_private_key = state.config.solana_fee_payer_private_key;
 

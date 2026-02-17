@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
     http::{StatusCode, header},
     response::IntoResponse,
@@ -13,6 +13,7 @@ use pacifica::{
 use crate::{
     AppState,
     error::AppError,
+    features::auth::types::AuthClaims,
     middleware::user::validate_solana_address,
     types::{OpenPositionsResponse, Side},
 };
@@ -110,6 +111,7 @@ pub async fn get_user_open_positions(
 }
 
 pub async fn bridge_to_pacifica(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Json(payload): Json<DepositPayload>,
 ) -> Result<Json<String>, AppError> {
@@ -118,6 +120,12 @@ pub async fn bridge_to_pacifica(
         errors.add("user_address", e);
         AppError::Validation(errors)
     })?;
+
+    if payload.user_address != claims.solana_address {
+        return Err(AppError::unauthorised(
+            "payload.userAddress does not match authenticated Solana address",
+        ));
+    }
 
     if payload.amount == 0 {
         return Err(AppError::parse("amount", "Amount must be greater than 0"));
