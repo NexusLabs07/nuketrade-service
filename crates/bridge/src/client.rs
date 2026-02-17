@@ -128,8 +128,8 @@ impl BridgeClient {
         let response = self
             .client
             .post(format!("{}{}", self.base_url, "/quote/v2"))
-            .json(&quote_request)
             .header("x-api-key", &self.api_key)
+            .json(&quote_request)
             .send()
             .await?;
 
