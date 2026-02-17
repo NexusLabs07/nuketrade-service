@@ -55,9 +55,7 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::{
-        features::auth::types::AuthClaims,
-        services::auth::AuthService,
-        types::FeedSnapshot,
+        features::auth::types::AuthClaims, services::auth::AuthService, types::FeedSnapshot,
     };
 
     const JWT_SECRET: &str = "test-middleware-secret";
@@ -73,6 +71,7 @@ mod tests {
             cors_allowed_origins: vec![],
             evm_fee_payer_private_key: "a".repeat(64),
             solana_fee_payer_private_key: "fake".into(),
+            relay_api_key: "fake-rel".into(),
             turnkey_api_base_url: "https://fake".into(),
             turnkey_parent_org_id: "fake-org".into(),
             turnkey_api_public_key: "fake-pub".into(),

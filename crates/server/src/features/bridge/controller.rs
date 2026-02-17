@@ -1,6 +1,8 @@
 use crate::features::auth::types::AuthClaims;
 use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
 use crate::middleware::user::validate_evm_address;
+use crate::state::AppState;
+use axum::extract::State;
 use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
@@ -28,6 +30,7 @@ pub struct QuotePayload {
 
 //* Bridge only supports base to other chains for now */
 pub async fn get_quote(
+    State(app_state): State<AppState>,
     Extension(claims): Extension<AuthClaims>,
     Json(payload): Json<QuotePayload>,
 ) -> Result<Json<QuoteResponse>, AppError> {
@@ -61,14 +64,18 @@ pub async fn get_quote(
         recipient: payload.recipient,
     };
 
-    let bridge_client = BridgeClient::new();
+    let relay_api_key = app_state.config.relay_api_key;
+    let bridge_client = BridgeClient::new(relay_api_key);
 
     let quote = bridge_client.quote(quote_request).await?;
 
     Ok(Json(quote))
 }
 
-pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<String>, AppError> {
+pub async fn execute_permits(
+    State(app_state): State<AppState>,
+    Json(payload): Json<PermitRequest>,
+) -> Result<Json<String>, AppError> {
     let mut errors = validator::ValidationErrors::new();
 
     if payload.signature.is_empty() {
@@ -91,7 +98,8 @@ pub async fn execute_permits(Json(payload): Json<PermitRequest>) -> Result<Json<
         return Err(AppError::Validation(errors));
     }
 
-    let bridge_client = BridgeClient::new();
+    let relay_api_key = app_state.config.relay_api_key;
+    let bridge_client = BridgeClient::new(relay_api_key);
 
     let result = bridge_client.execute_permit(payload).await?;
 

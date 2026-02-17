@@ -32,6 +32,9 @@ pub struct Config {
     pub evm_fee_payer_private_key: String,
     pub solana_fee_payer_private_key: String,
 
+    //Relay
+    pub relay_api_key: String,
+
     // Auth / Turnkey
     pub turnkey_api_base_url: String,
     pub turnkey_parent_org_id: String,
@@ -79,6 +82,8 @@ impl Config {
         let solana_fee_payer_private_key = std::env::var("SOLANA_FEE_PAYER_PRIVATE_KEY")
             .context("SOLANA_FEE_PAYER_PRIVATE_KEY is required")?;
 
+        let relay_api_key = std::env::var("RELAY_API_KEY").context("RELAY API KEY is required")?;
+
         let turnkey_api_base_url = std::env::var("TURNKEY_API_BASE_URL")
             .unwrap_or_else(|_| "https://api.turnkey.com".to_string());
 
@@ -105,6 +110,7 @@ impl Config {
             db_url,
             evm_fee_payer_private_key,
             solana_fee_payer_private_key,
+            relay_api_key,
             solana_rpc_url,
             arbitrum_rpc_url,
             base_rpc_url,

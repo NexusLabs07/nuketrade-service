@@ -112,19 +112,15 @@ fn parse_quote(data: &Value) -> Result<QuoteResponse> {
 pub struct BridgeClient {
     pub client: Client,
     pub base_url: String,
-}
-
-impl Default for BridgeClient {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub api_key: String,
 }
 
 impl BridgeClient {
-    pub fn new() -> Self {
+    pub fn new(api_key: String) -> Self {
         Self {
             client: Client::new(),
             base_url: RELAY_API_URL.to_string(),
+            api_key: api_key.to_string(),
         }
     }
 
@@ -133,6 +129,7 @@ impl BridgeClient {
             .client
             .post(format!("{}{}", self.base_url, "/quote/v2"))
             .json(&quote_request)
+            .header("x-api-key", &self.api_key)
             .send()
             .await?;
 
@@ -159,6 +156,7 @@ impl BridgeClient {
             .client
             .post(format!("{}{}", self.base_url, "/execute/permits"))
             .query(&[("signature", &permit_request.signature)])
+            .header("x-api-key", &self.api_key)
             .json(&body)
             .send()
             .await?;
