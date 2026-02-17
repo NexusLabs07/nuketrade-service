@@ -91,6 +91,7 @@ impl AuthService {
                 AppError::unauthorised("signature address does not match any Turnkey EVM address")
             })?;
 
+        //TODO: This only handles the case where only 1 solana address is associated with the matched wallet - we may want to support multiple in future
         let solana_address = matched_wallet
             .solana_addresses
             .first()
@@ -352,4 +353,140 @@ fn now_unix() -> Result<u64, AppError> {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .map_err(|e| AppError::internal(format!("system time error: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::signers::{Signer, local::PrivateKeySigner};
+
+    fn test_auth_service(jwt_secret: &str) -> AuthService {
+        AuthService {
+            http: Client::new(),
+            turnkey_base_url: "https://api.turnkey.com".into(),
+            turnkey_parent_org_id: "test-org".into(),
+            turnkey_api_public_key: "test-pub".into(),
+            turnkey_api_private_key: "a".repeat(64),
+            jwt_secret: jwt_secret.into(),
+            jwt_ttl_secs: 3600,
+        }
+    }
+
+    #[test]
+    fn issue_and_verify_jwt_round_trip() {
+        let svc = test_auth_service("test-secret-key-12345");
+        let (token, exp) = svc
+            .issue_jwt(
+                "sub-org-1".into(),
+                "0xABCD".into(),
+                "SoLaNaAddr".into(),
+            )
+            .unwrap();
+
+        assert!(!token.is_empty());
+        assert!(exp > 0);
+
+        let claims = svc.verify_token(&token).unwrap();
+        assert_eq!(claims.suborg_id, "sub-org-1");
+        assert_eq!(claims.evm_address, "0xABCD");
+        assert_eq!(claims.solana_address, "SoLaNaAddr");
+        assert_eq!(claims.exp, exp);
+    }
+
+    #[test]
+    fn verify_token_rejects_garbage() {
+        let svc = test_auth_service("my-secret");
+        let err = svc.verify_token("not.a.real.token").unwrap_err();
+        assert!(
+            format!("{err}").contains("invalid or expired"),
+            "expected unauthorised, got: {err}"
+        );
+    }
+
+    #[test]
+    fn verify_token_rejects_wrong_secret() {
+        let svc_a = test_auth_service("secret-a");
+        let svc_b = test_auth_service("secret-b");
+
+        let (token_a, _) = svc_a
+            .issue_jwt("org".into(), "0x1".into(), "sol1".into())
+            .unwrap();
+
+        let err = svc_b.verify_token(&token_a).unwrap_err();
+        assert!(
+            format!("{err}").contains("invalid or expired"),
+            "expected unauthorised, got: {err}"
+        );
+    }
+
+    #[test]
+    fn verify_token_rejects_expired() {
+        let svc = AuthService {
+            jwt_ttl_secs: 0, // expires immediately
+            ..test_auth_service("expire-test")
+        };
+
+        // Craft a manually expired token (leeway is 30s so ttl=0 alone won't expire fast enough):
+        let expired_claims = AuthClaims {
+            suborg_id: "org".into(),
+            evm_address: "0x1".into(),
+            solana_address: "sol1".into(),
+            iat: 1000,
+            exp: 1001, // far in the past
+        };
+        let expired_token = encode(
+            &Header::new(Algorithm::HS256),
+            &expired_claims,
+            &EncodingKey::from_secret(b"expire-test"),
+        )
+        .unwrap();
+
+        let err = svc.verify_token(&expired_token).unwrap_err();
+        assert!(
+            format!("{err}").contains("invalid or expired"),
+            "expected unauthorised, got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_evm_address_valid() {
+        let addr = parse_evm_address("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "test")
+            .unwrap();
+        assert_eq!(
+            addr,
+            "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+                .parse::<Address>()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_evm_address_invalid() {
+        let err = parse_evm_address("not-an-address", "field").unwrap_err();
+        assert!(format!("{err}").contains("invalid evm address"));
+    }
+
+    #[tokio::test]
+    async fn recover_evm_address_valid_signature() {
+        let signer = PrivateKeySigner::random();
+        let message = "hello world";
+        let signature = signer.sign_message(message.as_bytes()).await.unwrap();
+        let sig_hex = format!("0x{}", hex::encode(signature.as_bytes()));
+
+        let recovered = recover_evm_address(message, &sig_hex).unwrap();
+        assert_eq!(recovered, signer.address());
+    }
+
+    #[test]
+    fn recover_evm_address_invalid_signature() {
+        let err = recover_evm_address("msg", "0xdeadbeef").unwrap_err();
+        assert!(format!("{err}").contains("invalid evm signature"));
+    }
+
+    #[test]
+    fn now_unix_returns_reasonable_value() {
+        let ts = now_unix().unwrap();
+        // Should be after 2024-01-01
+        assert!(ts > 1_704_067_200);
+    }
 }
