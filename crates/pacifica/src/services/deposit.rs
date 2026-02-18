@@ -1,3 +1,4 @@
+use anyhow::Context;
 use perp_core::{ASSOCIATED_TOKEN_PROGRAM, Chain, SYSTEM_PROGRAM, TOKEN_PROGRAM};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -21,6 +22,8 @@ use crate::{
 
 // 0.2 USDC = 200_000 (USDC has 6 decimals)
 const GAS_REIMBURSEMENT_AMOUNT: u64 = 200_000;
+
+const MINIMUM_DEPOSIT_AMOUNT: u64 = 11_000_000; // 11 USDC
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepositPayload {
@@ -51,7 +54,25 @@ pub async fn deposit_to_pacifica(
     let user_usdc_ata = get_associated_token_address(&user_pubkey, &usdc_pubkey);
     let fee_payer_usdc_ata = get_associated_token_address(&fee_payer_pubkey, &usdc_pubkey);
 
+    //get user balanace
+    let user_usdc_balance = rpc
+        .get_token_account_balance(&user_usdc_ata)
+        .await
+        .map(|resp| resp.amount.parse::<u64>().unwrap_or(0))
+        .context("Invalid token balance returned by RPC")?;
+
+    log::info!("User USDC balance: {}", user_usdc_balance);
+
+    if user_usdc_balance < MINIMUM_DEPOSIT_AMOUNT {
+        anyhow::bail!(
+            "Insufficient USDC balance for deposit. Minimum required: {}, User balance: {}",
+            MINIMUM_DEPOSIT_AMOUNT,
+            user_usdc_balance
+        );
+    }
+
     let central_state_pubkey = Pubkey::from_str(PACIFICA_CENTRAL_STATE_ADDRESS)?;
+
     let vault_pubkey = Pubkey::from_str(PACIFICA_VAULT_ADDRESS)?;
 
     let token_program_pubkey = Pubkey::from_str(TOKEN_PROGRAM)?;
