@@ -33,6 +33,13 @@ pub async fn deposit_to_pacifica(
     fee_payer_private_key: String,
     payload: DepositPayload,
 ) -> anyhow::Result<String> {
+    log::info!(
+        "Starting Pacifica deposit simulation: user={}, amount={}, gas_reimbursement={}",
+        payload.user_address,
+        payload.amount,
+        GAS_REIMBURSEMENT_AMOUNT
+    );
+
     let rpc = RpcClient::new(solana_rpc_url);
 
     let fee_payer_keypair = Keypair::from_base58_string(&fee_payer_private_key);
@@ -55,6 +62,13 @@ pub async fn deposit_to_pacifica(
     let pacifica_program_pubkey = Pubkey::from_str(PACIFICA_PROGRAM_ADDRESS)?;
 
     let amount_to_deposit = payload.amount - GAS_REIMBURSEMENT_AMOUNT;
+
+    log::info!(
+        "Derived accounts: user_usdc_ata={}, fee_payer_usdc_ata={}, amount_to_deposit={}",
+        user_usdc_ata,
+        fee_payer_usdc_ata,
+        amount_to_deposit
+    );
 
     let deposit_ix = Instruction {
         program_id: pacifica_program_pubkey,
@@ -117,6 +131,14 @@ pub async fn deposit_to_pacifica(
             log::warn!(
                 "Deposit simulation attempt {attempt}/{MAX_SIMULATION_RETRIES} failed: {err:?}"
             );
+            if let Some(logs) = &result.value.logs {
+                log::warn!("Program logs for failed attempt {attempt}:");
+                for log_line in logs {
+                    log::warn!("  {log_line}");
+                }
+            } else {
+                log::warn!("No program logs returned for failed attempt {attempt}");
+            }
             last_err = Some(err);
             if attempt < MAX_SIMULATION_RETRIES {
                 tokio::time::sleep(std::time::Duration::from_millis(500 * attempt)).await;
@@ -133,7 +155,7 @@ pub async fn deposit_to_pacifica(
         None => {
             let err = last_err.expect("last_err must be set after failed retries");
             log::error!(
-                "Deposit simulation failed after {MAX_SIMULATION_RETRIES} attempts: {err:?}"
+                "Deposit simulation failed after all {MAX_SIMULATION_RETRIES} attempts. Last error: {err:?}"
             );
             anyhow::bail!("Deposit simulation failed: {err:?}");
         }
