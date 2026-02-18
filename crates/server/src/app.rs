@@ -89,6 +89,7 @@ fn get_cors_origins() -> Vec<HeaderValue> {
         "https://nuketrade.xyz",
         "https://arbitrage-funding-landing-page.vercel.app",
         "http://localhost:3000",
+        "https://app.nuketrade.xyz",
     ];
 
     let origins_str =
