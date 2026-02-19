@@ -4,7 +4,7 @@ use alloy::{
     sol,
 };
 use bridge::MIN_BRIDGE_AMOUNT;
-use perp_core::{Chain, chains::get_usdc_address, config::Config};
+use perp_core::{Chain, chains::get_usdc_address, config::Config, has_sufficient_balance};
 use validator::ValidationError;
 
 use crate::features::bridge::controller::QuotePayload;
@@ -70,7 +70,7 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         err
     })?;
 
-    if balance < amount {
+    if !has_sufficient_balance(&balance, &amount) {
         let mut err = validator::ValidationError::new("insufficient_balance");
         err.message =
             Some(format!("Insufficient USDC: required {amount}, available {balance}").into());
