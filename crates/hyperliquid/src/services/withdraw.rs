@@ -1,5 +1,9 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+use crate::HYPERLIQUID_HTTP_URL;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WithdrawError {
@@ -15,9 +19,9 @@ pub struct WithdrawAction {
     hyperliquid_chain: String,
     #[serde(rename = "signatureChainId")]
     signature_chain_id: String,
-    pub time: u64,
+    pub time: u128,
     pub amount: String,
-    pub destination: String, //TODO: this needs to be user's own address on the arbitrum chain
+    pub destination: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -25,11 +29,11 @@ pub struct WithdrawResponse {
     action: WithdrawAction,
     #[serde(rename = "typedData")]
     typed_data: Value,
-    nonce: u64,
+    nonce: u128,
     endpoint: String,
 }
 
-pub fn create_withdraw_typed_data(destination: &str, amount: &str, time: u64) -> Value {
+pub fn create_withdraw_typed_data(destination: &str, amount: &str, time: u128) -> Value {
     json!({
         "types": {
             "EIP712Domain": [
@@ -74,7 +78,10 @@ pub async fn withdraw(
     }
 
     let destination_address = destination_address.unwrap();
-    let nonce = 0; //TODO: need to get current time in seconds
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
 
     let typed_data = create_withdraw_typed_data(&destination_address, &amount, nonce);
 
@@ -91,6 +98,6 @@ pub async fn withdraw(
         action: withdraw_action,
         typed_data,
         nonce,
-        endpoint: String::from("https://api.hyperliquid.com/withdraw"),
+        endpoint: format!("{}/exchange", HYPERLIQUID_HTTP_URL),
     })
 }
