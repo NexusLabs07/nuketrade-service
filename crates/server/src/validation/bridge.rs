@@ -28,7 +28,6 @@ pub fn validate_destination_usdc_address(
     Ok(())
 }
 
-/// Validates that the user has sufficient USDC balance on Base chain
 pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::ValidationError> {
     let base_rpc_url = Config::from_env()
         .map_err(|_| {
@@ -63,7 +62,6 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
     })?;
 
     let provider = ProviderBuilder::new().connect_http(base_rpc_url.parse().unwrap());
-
     let usdc = IERC20::new(usdc_address, provider);
 
     let balance = usdc.balanceOf(user_address).call().await.map_err(|e| {

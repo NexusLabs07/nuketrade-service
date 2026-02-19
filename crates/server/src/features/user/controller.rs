@@ -5,7 +5,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::{AppState, error::AppError, middleware::user::validate_addresses_are_null};
+use crate::{AppState, error::AppError, validation::user::validate_addresses_are_null};
 
 #[derive(Serialize)]
 pub struct WaitlistSuccessResponse {

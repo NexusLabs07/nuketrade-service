@@ -1,24 +1,51 @@
 use axum::{
     Extension, Json,
-    extract::{Path, State},
+    extract::State,
     http::{StatusCode, header},
     response::IntoResponse,
 };
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
     perp_metadata::PERP_META,
-    services::{DepositPayload, deposit_to_hyperliquid},
+    services::{DepositPayload, PermitSignature, deposit_to_hyperliquid},
     spot_metadata::SPOT_META,
 };
 use perp_core::parse_f64_or_zero;
+use serde::Deserialize;
+use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
+    extractors::{ValidatedJson, ValidatedPath},
     features::auth::types::AuthClaims,
-    middleware::user::validate_evm_address,
     types::{OpenPositionsResponse, Side},
+    validation::address::validate_evm_address,
 };
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct HyperliquidUserPath {
+    #[validate(custom(function = "validate_evm_address"))]
+    pub user_evm_address: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct HyperliquidDepositRequest {
+    #[validate(custom(function = "validate_evm_address"))]
+    pub user: String,
+    pub amount: String,
+    pub permit: PermitSignature,
+}
+
+impl From<HyperliquidDepositRequest> for DepositPayload {
+    fn from(value: HyperliquidDepositRequest) -> Self {
+        Self {
+            amount: value.amount,
+            user: value.user,
+            permit: value.permit,
+        }
+    }
+}
 
 //TODO: make them dynamic using cron later
 pub async fn get_spot_metadata() -> impl IntoResponse {
@@ -38,15 +65,9 @@ pub async fn get_perp_metadata() -> impl IntoResponse {
 }
 
 pub async fn get_user_open_positions(
-    Path(user_evm_address): Path<String>,
+    ValidatedPath(params): ValidatedPath<HyperliquidUserPath>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
-    validate_evm_address(&user_evm_address).map_err(|e| {
-        let mut errors = validator::ValidationErrors::new();
-        errors.add("user_evm_address", e);
-        AppError::Validation(errors)
-    })?;
-
-    let user_info_client = UserInfo::new(Some(user_evm_address), None);
+    let user_info_client = UserInfo::new(Some(params.user_evm_address), None);
 
     let open_positions: ClearinghouseState = user_info_client.get_open_positions().await?;
 
@@ -83,14 +104,8 @@ pub async fn get_user_open_positions(
 pub async fn bridge_to_hyperliquid(
     Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
-    Json(payload): Json<DepositPayload>,
+    ValidatedJson(payload): ValidatedJson<HyperliquidDepositRequest>,
 ) -> Result<Json<String>, AppError> {
-    validate_evm_address(&payload.user).map_err(|e| {
-        let mut errors = validator::ValidationErrors::new();
-        errors.add("user", e);
-        AppError::Validation(errors)
-    })?;
-
     if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
         return Err(AppError::unauthorised(
             "payload.user does not match authenticated EVM address",
@@ -100,7 +115,8 @@ pub async fn bridge_to_hyperliquid(
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
     let fee_payer_private_key = state.config.evm_fee_payer_private_key;
 
-    let tx_hash = deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, payload).await?;
+    let tx_hash =
+        deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, payload.into()).await?;
 
     Ok(Json(tx_hash))
 }

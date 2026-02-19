@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
 };
 use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::{
@@ -21,11 +21,9 @@ use validator::Validate;
 use crate::{
     AppState,
     error::AppError,
-    middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
-    types::{
-        LiveMarketFeedResponse, MarketFeedValueStruct, MergedPositionResponse,
-        OpenPositionsResponse, Side,
-    },
+    extractors::{ValidatedPath, ValidatedQuery},
+    types::{LiveMarketFeedResponse, MergedPositionResponse, OpenPositionsResponse, Side},
+    validation::address::{validate_evm_address, validate_solana_address, validate_timeframe},
 };
 
 #[derive(Deserialize, Validate)]
@@ -36,13 +34,6 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
-//Market feeed with price and funding rate
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct MarketFeedStruct {
-    hyperliquid: MarketFeedValueStruct,
-    pacifica: MarketFeedValueStruct,
-}
-
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct ChartParams {
     #[validate(custom(function = "validate_timeframe"))]
@@ -50,11 +41,9 @@ pub struct ChartParams {
 }
 
 pub async fn get_merged_open_positions(
-    Path(params): Path<MergedPositionsParams>,
+    ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
-    params.validate()?;
-
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
@@ -203,11 +192,9 @@ pub async fn get_live_market_feed(
 
 pub async fn get_token_chart(
     Path(symbol): Path<String>,
-    Query(params): Query<ChartParams>,
+    ValidatedQuery(params): ValidatedQuery<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
-    params.validate()?;
-
     let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
