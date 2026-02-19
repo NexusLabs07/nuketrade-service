@@ -6,14 +6,15 @@ use axum::{
     extract::{Path, Query, State},
 };
 use db::funding::{FundingRate, get_token_chart_info};
-use hyperliquid::{
-    apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
-    // helpers::markets::HL_MARKETS,
-};
+use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
 use pacifica::{
-    apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
+    apis::user::{
+        AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
+        UserPositionsResponse,
+    },
     helpers::markets::PACIFICA_MARKETS,
 };
+
 use perp_core::{SevenDayApr, parse_f64_or_zero};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -22,9 +23,10 @@ use crate::{
     AppState,
     error::AppError,
     middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
+    services::PositionService,
     types::{
-        LiveMarketFeedResponse, MarketFeedValueStruct, MergedPositionResponse,
-        OpenPositionsResponse, Side,
+        LiveMarketFeedResponse, MarketFeedValueStruct, MergedClosedPositionResponse,
+        MergedPositionResponse, OpenPositionsResponse, Side,
     },
 };
 
@@ -190,6 +192,42 @@ pub async fn get_merged_open_positions(
     }
 
     let merged_positions: Vec<MergedPositionResponse> = positions_map.into_values().collect();
+    Ok(Json(merged_positions))
+}
+
+pub async fn get_merged_closed_positions(
+    Path(params): Path<MergedPositionsParams>,
+) -> Result<Json<Vec<MergedClosedPositionResponse>>, AppError> {
+    params.validate()?;
+
+    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
+
+    let (hl_result, pacifica_result): (
+        Result<Vec<UserFill>>,
+        Result<UserPositionsHistoryResponse>,
+    ) = tokio::join!(
+        hl_client.get_closed_positions(),
+        pacifica_client.get_closed_positions()
+    );
+
+    let hl_fills = hl_result.unwrap_or_default();
+    let hl_closed_positions = hl_fills
+        .iter()
+        .filter_map(PositionService::from_hyperliquid_closed_fill)
+        .collect::<Vec<_>>();
+
+    let pacifica_closed_positions = pacifica_result
+        .ok()
+        .and_then(|history| if history.success { history.data } else { None })
+        .unwrap_or_default()
+        .iter()
+        .filter_map(PositionService::from_pacifica_closed_position)
+        .collect::<Vec<_>>();
+
+    let merged_positions =
+        PositionService::merge_closed_positions(hl_closed_positions, pacifica_closed_positions);
+
     Ok(Json(merged_positions))
 }
 

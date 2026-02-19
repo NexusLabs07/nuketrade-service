@@ -46,3 +46,26 @@ pub struct FeedSnapshot {
     pub by_symbol: HashMap<String, LiveMarketFeedResponse>,
     pub formatted: Vec<LiveMarketFeedResponse>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClosedPositionResponse {
+    pub symbol: String,
+    pub size: String,
+    pub side: Side,
+    pub pnl: String,
+    #[serde(rename = "entryPrice")]
+    pub entry_price: String,
+    #[serde(rename = "exitPrice")]
+    pub exit_price: String,
+    #[serde(rename = "closedAt")]
+    pub closed_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MergedClosedPositionResponse {
+    pub symbol: String,
+    #[serde(rename = "closedAt")]
+    pub closed_at: i64,
+    pub hyperliquid: Option<ClosedPositionResponse>,
+    pub pacifica: Option<ClosedPositionResponse>,
+}

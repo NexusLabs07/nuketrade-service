@@ -3,7 +3,11 @@
 use perp_core::{PositionSide, UnifiedPosition, parse_f64_or_zero};
 use std::collections::HashMap;
 
-use crate::types::{MergedPositionResponse, OpenPositionsResponse, Side};
+// replace existing types import
+use crate::types::{
+    ClosedPositionResponse, MergedClosedPositionResponse, MergedPositionResponse,
+    OpenPositionsResponse, Side,
+};
 
 /// Service for position conversion and merging operations.
 pub struct PositionService;
@@ -117,5 +121,116 @@ impl PositionService {
         }
 
         positions_map.into_values().collect()
+    }
+
+    pub fn from_hyperliquid_closed_fill(
+        fill: &hyperliquid::apis::user::UserFill,
+    ) -> Option<ClosedPositionResponse> {
+        if fill.coin.is_empty() {
+            return None;
+        }
+
+        let dir = fill.dir.to_ascii_lowercase();
+        let side = if dir.contains("close long") {
+            Side::Long
+        } else if dir.contains("close short") {
+            Side::Short
+        } else {
+            return None;
+        };
+
+        Some(ClosedPositionResponse {
+            symbol: fill.coin.clone(),
+            size: fill.sz.clone(),
+            side,
+            pnl: if fill.closed_pnl.is_empty() {
+                "0".to_string()
+            } else {
+                fill.closed_pnl.clone()
+            },
+            entry_price: String::new(),
+            exit_price: fill.px.clone(),
+            closed_at: fill.time,
+        })
+    }
+
+    pub fn from_pacifica_closed_position(
+        pos: &pacifica::apis::user::UserPositionHistory,
+    ) -> Option<ClosedPositionResponse> {
+        if pos.symbol.is_empty() {
+            return None;
+        }
+
+        let status = pos.status.to_ascii_lowercase();
+        if !status.is_empty()
+            && !matches!(
+                status.as_str(),
+                "filled" | "closed" | "executed" | "success"
+            )
+        {
+            return None;
+        }
+
+        let side_raw = pos.side.to_ascii_lowercase();
+        let side = match side_raw.as_str() {
+            "close_long" | "close long" | "close-long" => Side::Long,
+            "close_short" | "close short" | "close-short" => Side::Short,
+            _ => return None,
+        };
+
+        Some(ClosedPositionResponse {
+            symbol: pos.symbol.clone(),
+            size: pos.amount.clone(),
+            side,
+            pnl: "0".to_string(),
+            entry_price: String::new(),
+            exit_price: pos.execution_price.clone(),
+            closed_at: pos.timestamp,
+        })
+    }
+
+    pub fn merge_closed_positions(
+        hl_positions: Vec<ClosedPositionResponse>,
+        pacifica_positions: Vec<ClosedPositionResponse>,
+    ) -> Vec<MergedClosedPositionResponse> {
+        let mut positions_map: HashMap<(String, i64), MergedClosedPositionResponse> =
+            HashMap::new();
+
+        for pos in hl_positions {
+            let symbol = pos.symbol.clone();
+            let closed_at = pos.closed_at;
+
+            let entry = positions_map.entry((symbol.clone(), closed_at)).or_insert(
+                MergedClosedPositionResponse {
+                    symbol,
+                    closed_at,
+                    hyperliquid: None,
+                    pacifica: None,
+                },
+            );
+
+            entry.hyperliquid = Some(pos);
+        }
+
+        for pos in pacifica_positions {
+            let symbol = pos.symbol.clone();
+            let closed_at = pos.closed_at;
+
+            let entry = positions_map.entry((symbol.clone(), closed_at)).or_insert(
+                MergedClosedPositionResponse {
+                    symbol,
+                    closed_at,
+                    hyperliquid: None,
+                    pacifica: None,
+                },
+            );
+
+            entry.pacifica = Some(pos);
+        }
+
+        let mut merged_positions: Vec<MergedClosedPositionResponse> =
+            positions_map.into_values().collect();
+        merged_positions.sort_by(|a, b| b.closed_at.cmp(&a.closed_at));
+        merged_positions
     }
 }
