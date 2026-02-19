@@ -6,36 +6,29 @@ use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::services::hedge::NextActionResponse;
-use crate::state::AppState;
-use crate::{error::AppError, features::hedge::services::HedgeService};
 use crate::{
+    error::AppError,
     extractors::ValidatedJson,
     features::auth::types::AuthClaims,
-    validation::address::{validate_evm_address, validate_solana_address},
+    features::hedge::services::HedgeService,
+    services::hedge::NextActionResponse,
+    state::AppState,
+    validation::{
+        address::{validate_evm_address, validate_solana_address},
+        hedge::validate_distinct_exchanges,
+    },
 };
+
 use db::hedge::{self as hedge_db};
 
 // ============================= Request / Response Types =============================
 
-fn validate_distinct_exchanges(
-    payload: &CreateHedgeIntentRequest,
-) -> Result<(), validator::ValidationError> {
-    let [first, second] = &payload.exchanges;
-    if first == second {
-        let mut err = validator::ValidationError::new("distinct_exchanges");
-        err.message = Some("Exchanges must be different".into());
-        return Err(err);
-    }
-    Ok(())
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
-#[validate(schema(function = "validate_distinct_exchanges"))]
 pub struct CreateHedgeIntentRequest {
     pub user_id: uuid::Uuid,
     #[validate(length(min = 1, message = "Asset must not be empty"))]
     pub asset: String,
+    #[validate(custom(function = "validate_distinct_exchanges"))]
     pub exchanges: [PerpetualExchange; 2],
     #[validate(range(exclusive_min = 0.0, message = "Margin must be greater than 0"))]
     pub margin_usd: f64,

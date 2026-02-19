@@ -17,7 +17,8 @@ use crate::{
     error::AppError,
     extractors::{ValidatedJson, ValidatedPath},
     features::auth::types::AuthClaims,
-    types::{OpenPositionsResponse, Side},
+    services::PositionService,
+    types::OpenPositionsResponse,
     validation::address::validate_solana_address,
 };
 
@@ -107,24 +108,12 @@ pub async fn get_user_open_positions(
             0.0
         };
 
-        open_position_response.push(OpenPositionsResponse {
-            symbol: asset_position.symbol.clone(),
-            size: asset_position.amount.clone(),
-            side: if asset_position.side == "bid" {
-                Side::Long
-            } else {
-                Side::Short
-            },
-            pnl: if asset_position.side == "ask" {
-                (-pnl).to_string()
-            } else {
-                pnl.to_string()
-            },
-            margin,
-            funding: asset_position.funding.clone().unwrap_or_default(),
+        open_position_response.push(PositionService::from_pacifica_position_with_metrics(
+            asset_position,
             leverage,
-            liquidation_price: asset_position.liquidation_price.clone().unwrap_or_default(),
-        });
+            margin,
+            pnl,
+        ));
     }
 
     Ok(Json(open_position_response))

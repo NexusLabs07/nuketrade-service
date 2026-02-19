@@ -14,15 +14,17 @@ use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
     helpers::markets::PACIFICA_MARKETS,
 };
-use perp_core::{SevenDayApr, parse_f64_or_zero};
-use serde::{Deserialize, Serialize};
+use perp_core::SevenDayApr;
+use serde::Deserialize;
+
 use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
     extractors::{ValidatedPath, ValidatedQuery},
-    types::{LiveMarketFeedResponse, MergedPositionResponse, OpenPositionsResponse, Side},
+    services::PositionService,
+    types::{LiveMarketFeedResponse, MergedPositionResponse, OpenPositionsResponse},
     validation::address::{validate_evm_address, validate_solana_address, validate_timeframe},
 };
 
@@ -34,7 +36,8 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate)]
+
 pub struct ChartParams {
     #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
@@ -57,52 +60,23 @@ pub async fn get_merged_open_positions(
         pacifica_client.get_account_settings()
     );
 
-    let mut positions_map: HashMap<String, MergedPositionResponse> = HashMap::new();
-
+    let mut hl_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
     if let Ok(hl_positions) = hl_result {
-        for asset_position in hl_positions.asset_positions.iter() {
-            let pos = &asset_position.position;
-            let symbol = pos.coin.clone();
-            let size_value = parse_f64_or_zero(&pos.szi);
-            let side = if size_value > 0.0 {
-                Side::Long
-            } else {
-                Side::Short
-            };
-
-            let hl_position = OpenPositionsResponse {
-                symbol: symbol.clone(),
-                size: if side == Side::Short {
-                    (-size_value).to_string()
-                } else {
-                    pos.szi.clone()
-                },
-                side,
-                margin: pos.margin_used.clone(),
-                pnl: pos.unrealized_pnl.clone(),
-                funding: pos.cum_funding.all_time.clone(),
-                leverage: pos.leverage.value,
-                liquidation_price: pos.liquidation_px.clone().unwrap_or_default(),
-            };
-
-            positions_map
-                .entry(symbol.clone())
-                .or_insert_with(|| MergedPositionResponse {
-                    symbol: symbol.clone(),
-                    hyperliquid: None,
-                    pacifica: None,
-                })
-                .hyperliquid = Some(hl_position);
+        for asset_position in &hl_positions.asset_positions {
+            hl_positions_vec.push(PositionService::from_hyperliquid_position(
+                &asset_position.position,
+            ));
         }
     }
 
+    let mut pacifica_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
     if let Ok(pacifica_positions) = pacifica_result {
         if let Some(positions_data) = pacifica_positions.data {
             if pacifica_positions.success {
                 let account_settings = pacifica_account_result.ok().and_then(|r| r.data);
                 let snapshot = state.feed.borrow().clone();
 
-                for asset_position in positions_data.iter() {
+                for asset_position in &positions_data {
                     let symbol = asset_position.symbol.clone();
 
                     let leverage: u32 = account_settings
@@ -143,42 +117,21 @@ pub async fn get_merged_open_positions(
                         0.0
                     };
 
-                    let pacifica_position = OpenPositionsResponse {
-                        symbol: symbol.clone(),
-                        size: asset_position.amount.clone(),
-                        side: if asset_position.side == "bid" {
-                            Side::Long
-                        } else {
-                            Side::Short
-                        },
-                        pnl: if asset_position.side == "ask" {
-                            (-pnl).to_string()
-                        } else {
-                            pnl.to_string()
-                        },
-                        funding: asset_position.funding.clone().unwrap_or_default(),
-                        leverage,
-                        margin,
-                        liquidation_price: asset_position
-                            .liquidation_price
-                            .clone()
-                            .unwrap_or_default(),
-                    };
-
-                    positions_map
-                        .entry(symbol.clone())
-                        .or_insert_with(|| MergedPositionResponse {
-                            symbol: symbol.clone(),
-                            hyperliquid: None,
-                            pacifica: None,
-                        })
-                        .pacifica = Some(pacifica_position);
+                    pacifica_positions_vec.push(
+                        PositionService::from_pacifica_position_with_metrics(
+                            asset_position,
+                            leverage,
+                            margin,
+                            pnl,
+                        ),
+                    );
                 }
             }
         }
     }
 
-    let merged_positions: Vec<MergedPositionResponse> = positions_map.into_values().collect();
+    let merged_positions =
+        PositionService::merge_positions(hl_positions_vec, pacifica_positions_vec);
     Ok(Json(merged_positions))
 }
 

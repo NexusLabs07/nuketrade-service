@@ -10,7 +10,6 @@ use hyperliquid::{
     services::{DepositPayload, PermitSignature, deposit_to_hyperliquid},
     spot_metadata::SPOT_META,
 };
-use perp_core::parse_f64_or_zero;
 use serde::Deserialize;
 use validator::Validate;
 
@@ -19,7 +18,8 @@ use crate::{
     error::AppError,
     extractors::{ValidatedJson, ValidatedPath},
     features::auth::types::AuthClaims,
-    types::{OpenPositionsResponse, Side},
+    services::PositionService,
+    types::OpenPositionsResponse,
     validation::address::validate_evm_address,
 };
 
@@ -73,29 +73,10 @@ pub async fn get_user_open_positions(
 
     let mut open_position_response: Vec<OpenPositionsResponse> = Vec::new();
 
-    for asset_position in open_positions.asset_positions.iter() {
-        let pos = &asset_position.position;
-        let size_value = parse_f64_or_zero(&pos.szi);
-        let side = if size_value > 0.0 {
-            Side::Long
-        } else {
-            Side::Short
-        };
-
-        open_position_response.push(OpenPositionsResponse {
-            symbol: pos.coin.clone(),
-            size: if side == Side::Short {
-                (-size_value).to_string()
-            } else {
-                pos.szi.clone()
-            },
-            side,
-            margin: pos.margin_used.clone(),
-            pnl: pos.unrealized_pnl.clone(),
-            funding: pos.cum_funding.all_time.clone(),
-            leverage: pos.leverage.value,
-            liquidation_price: pos.liquidation_px.clone().unwrap_or_default(),
-        });
+    for asset_position in &open_positions.asset_positions {
+        open_position_response.push(PositionService::from_hyperliquid_position(
+            &asset_position.position,
+        ));
     }
 
     Ok(Json(open_position_response))
