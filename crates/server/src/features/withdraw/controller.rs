@@ -4,11 +4,12 @@ use axum::{
     Extension, Json,
     extract::{Path, State},
 };
+use bridge::client::{BridgeClient, QuoteRequest, QuoteResponse};
 use pacifica::services::withdraw::WithdrawRequest;
 use perp_core::{Chain, exchange::PerpetualExchange};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationErrors};
 
 use crate::{
     error::AppError,
@@ -196,7 +197,7 @@ pub async fn create_withdraw_transaction(
     Extension(claims): Extension<AuthClaims>,
     Json(payload): Json<CreateWithdrawTransactionRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    //todo
+    //todo: fix validation
     // payload.validate()?;
 
     match payload {
@@ -218,6 +219,12 @@ pub async fn create_withdraw_transaction(
             Ok(Json(value))
         }
         CreateWithdrawTransactionRequest::Pacifica(payload) => {
+            if !payload.account.eq_ignore_ascii_case(&claims.solana_address) {
+                return Err(AppError::Unauthorised(String::from(
+                    "payload.account does not match authenticated solana address",
+                )));
+            }
+
             let withdrawal_request = WithdrawRequest {
                 account: payload.account,
                 signature: payload.signature,
@@ -235,4 +242,58 @@ pub async fn create_withdraw_transaction(
         }
         _ => unimplemented!(),
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BridgeRequest {
+    pub user: String,
+    #[serde(rename = "originChainId")]
+    pub origin_chain_id: u64,
+    #[serde(rename = "destinationChainId")]
+    pub destination_chain_id: u64,
+    pub amount: String,
+    #[serde(rename = "tradeType")]
+    pub trade_type: String,
+    #[serde(rename = "usePermit")]
+    pub use_permit: bool,
+    pub recipient: String,
+}
+
+pub async fn bridge(
+    State(app_state): State<AppState>,
+    Extension(claims): Extension<AuthClaims>,
+    Json(payload): Json<BridgeRequest>,
+) -> Result<Json<QuoteResponse>, AppError> {
+    //TODO: validation needed
+
+    let validated_origin_chain = Chain::from_id(payload.origin_chain_id);
+    let validated_destination_chain = Chain::from_id(payload.destination_chain_id);
+
+    if validated_origin_chain.is_none() || validated_destination_chain.is_none() {
+        return Err(AppError::NotFound(String::from(
+            "Invalid origin or destination chain id",
+        )));
+    }
+
+    let validated_origin_chain = validated_origin_chain.unwrap();
+    let validated_destination_chain = validated_destination_chain.unwrap();
+
+    let quote_request = QuoteRequest {
+        user: payload.user,
+        origin_chain_id: validated_origin_chain.id,
+        destination_chain_id: validated_destination_chain.id,
+        origin_currency: validated_origin_chain.usdc_address.to_string(),
+        destination_currency: validated_destination_chain.usdc_address.to_string(),
+        amount: payload.amount,
+        trade_type: payload.trade_type,
+        use_permit: payload.use_permit,
+        recipient: payload.recipient,
+    };
+
+    let relay_api_key = app_state.config.relay_api_key;
+    let bridge_client = BridgeClient::new(relay_api_key);
+
+    let quote = bridge_client.quote(quote_request).await?;
+
+    Ok(Json(quote))
 }
