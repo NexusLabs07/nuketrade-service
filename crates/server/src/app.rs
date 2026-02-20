@@ -126,7 +126,7 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/aggregated", aggregated::routes::routes())
         .nest("/bridge", bridge::routes::routes())
         .nest("/hedge-intents", hedge::routes::routes())
-        .nest("/withdraw", withdraw::routes::routes())
+        .nest("/withdraw-intents", withdraw::routes::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .layer(axum__middleware::from_fn_with_state(

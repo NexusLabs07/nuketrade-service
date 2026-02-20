@@ -3,6 +3,7 @@ pub mod hedge;
 pub mod points;
 pub mod user;
 pub mod wallet;
+pub mod withdraw;
 
 // use {funding, points, user, wallet};
 

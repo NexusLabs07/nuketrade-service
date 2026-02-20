@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 
 use crate::HYPERLIQUID_HTTP_URL;
 
+const MINIMUM_WITHDRAWAL_AMOUNT: u64 = 2_000_000;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WithdrawError {
     MissingDestinationAddress,
@@ -70,8 +72,16 @@ pub async fn withdraw(
     destination_address: Option<String>,
     amount: String,
 ) -> Result<WithdrawResponse, WithdrawError> {
-    //TODO: verify the amount is greater than 0 and greater than user balance
+    //TODO: verify the amount is greater than user balance
     // TODO: verify that the destination address is evm compatible
+
+    let parsed_amount = amount
+        .parse::<u64>()
+        .map_err(|_| WithdrawError::InvalidAmount)?;
+
+    if parsed_amount < MINIMUM_WITHDRAWAL_AMOUNT {
+        return Err(WithdrawError::InvalidAmount);
+    }
 
     if destination_address.is_none() {
         return Err(WithdrawError::MissingDestinationAddress);

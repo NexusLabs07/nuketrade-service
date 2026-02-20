@@ -7,5 +7,6 @@ pub mod auth;
 pub mod balance;
 pub mod hedge;
 pub mod position;
+pub mod withdraw;
 
 pub use position::PositionService;
