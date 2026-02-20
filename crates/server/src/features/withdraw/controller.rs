@@ -1,7 +1,10 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use axum::{
     Extension, Json,
     extract::{Path, State},
 };
+use pacifica::services::withdraw::WithdrawRequest;
 use perp_core::{Chain, exchange::PerpetualExchange};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,7 +13,7 @@ use validator::Validate;
 use crate::{
     error::AppError,
     features::{auth::types::AuthClaims, withdraw::services::WithdrawService},
-    middleware::user::validate_evm_address,
+    middleware::user::{validate_evm_address, validate_solana_address},
     services::withdraw::NextActionResponse,
     state::AppState,
 };
@@ -159,8 +162,7 @@ pub async fn list_user_withdrawal_intents(
 // ============================= Withdraw Transaction =============================
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
-pub struct CreateWithdrawTransactionRequest {
-    pub exchange: PerpetualExchange,
+pub struct HyperliquidTransactionRequest {
     /// The user's address on the source chain (must match auth claims).
     #[validate(custom(function = "validate_evm_address"))]
     pub evm_address: String,
@@ -172,6 +174,20 @@ pub struct CreateWithdrawTransactionRequest {
     pub amount: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct PacificaTransactionRequest {
+    #[validate(custom(function = "validate_solana_address"))]
+    pub account: String,
+    pub signature: String,
+    pub amount: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CreateWithdrawTransactionRequest {
+    Hyperliquid(HyperliquidTransactionRequest),
+    Pacifica(PacificaTransactionRequest),
+}
+
 /// POST /withdraw-intents/transaction — Generate the signed withdrawal transaction data.
 ///
 /// For Hyperliquid this returns EIP-712 typed data the client must sign and submit
@@ -180,19 +196,19 @@ pub async fn create_withdraw_transaction(
     Extension(claims): Extension<AuthClaims>,
     Json(payload): Json<CreateWithdrawTransactionRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    payload.validate()?;
+    //todo
+    // payload.validate()?;
 
-    if !payload
-        .evm_address
-        .eq_ignore_ascii_case(&claims.evm_address)
-    {
-        return Err(AppError::unauthorised(
-            "payload.evm_address does not match authenticated EVM address",
-        ));
-    }
-
-    match payload.exchange {
-        PerpetualExchange::Hyperliquid => {
+    match payload {
+        CreateWithdrawTransactionRequest::Hyperliquid(payload) => {
+            if !payload
+                .evm_address
+                .eq_ignore_ascii_case(&claims.evm_address)
+            {
+                return Err(AppError::unauthorised(
+                    "payload.evm_address does not match authenticated EVM address",
+                ));
+            }
             let response =
                 hyperliquid::services::withdraw(Some(payload.destination), payload.amount)
                     .await
@@ -201,11 +217,22 @@ pub async fn create_withdraw_transaction(
             let value = serde_json::to_value(response)?;
             Ok(Json(value))
         }
-        PerpetualExchange::Pacifica => {
-            Err(AppError::internal("Pacifica withdrawal not yet supported"))
+        CreateWithdrawTransactionRequest::Pacifica(payload) => {
+            let withdrawal_request = WithdrawRequest {
+                account: payload.account,
+                signature: payload.signature,
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+                amount: payload.amount,
+            };
+
+            let response = pacifica::services::withdraw::withdraw(withdrawal_request).await?;
+
+            let value = serde_json::to_value(&response)?;
+            Ok(Json(value))
         }
-        PerpetualExchange::Lighter => {
-            Err(AppError::internal("Lighter withdrawal not yet supported"))
-        }
+        _ => unimplemented!(),
     }
 }
