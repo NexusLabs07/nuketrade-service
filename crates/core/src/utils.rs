@@ -89,3 +89,12 @@ pub fn is_positive(s: &str) -> bool {
 pub fn is_negative(s: &str) -> bool {
     parse_f64(s).map(|v| v < 0.0).unwrap_or(false)
 }
+
+/// Check if available balance is sufficient for a required amount.
+#[inline]
+pub fn has_sufficient_balance<T>(available: &T, required: &T) -> bool
+where
+    T: PartialOrd,
+{
+    available >= required
+}

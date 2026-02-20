@@ -123,6 +123,31 @@ impl PositionService {
         positions_map.into_values().collect()
     }
 
+    pub fn from_pacifica_position_with_metrics(
+        pos: &pacifica::apis::user::UserPosition,
+        leverage: u32,
+        margin: String,
+        pnl: f64,
+    ) -> OpenPositionsResponse {
+        let is_bid = pos.side == "bid";
+        let is_ask = pos.side == "ask";
+
+        OpenPositionsResponse {
+            symbol: pos.symbol.clone(),
+            size: pos.amount.clone(),
+            side: if is_bid { Side::Long } else { Side::Short },
+            pnl: if is_ask {
+                (-pnl).to_string()
+            } else {
+                pnl.to_string()
+            },
+            margin,
+            funding: pos.funding.clone().unwrap_or_default(),
+            leverage,
+            liquidation_price: pos.liquidation_price.clone().unwrap_or_default(),
+        }
+    }
+
     pub fn from_hyperliquid_closed_fill(
         fill: &hyperliquid::apis::user::UserFill,
     ) -> Option<ClosedPositionResponse> {

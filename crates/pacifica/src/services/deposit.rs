@@ -1,5 +1,7 @@
 use anyhow::Context;
-use perp_core::{ASSOCIATED_TOKEN_PROGRAM, Chain, SYSTEM_PROGRAM, TOKEN_PROGRAM};
+use perp_core::{
+    ASSOCIATED_TOKEN_PROGRAM, Chain, SYSTEM_PROGRAM, TOKEN_PROGRAM, has_sufficient_balance,
+};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -63,7 +65,7 @@ pub async fn deposit_to_pacifica(
 
     log::info!("User USDC balance: {}", user_usdc_balance);
 
-    if user_usdc_balance < MINIMUM_DEPOSIT_AMOUNT {
+    if !has_sufficient_balance(&user_usdc_balance, &MINIMUM_DEPOSIT_AMOUNT) {
         anyhow::bail!(
             "Insufficient USDC balance for deposit. Minimum required: {}, User balance: {}",
             MINIMUM_DEPOSIT_AMOUNT,

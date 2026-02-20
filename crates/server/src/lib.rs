@@ -10,11 +10,13 @@ use crate::{app::create_app, services::auth::AuthService, state::AppState, types
 
 pub mod app;
 pub mod error;
+pub mod extractors;
 pub mod features;
 pub mod middleware;
 pub mod services;
 pub mod state;
 pub mod types;
+pub mod validation;
 
 pub async fn run_server(
     config: Config,

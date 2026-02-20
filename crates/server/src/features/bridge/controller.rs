@@ -1,15 +1,17 @@
+use crate::error::AppError;
+use crate::extractors::ValidatedJson;
 use crate::features::auth::types::AuthClaims;
-use crate::middleware::bridge::{validate_balance, validate_destination_usdc_address};
-use crate::middleware::user::validate_evm_address;
 use crate::state::AppState;
+use crate::validation::{
+    address::validate_evm_address,
+    bridge::{validate_balance, validate_destination_usdc_address},
+};
 use axum::extract::State;
 use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-
-use crate::error::AppError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_destination_usdc_address"))]
@@ -28,14 +30,35 @@ pub struct QuotePayload {
     pub recipient: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct ExecutePermitPayload {
+    #[validate(length(min = 1, message = "Signature must not be empty"))]
+    pub signature: String,
+    #[validate(length(min = 1, message = "Kind must not be empty"))]
+    pub kind: String,
+    #[serde(rename = "requestId")]
+    #[validate(length(min = 1, message = "Request ID must not be empty"))]
+    pub request_id: String,
+    pub api: Option<String>,
+}
+
+impl From<ExecutePermitPayload> for PermitRequest {
+    fn from(value: ExecutePermitPayload) -> Self {
+        Self {
+            signature: value.signature,
+            kind: value.kind,
+            request_id: value.request_id,
+            api: value.api,
+        }
+    }
+}
+
 //* Bridge only supports base to other chains for now */
 pub async fn get_quote(
     State(app_state): State<AppState>,
     Extension(claims): Extension<AuthClaims>,
-    Json(payload): Json<QuotePayload>,
+    ValidatedJson(payload): ValidatedJson<QuotePayload>,
 ) -> Result<Json<QuoteResponse>, AppError> {
-    payload.validate()?;
-
     if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
         return Err(AppError::unauthorised(
             "payload.user does not match authenticated EVM address",
@@ -74,34 +97,12 @@ pub async fn get_quote(
 
 pub async fn execute_permits(
     State(app_state): State<AppState>,
-    Json(payload): Json<PermitRequest>,
+    ValidatedJson(payload): ValidatedJson<ExecutePermitPayload>,
 ) -> Result<Json<String>, AppError> {
-    let mut errors = validator::ValidationErrors::new();
-
-    if payload.signature.is_empty() {
-        let mut err = validator::ValidationError::new("required");
-        err.message = Some("Signature must not be empty".into());
-        errors.add("signature", err);
-    }
-    if payload.kind.is_empty() {
-        let mut err = validator::ValidationError::new("required");
-        err.message = Some("Kind must not be empty".into());
-        errors.add("kind", err);
-    }
-    if payload.request_id.is_empty() {
-        let mut err = validator::ValidationError::new("required");
-        err.message = Some("Request ID must not be empty".into());
-        errors.add("request_id", err);
-    }
-
-    if !errors.is_empty() {
-        return Err(AppError::Validation(errors));
-    }
-
     let relay_api_key = app_state.config.relay_api_key;
     let bridge_client = BridgeClient::new(relay_api_key);
 
-    let result = bridge_client.execute_permit(payload).await?;
+    let result = bridge_client.execute_permit(payload.into()).await?;
 
     let serialized_response = serde_json::to_string(&result)?;
 

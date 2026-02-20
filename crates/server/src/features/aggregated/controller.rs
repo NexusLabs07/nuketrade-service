@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
 };
 use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
@@ -14,20 +14,20 @@ use pacifica::{
     },
     helpers::markets::PACIFICA_MARKETS,
 };
-
-use perp_core::{SevenDayApr, parse_f64_or_zero};
-use serde::{Deserialize, Serialize};
+use perp_core::SevenDayApr;
+use serde::Deserialize;
 use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
-    middleware::user::{validate_evm_address, validate_solana_address, validate_timeframe},
+    extractors::{ValidatedPath, ValidatedQuery},
     services::PositionService,
     types::{
-        LiveMarketFeedResponse, MarketFeedValueStruct, MergedClosedPositionResponse,
-        MergedPositionResponse, OpenPositionsResponse, Side,
+        LiveMarketFeedResponse, MergedClosedPositionResponse, MergedPositionResponse,
+        OpenPositionsResponse,
     },
+    validation::address::{validate_evm_address, validate_solana_address, validate_timeframe},
 };
 
 #[derive(Deserialize, Validate)]
@@ -38,25 +38,16 @@ pub struct MergedPositionsParams {
     pub user_solana_address: String,
 }
 
-//Market feeed with price and funding rate
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct MarketFeedStruct {
-    hyperliquid: MarketFeedValueStruct,
-    pacifica: MarketFeedValueStruct,
-}
-
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct ChartParams {
     #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
 }
 
 pub async fn get_merged_open_positions(
-    Path(params): Path<MergedPositionsParams>,
+    ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
-    params.validate()?;
-
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
@@ -70,52 +61,23 @@ pub async fn get_merged_open_positions(
         pacifica_client.get_account_settings()
     );
 
-    let mut positions_map: HashMap<String, MergedPositionResponse> = HashMap::new();
-
+    let mut hl_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
     if let Ok(hl_positions) = hl_result {
-        for asset_position in hl_positions.asset_positions.iter() {
-            let pos = &asset_position.position;
-            let symbol = pos.coin.clone();
-            let size_value = parse_f64_or_zero(&pos.szi);
-            let side = if size_value > 0.0 {
-                Side::Long
-            } else {
-                Side::Short
-            };
-
-            let hl_position = OpenPositionsResponse {
-                symbol: symbol.clone(),
-                size: if side == Side::Short {
-                    (-size_value).to_string()
-                } else {
-                    pos.szi.clone()
-                },
-                side,
-                margin: pos.margin_used.clone(),
-                pnl: pos.unrealized_pnl.clone(),
-                funding: pos.cum_funding.all_time.clone(),
-                leverage: pos.leverage.value,
-                liquidation_price: pos.liquidation_px.clone().unwrap_or_default(),
-            };
-
-            positions_map
-                .entry(symbol.clone())
-                .or_insert_with(|| MergedPositionResponse {
-                    symbol: symbol.clone(),
-                    hyperliquid: None,
-                    pacifica: None,
-                })
-                .hyperliquid = Some(hl_position);
+        for asset_position in &hl_positions.asset_positions {
+            hl_positions_vec.push(PositionService::from_hyperliquid_position(
+                &asset_position.position,
+            ));
         }
     }
 
+    let mut pacifica_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
     if let Ok(pacifica_positions) = pacifica_result {
         if let Some(positions_data) = pacifica_positions.data {
             if pacifica_positions.success {
                 let account_settings = pacifica_account_result.ok().and_then(|r| r.data);
                 let snapshot = state.feed.borrow().clone();
 
-                for asset_position in positions_data.iter() {
+                for asset_position in &positions_data {
                     let symbol = asset_position.symbol.clone();
 
                     let leverage: u32 = account_settings
@@ -156,50 +118,27 @@ pub async fn get_merged_open_positions(
                         0.0
                     };
 
-                    let pacifica_position = OpenPositionsResponse {
-                        symbol: symbol.clone(),
-                        size: asset_position.amount.clone(),
-                        side: if asset_position.side == "bid" {
-                            Side::Long
-                        } else {
-                            Side::Short
-                        },
-                        pnl: if asset_position.side == "ask" {
-                            (-pnl).to_string()
-                        } else {
-                            pnl.to_string()
-                        },
-                        funding: asset_position.funding.clone().unwrap_or_default(),
-                        leverage,
-                        margin,
-                        liquidation_price: asset_position
-                            .liquidation_price
-                            .clone()
-                            .unwrap_or_default(),
-                    };
-
-                    positions_map
-                        .entry(symbol.clone())
-                        .or_insert_with(|| MergedPositionResponse {
-                            symbol: symbol.clone(),
-                            hyperliquid: None,
-                            pacifica: None,
-                        })
-                        .pacifica = Some(pacifica_position);
+                    pacifica_positions_vec.push(
+                        PositionService::from_pacifica_position_with_metrics(
+                            asset_position,
+                            leverage,
+                            margin,
+                            pnl,
+                        ),
+                    );
                 }
             }
         }
     }
 
-    let merged_positions: Vec<MergedPositionResponse> = positions_map.into_values().collect();
+    let merged_positions =
+        PositionService::merge_positions(hl_positions_vec, pacifica_positions_vec);
     Ok(Json(merged_positions))
 }
 
 pub async fn get_merged_closed_positions(
-    Path(params): Path<MergedPositionsParams>,
+    ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
 ) -> Result<Json<Vec<MergedClosedPositionResponse>>, AppError> {
-    params.validate()?;
-
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
@@ -234,18 +173,15 @@ pub async fn get_merged_closed_positions(
 pub async fn get_live_market_feed(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
-    // clone the formatted snapshot from FeedManager
     let snapshot = state.feed.borrow().clone();
     Ok(Json(snapshot.formatted.clone()))
 }
 
 pub async fn get_token_chart(
     Path(symbol): Path<String>,
-    Query(params): Query<ChartParams>,
+    ValidatedQuery(params): ValidatedQuery<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
-    params.validate()?;
-
     let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
