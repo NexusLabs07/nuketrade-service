@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{Path, State},
+    extract::State,
     http::{StatusCode, header},
     response::IntoResponse,
 };
@@ -9,14 +9,41 @@ use pacifica::{
     perp_metadata::PERP_META,
     services::deposit::{DepositPayload, deposit_to_pacifica},
 };
+use serde::Deserialize;
+use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
+    extractors::{ValidatedJson, ValidatedPath},
     features::auth::types::AuthClaims,
-    middleware::user::validate_solana_address,
-    types::{OpenPositionsResponse, Side},
+    services::PositionService,
+    types::OpenPositionsResponse,
+    validation::address::validate_solana_address,
 };
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct PacificaUserPath {
+    #[validate(custom(function = "validate_solana_address"))]
+    pub user_solana_address: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct PacificaDepositRequest {
+    #[validate(custom(function = "validate_solana_address"))]
+    pub user_address: String,
+    #[validate(range(min = 1, message = "Amount must be greater than 0"))]
+    pub amount: u64,
+}
+
+impl From<PacificaDepositRequest> for DepositPayload {
+    fn from(value: PacificaDepositRequest) -> Self {
+        Self {
+            user_address: value.user_address,
+            amount: value.amount,
+        }
+    }
+}
 
 //TODO: make them dynamic using cron later
 pub async fn get_perp_metadata() -> impl IntoResponse {
@@ -28,16 +55,10 @@ pub async fn get_perp_metadata() -> impl IntoResponse {
 }
 
 pub async fn get_user_open_positions(
-    Path(user_solana_address): Path<String>,
+    ValidatedPath(params): ValidatedPath<PacificaUserPath>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
-    validate_solana_address(&user_solana_address).map_err(|e| {
-        let mut errors = validator::ValidationErrors::new();
-        errors.add("user_solana_address", e);
-        AppError::Validation(errors)
-    })?;
-
-    let user_info_client = UserInfo::new(user_solana_address);
+    let user_info_client = UserInfo::new(params.user_solana_address);
 
     let open_positions: UserPositionsResponse = user_info_client.get_open_positions().await?;
     let account_setting: AccountSettingsResponse = user_info_client.get_account_settings().await?;
@@ -87,24 +108,12 @@ pub async fn get_user_open_positions(
             0.0
         };
 
-        open_position_response.push(OpenPositionsResponse {
-            symbol: asset_position.symbol.clone(),
-            size: asset_position.amount.clone(),
-            side: if asset_position.side == "bid" {
-                Side::Long
-            } else {
-                Side::Short
-            },
-            pnl: if asset_position.side == "ask" {
-                (-pnl).to_string()
-            } else {
-                pnl.to_string()
-            },
-            margin,
-            funding: asset_position.funding.clone().unwrap_or_default(),
+        open_position_response.push(PositionService::from_pacifica_position_with_metrics(
+            asset_position,
             leverage,
-            liquidation_price: asset_position.liquidation_price.clone().unwrap_or_default(),
-        });
+            margin,
+            pnl,
+        ));
     }
 
     Ok(Json(open_position_response))
@@ -113,28 +122,19 @@ pub async fn get_user_open_positions(
 pub async fn bridge_to_pacifica(
     Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
-    Json(payload): Json<DepositPayload>,
+    ValidatedJson(payload): ValidatedJson<PacificaDepositRequest>,
 ) -> Result<Json<String>, AppError> {
-    validate_solana_address(&payload.user_address).map_err(|e| {
-        let mut errors = validator::ValidationErrors::new();
-        errors.add("user_address", e);
-        AppError::Validation(errors)
-    })?;
-
     if payload.user_address != claims.solana_address {
         return Err(AppError::unauthorised(
             "payload.userAddress does not match authenticated Solana address",
         ));
     }
 
-    if payload.amount == 0 {
-        return Err(AppError::parse("amount", "Amount must be greater than 0"));
-    }
-
     let solana_rpc_url = state.config.solana_rpc_url;
     let fee_payer_private_key = state.config.solana_fee_payer_private_key;
 
-    let serialized_tx = deposit_to_pacifica(solana_rpc_url, fee_payer_private_key, payload).await?;
+    let serialized_tx =
+        deposit_to_pacifica(solana_rpc_url, fee_payer_private_key, payload.into()).await?;
 
     Ok(Json(serialized_tx))
 }

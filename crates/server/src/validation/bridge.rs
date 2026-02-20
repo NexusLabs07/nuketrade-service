@@ -4,7 +4,7 @@ use alloy::{
     sol,
 };
 use bridge::MIN_BRIDGE_AMOUNT;
-use perp_core::{Chain, chains::get_usdc_address, config::Config};
+use perp_core::{Chain, chains::get_usdc_address, config::Config, has_sufficient_balance};
 use validator::ValidationError;
 
 use crate::features::bridge::controller::QuotePayload;
@@ -28,7 +28,6 @@ pub fn validate_destination_usdc_address(
     Ok(())
 }
 
-/// Validates that the user has sufficient USDC balance on Base chain
 pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::ValidationError> {
     let base_rpc_url = Config::from_env()
         .map_err(|_| {
@@ -63,7 +62,6 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
     })?;
 
     let provider = ProviderBuilder::new().connect_http(base_rpc_url.parse().unwrap());
-
     let usdc = IERC20::new(usdc_address, provider);
 
     let balance = usdc.balanceOf(user_address).call().await.map_err(|e| {
@@ -72,7 +70,7 @@ pub async fn validate_balance(payload: &QuotePayload) -> Result<(), validator::V
         err
     })?;
 
-    if balance < amount {
+    if !has_sufficient_balance(&balance, &amount) {
         let mut err = validator::ValidationError::new("insufficient_balance");
         err.message =
             Some(format!("Insufficient USDC: required {amount}, available {balance}").into());

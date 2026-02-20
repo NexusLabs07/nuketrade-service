@@ -5,7 +5,14 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::{AppState, error::AppError, middleware::user::validate_addresses_are_null};
+use crate::{
+    AppState,
+    error::AppError,
+    validation::user::{
+        validate_connected_evm_address_none, validate_connected_solana_address_none,
+        validate_turnkey_evm_address_none,
+    },
+};
 
 #[derive(Serialize)]
 pub struct WaitlistSuccessResponse {
@@ -30,17 +37,19 @@ pub struct UserPositionSuccessResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[validate(schema(function = "validate_addresses_are_null"))]
 pub struct CreateUserPayload {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 
+    #[validate(custom(function = "validate_connected_evm_address_none"))]
     pub connected_evm_address: Option<String>,
 
+    #[validate(custom(function = "validate_connected_solana_address_none"))]
     pub connected_solana_address: Option<String>,
 
     pub referred_by: Option<String>,
 
+    #[validate(custom(function = "validate_turnkey_evm_address_none"))]
     pub turnkey_evm_address: Option<String>,
 }
 

@@ -44,20 +44,6 @@ impl HedgeService {
         let exchange_a_str = exchange_a.to_string();
         let exchange_b_str = exchange_b.to_string();
 
-        if exchange_a_str == exchange_b_str {
-            return Err(AppError::parse("exchanges", "Exchanges must be different"));
-        }
-
-        // Validate margin
-        if payload.margin_usd <= 0.0 {
-            return Err(AppError::parse("margin_usd", "Margin must be positive"));
-        }
-
-        // Validate leverage
-        if payload.leverage < 1.0 {
-            return Err(AppError::parse("leverage", "Leverage must be >= 1"));
-        }
-
         let intent_id = uuid::Uuid::new_v4();
         let half_margin = payload.margin_usd / 2.0;
 
