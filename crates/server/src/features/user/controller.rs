@@ -2,6 +2,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use db::user::queries;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -12,6 +13,16 @@ pub struct WaitlistSuccessResponse {
     pub message: String,
     pub user_id: Option<uuid::Uuid>,
     pub user_referral_code: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PacificaClaimRequest {
+    user_id: uuid::Uuid,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PacificaClaimResponse {
+    is_claimed: bool,
 }
 
 #[derive(Serialize)]
@@ -77,4 +88,29 @@ pub async fn get_user_position(
     let position = db::user::get_user_position(state.db, user_id).await?;
 
     Ok(Json(UserPositionSuccessResponse { position }))
+}
+
+pub async fn mark_pacifica_claim(
+    State(state): State<AppState>,
+    Json(payload): Json<PacificaClaimRequest>,
+) -> Result<(), AppError> {
+    if let Err(err) = queries::mark_pacifica_claim(state.db, payload.user_id).await {
+        return Err(AppError::Database(err));
+    };
+
+    Ok(())
+}
+
+pub async fn get_pacifica_claim_status(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<PacificaClaimResponse>, AppError> {
+    let user_id_uuid = uuid::Uuid::parse_str(&user_id).map_err(|_| AppError::Parse {
+        field: String::from("uuid"),
+        message: String::from("Failed to parse string into uuid"),
+    })?;
+
+    let result = queries::get_pacifica_claim_status(state.db, user_id_uuid).await?;
+
+    Ok(Json(PacificaClaimResponse { is_claimed: result }))
 }

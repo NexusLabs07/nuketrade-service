@@ -4,11 +4,13 @@ use axum::{
     http::{StatusCode, header},
     response::IntoResponse,
 };
+use db::user::queries;
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse},
     perp_metadata::PERP_META,
     services::deposit::{DepositPayload, deposit_to_pacifica},
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     AppState,
