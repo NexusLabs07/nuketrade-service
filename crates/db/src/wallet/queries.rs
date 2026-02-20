@@ -19,13 +19,14 @@ where
     E: Executor<'e, Database = Postgres>,
 {
     let query = r#"
-        INSERT INTO wallets(id, turnkey_evm_address)
-        VALUES($1, $2)
+        INSERT INTO wallets(id, turnkey_evm_address, turnkey_solana_address)
+        VALUES($1, $2, $3)
     "#;
 
     sqlx::query(query)
         .bind(wallet.id)
         .bind(&wallet.turnkey_evm_address)
+        .bind(&wallet.turnkey_solana_address)
         .execute(executor)
         .await?;
 

@@ -123,6 +123,33 @@ pub async fn get_referral_count_from_user_id(
     Ok(row.0)
 }
 
+pub async fn upsert_google_user(
+    db_conn: Arc<PgPool>,
+    email: String,
+    name: String,
+) -> Result<User, anyhow::Error> {
+    let id = uuid::Uuid::new_v4();
+    let referral_code = uuid::Uuid::new_v4().to_string().replace('-', "")[..10].to_string();
+
+    let query = r#"
+        INSERT INTO users (id, email, name, referral_code)
+        VALUES ($1, LOWER($2), $3, $4)
+        ON CONFLICT (LOWER(email)) DO UPDATE
+        SET name = COALESCE(EXCLUDED.name, users.name), updated_at = now()
+        RETURNING *
+    "#;
+
+    let user = sqlx::query_as::<_, User>(query)
+        .bind(id)
+        .bind(&email)
+        .bind(&name)
+        .bind(&referral_code)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(user)
+}
+
 pub async fn get_user_position(
     db_conn: Arc<PgPool>,
     user_id: uuid::Uuid,

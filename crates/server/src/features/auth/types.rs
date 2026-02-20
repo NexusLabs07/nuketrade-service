@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
-use validator::Validate;
+
+/// Claims extracted from Google's ID token (RS256, verified against Google JWKS).
+#[derive(Debug, Deserialize)]
+pub struct GoogleIdClaims {
+    pub sub: String,
+    pub email: String,
+    pub name: String,
+    pub aud: String,
+    pub iss: String,
+    pub exp: u64,
+    pub iat: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthClaims {
@@ -12,14 +23,16 @@ pub struct AuthClaims {
     pub exp: u64,
 }
 
-#[derive(Debug, Clone, Deserialize, Validate)]
+/// Unified login request — send either `idToken` (Google) or the three Turnkey fields.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    #[validate(length(min = 1, max = 128, message = "suborgId must not be empty"))]
+    // Google path
+    pub id_token: String,
+
+    // Turnkey path
     pub suborg_id: String,
-    #[validate(length(min = 1, max = 2048, message = "message must not be empty"))]
     pub message: String,
-    #[validate(length(min = 1, max = 180, message = "signature must not be empty"))]
     pub signature: String,
 }
 

@@ -9,7 +9,7 @@ use pacifica::services::withdraw::WithdrawRequest;
 use perp_core::{Chain, exchange::PerpetualExchange};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::{Validate, ValidationErrors};
+use validator::Validate;
 
 use crate::{
     error::AppError,
