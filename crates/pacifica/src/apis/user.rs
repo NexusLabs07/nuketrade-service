@@ -47,6 +47,43 @@ pub struct AccountSetting {
     pub updated_at: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserPositionsHistoryResponse {
+    pub success: bool,
+    pub data: Option<Vec<UserPositionHistory>>,
+    pub error: Option<String>,
+    pub code: Option<String>,
+    pub last_order_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UserPositionHistory {
+    #[serde(default)]
+    pub order_id: u64,
+    #[serde(default)]
+    pub account: String,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub side: String,
+    #[serde(default)]
+    pub order_type: String,
+    #[serde(default)]
+    pub amount: String,
+    #[serde(default)]
+    pub is_liquidation: bool,
+    #[serde(default)]
+    pub execution_price: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub timestamp: i64,
+    #[serde(default)]
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct UserInfo {
     pub client: Client,
@@ -98,6 +135,28 @@ impl UserInfo {
             Err(_err) => {
                 return Err(anyhow::Error::msg(
                     "Failed to get pacifica user account setting",
+                ));
+            }
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_closed_positions(&self) -> Result<UserPositionsHistoryResponse> {
+        let response = self
+            .client
+            .get(format!(
+                "{}{}{}",
+                self.base_url, "/positions/history?account=", self.solana_address
+            ))
+            .send()
+            .await?;
+
+        let data: UserPositionsHistoryResponse = match response.json().await {
+            Ok(d) => d,
+            Err(_err) => {
+                return Err(anyhow::Error::msg(
+                    "Failed to get pacifica closed positions",
                 ));
             }
         };

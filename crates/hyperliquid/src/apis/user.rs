@@ -106,6 +106,34 @@ pub struct Leverage {
     pub value: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClosedPositionRequest {
+    #[serde(rename = "type")]
+    pub request_type: String,
+    pub user: String,
+    #[serde(rename = "aggregateByTime")]
+    pub aggregate_by_time: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UserFill {
+    pub coin: String,
+    #[serde(default)]
+    pub dir: String,
+    #[serde(default)]
+    pub side: String,
+    #[serde(default)]
+    pub px: String,
+    #[serde(default)]
+    pub sz: String,
+    #[serde(rename = "closedPnl", default)]
+    pub closed_pnl: String,
+    #[serde(rename = "startPosition", default)]
+    pub start_position: String,
+    #[serde(default)]
+    pub time: i64,
+}
+
 impl UserInfo {
     pub fn new(evm_address: Option<String>, solana_address: Option<String>) -> Self {
         Self {
@@ -174,6 +202,39 @@ impl UserInfo {
                 );
                 return Err(anyhow::Error::msg(
                     "Failed to fetch hyperliquid open positions",
+                ));
+            }
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_closed_positions(self) -> Result<Vec<UserFill>> {
+        let evm_address = self.evm_address.ok_or_else(|| {
+            anyhow::Error::msg("EVM address is required for closed positions query")
+        })?;
+
+        let request = ClosedPositionRequest {
+            request_type: "userFills".to_string(),
+            user: evm_address,
+            aggregate_by_time: false,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}{}", self.base_url, "/info"))
+            .json(&request)
+            .send()
+            .await?;
+
+        let data: Vec<UserFill> = match response.json().await {
+            Ok(d) => d,
+            Err(err) => {
+                log::error!(
+                    "Failed to fetch hyperliquid closed positions. Failed with error: {err:?}"
+                );
+                return Err(anyhow::Error::msg(
+                    "Failed to fetch hyperliquid closed positions",
                 ));
             }
         };

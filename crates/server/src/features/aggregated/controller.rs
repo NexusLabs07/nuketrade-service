@@ -6,17 +6,16 @@ use axum::{
     extract::{Path, State},
 };
 use db::funding::{FundingRate, get_token_chart_info};
-use hyperliquid::{
-    apis::user::{ClearinghouseState, UserInfo as HyperliquidUserInfo},
-    // helpers::markets::HL_MARKETS,
-};
+use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
 use pacifica::{
-    apis::user::{AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsResponse},
+    apis::user::{
+        AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
+        UserPositionsResponse,
+    },
     helpers::markets::PACIFICA_MARKETS,
 };
 use perp_core::SevenDayApr;
 use serde::Deserialize;
-
 use validator::Validate;
 
 use crate::{
@@ -24,7 +23,10 @@ use crate::{
     error::AppError,
     extractors::{ValidatedPath, ValidatedQuery},
     services::PositionService,
-    types::{LiveMarketFeedResponse, MergedPositionResponse, OpenPositionsResponse},
+    types::{
+        LiveMarketFeedResponse, MergedClosedPositionResponse, MergedPositionResponse,
+        OpenPositionsResponse,
+    },
     validation::address::{validate_evm_address, validate_solana_address, validate_timeframe},
 };
 
@@ -37,7 +39,6 @@ pub struct MergedPositionsParams {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-
 pub struct ChartParams {
     #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
@@ -135,10 +136,43 @@ pub async fn get_merged_open_positions(
     Ok(Json(merged_positions))
 }
 
+pub async fn get_merged_closed_positions(
+    ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
+) -> Result<Json<Vec<MergedClosedPositionResponse>>, AppError> {
+    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
+
+    let (hl_result, pacifica_result): (
+        Result<Vec<UserFill>>,
+        Result<UserPositionsHistoryResponse>,
+    ) = tokio::join!(
+        hl_client.get_closed_positions(),
+        pacifica_client.get_closed_positions()
+    );
+
+    let hl_fills = hl_result.unwrap_or_default();
+    let hl_closed_positions = hl_fills
+        .iter()
+        .filter_map(PositionService::from_hyperliquid_closed_fill)
+        .collect::<Vec<_>>();
+
+    let pacifica_closed_positions = pacifica_result
+        .ok()
+        .and_then(|history| if history.success { history.data } else { None })
+        .unwrap_or_default()
+        .iter()
+        .filter_map(PositionService::from_pacifica_closed_position)
+        .collect::<Vec<_>>();
+
+    let merged_positions =
+        PositionService::merge_closed_positions(hl_closed_positions, pacifica_closed_positions);
+
+    Ok(Json(merged_positions))
+}
+
 pub async fn get_live_market_feed(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
-    // clone the formatted snapshot from FeedManager
     let snapshot = state.feed.borrow().clone();
     Ok(Json(snapshot.formatted.clone()))
 }
