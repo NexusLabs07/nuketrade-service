@@ -8,6 +8,13 @@ pub async fn login(
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
+    if let Some(expected) = &state.config.access_code {
+        let provided = payload.access_code.as_deref().unwrap_or("");
+        if provided != expected.as_str() {
+            return Err(AppError::unauthorised("Invalid access code"));
+        }
+    }
+
     let result = state
         .auth
         .login(payload.suborg_id.trim().to_string(), payload.message, payload.signature)

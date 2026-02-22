@@ -45,6 +45,9 @@ pub struct Config {
     pub turnkey_api_private_key: String,
     pub auth_jwt_secret: String,
     pub auth_jwt_ttl_days: u64,
+
+    // Optional access code gate for login
+    pub access_code: Option<String>,
 }
 
 impl Config {
@@ -112,6 +115,8 @@ impl Config {
         let google_client_id = std::env::var("GOOGLE_CLIENT_ID")
             .context("GOOGLE_CLIENT_ID environment variable is required")?;
 
+        let access_code = std::env::var("ACCESS_CODE").ok();
+
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -130,6 +135,7 @@ impl Config {
             auth_jwt_secret,
             auth_jwt_ttl_days,
             google_client_id,
+            access_code,
         })
     }
 

@@ -39,6 +39,9 @@ pub struct LoginRequest {
     pub message: String,
     #[validate(length(min = 1, message = "signature must not be empty"))]
     pub signature: String,
+
+    // Access gate
+    pub access_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
