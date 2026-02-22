@@ -14,9 +14,9 @@ use validator::Validate;
 use crate::{
     error::AppError,
     features::{auth::types::AuthClaims, withdraw::services::WithdrawService},
-    middleware::user::{validate_evm_address, validate_solana_address},
     services::withdraw::NextActionResponse,
     state::AppState,
+    validation::address::{validate_evm_address, validate_solana_address},
 };
 use db::withdraw::{self as withdraw_db};
 
@@ -252,7 +252,10 @@ pub async fn create_withdraw_transaction(
             let value = serde_json::to_value(&response)?;
             Ok(Json(value))
         }
-        _ => Err(AppError::parse("exchange", "unsupported exchange for withdrawal")),
+        _ => Err(AppError::parse(
+            "exchange",
+            "unsupported exchange for withdrawal",
+        )),
     }
 }
 

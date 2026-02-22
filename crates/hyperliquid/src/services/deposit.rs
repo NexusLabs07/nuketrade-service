@@ -7,7 +7,7 @@ use alloy::{
     sol,
     sol_types::SolCall,
 };
-use perp_core::Chain;
+use perp_core::{Chain, has_sufficient_balance};
 use serde::{Deserialize, Serialize};
 
 use crate::HYPERLIQUID_DEPOSIT_CONTRACT_ADDRESS;
@@ -102,7 +102,7 @@ async fn check_user_balance(
         .await
         .map_err(|e| DepositError::ContractError(format!("{e:?}")))?;
 
-    if balance < required_amount {
+    if !has_sufficient_balance(&balance, &required_amount) {
         return Err(DepositError::InsufficientBalance {
             required: required_amount,
             available: balance,

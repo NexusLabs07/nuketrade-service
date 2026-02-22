@@ -13,7 +13,7 @@ pub use exchange::{
 
 // pub use types::LiveMarketFeed;
 pub use types::{LiveMarketFeed, MarketFeedUpdate, PairSpread, RawMarketData, SevenDayApr};
-pub use utils::{parse_f64, parse_f64_or, parse_f64_or_zero};
+pub use utils::{has_sufficient_balance, parse_f64, parse_f64_or, parse_f64_or_zero};
 pub use ws::{WsConfig, WsMessage, run_funding_feed};
 
 // Re-export chain types and Solana program constants

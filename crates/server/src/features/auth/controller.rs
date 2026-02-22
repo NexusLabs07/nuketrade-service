@@ -1,16 +1,13 @@
 use axum::{Json, extract::State};
-use validator::Validate;
 
-use crate::{error::AppError, state::AppState};
+use crate::{error::AppError, extractors::ValidatedJson, state::AppState};
 
 use super::types::{LoginRequest, LoginResponse};
 
 pub async fn login(
     State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
+    ValidatedJson(payload): ValidatedJson<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
-    payload.validate()?;
-
     let result = state
         .auth
         .login(payload.suborg_id.trim().to_string(), payload.message, payload.signature)

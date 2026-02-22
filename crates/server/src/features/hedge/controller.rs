@@ -6,13 +6,19 @@ use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::services::hedge::NextActionResponse;
-use crate::state::AppState;
-use crate::{error::AppError, features::hedge::services::HedgeService};
 use crate::{
+    error::AppError,
+    extractors::ValidatedJson,
     features::auth::types::AuthClaims,
-    middleware::user::{validate_evm_address, validate_solana_address},
+    features::hedge::services::HedgeService,
+    services::hedge::NextActionResponse,
+    state::AppState,
+    validation::{
+        address::{validate_evm_address, validate_solana_address},
+        hedge::validate_distinct_exchanges,
+    },
 };
+
 use db::hedge::{self as hedge_db};
 
 // ============================= Request / Response Types =============================
@@ -22,10 +28,11 @@ pub struct CreateHedgeIntentRequest {
     pub user_id: uuid::Uuid,
     #[validate(length(min = 1, message = "Asset must not be empty"))]
     pub asset: String,
+    #[validate(custom(function = "validate_distinct_exchanges"))]
     pub exchanges: [PerpetualExchange; 2],
     #[validate(range(exclusive_min = 0.0, message = "Margin must be greater than 0"))]
     pub margin_usd: f64,
-    #[validate(range(exclusive_min = 0.0, message = "Leverage must be greater than 0"))]
+    #[validate(range(min = 1.0, message = "Leverage must be >= 1"))]
     pub leverage: f64,
     #[validate(custom(function = "validate_evm_address"))]
     pub evm_address: String,
@@ -75,10 +82,8 @@ pub struct HedgeIntentDetailResponse {
 pub async fn create_hedge_intent(
     Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
-    Json(payload): Json<CreateHedgeIntentRequest>,
+    ValidatedJson(payload): ValidatedJson<CreateHedgeIntentRequest>,
 ) -> Result<Json<CreateHedgeIntentResponse>, AppError> {
-    payload.validate()?;
-
     if !payload
         .evm_address
         .eq_ignore_ascii_case(&claims.evm_address)
@@ -126,10 +131,8 @@ pub async fn report_action_result(
     Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Path(intent_id): Path<uuid::Uuid>,
-    Json(payload): Json<ActionResultRequest>,
+    ValidatedJson(payload): ValidatedJson<ActionResultRequest>,
 ) -> Result<Json<ActionResultResponse>, AppError> {
-    payload.validate()?;
-
     let intent = hedge_db::get_hedge_intent(state.db.clone(), intent_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Hedge intent {intent_id}")))?;
