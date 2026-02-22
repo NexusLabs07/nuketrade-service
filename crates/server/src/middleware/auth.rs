@@ -109,6 +109,7 @@ mod tests {
             auth_jwt_secret: JWT_SECRET.into(),
             auth_jwt_ttl_days: 1,
             google_client_id: String::from("fake_client"),
+            access_code: Some(String::from("ABCD")),
         }
     }
 

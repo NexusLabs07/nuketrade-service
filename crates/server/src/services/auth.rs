@@ -13,6 +13,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use db::user::upsert_google_user;
+use uuid::Uuid;
 
 use crate::{
     error::AppError,
@@ -125,7 +126,7 @@ impl AuthService {
         id_token: String,
         evm_address: String,
         solana_address: String,
-    ) -> Result<(), AppError> {
+    ) -> Result<(Uuid, Uuid), AppError> {
         #[derive(Debug, Deserialize)]
         struct Jwk {
             kid: String,
@@ -174,11 +175,17 @@ impl AuthService {
         let google_claims = token_data.claims;
 
         // Upsert wallet then user into the DB
-        upsert_google_user(db, google_claims.email.clone(), google_claims.name.clone(), evm_address, solana_address)
-            .await
-            .map_err(|e| AppError::internal(format!("failed to upsert Google user: {e}")))?;
+        let (wallet_id, user) = upsert_google_user(
+            db,
+            google_claims.email.clone(),
+            google_claims.name.clone(),
+            evm_address,
+            solana_address,
+        )
+        .await
+        .map_err(|e| AppError::internal(format!("failed to upsert Google user: {e}")))?;
 
-        Ok(())
+        Ok((wallet_id, user.id))
     }
 
     pub fn verify_token(&self, token: &str) -> Result<AuthClaims, AppError> {

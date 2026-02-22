@@ -9,7 +9,10 @@ use crate::{
         queries::{insert_points_with_executor, update_points_with_executor},
     },
     user::models::User,
-    wallet::{models::Wallet, queries::{insert_wallet_with_executor, upsert_wallet_with_executor}},
+    wallet::{
+        models::Wallet,
+        queries::{insert_wallet_with_executor, upsert_wallet_with_executor},
+    },
 };
 
 #[derive(sqlx::FromRow, Serialize, Deserialize)]
@@ -135,7 +138,7 @@ pub async fn upsert_google_user(
     name: String,
     evm_address: String,
     solana_address: String,
-) -> Result<User, anyhow::Error> {
+) -> Result<(uuid::Uuid, User), anyhow::Error> {
     let mut tx = db_conn.begin().await?;
 
     let wallet = Wallet {
@@ -171,7 +174,7 @@ pub async fn upsert_google_user(
 
     tx.commit().await?;
 
-    Ok(user)
+    Ok((wallet_id, user))
 }
 
 pub async fn get_user_position(

@@ -17,15 +17,26 @@ pub async fn login(
 
     let result = state
         .auth
-        .login(payload.suborg_id.trim().to_string(), payload.message, payload.signature)
+        .login(
+            payload.suborg_id.trim().to_string(),
+            payload.message,
+            payload.signature,
+        )
         .await?;
 
-    state
+    let (wallet_id, user_id) = state
         .auth
-        .google_login(state.db.clone(), payload.id_token, result.evm_address.clone(), result.solana_address.clone())
+        .google_login(
+            state.db.clone(),
+            payload.id_token,
+            result.evm_address.clone(),
+            result.solana_address.clone(),
+        )
         .await?;
 
     Ok(Json(LoginResponse {
+        wallet_id: wallet_id.to_string(),
+        user_id: user_id.to_string(),
         token: result.token,
         evm_address: result.evm_address,
         solana_address: result.solana_address,
