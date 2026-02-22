@@ -12,7 +12,12 @@ use perp_core::config::Config;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{error::AppError, features::auth::types::AuthClaims};
+use db::user::upsert_google_user;
+
+use crate::{
+    error::AppError,
+    features::auth::types::{AuthClaims, GoogleIdClaims},
+};
 
 const TURNKEY_SIGNATURE_SCHEME: &str = "SIGNATURE_SCHEME_TK_API_P256";
 const ADDRESS_FORMAT_ETHEREUM: &str = "ADDRESS_FORMAT_ETHEREUM";
@@ -27,6 +32,7 @@ pub struct AuthService {
     turnkey_api_private_key: String,
     jwt_secret: String,
     jwt_ttl_secs: u64,
+    google_client_id: String,
 }
 
 impl fmt::Debug for AuthService {
@@ -68,6 +74,7 @@ impl AuthService {
             turnkey_api_private_key: config.turnkey_api_private_key.clone(),
             jwt_secret: config.auth_jwt_secret.clone(),
             jwt_ttl_secs: config.auth_jwt_ttl_days.saturating_mul(24 * 60 * 60),
+            google_client_id: config.google_client_id.clone(),
         })
     }
 
@@ -110,6 +117,66 @@ impl AuthService {
             solana_address,
             expires_at_unix: exp,
         })
+    }
+
+    pub async fn google_login(
+        &self,
+        db: std::sync::Arc<sqlx::PgPool>,
+        id_token: String,
+    ) -> Result<(), AppError> {
+        #[derive(Debug, Deserialize)]
+        struct Jwk {
+            kid: String,
+            n: String,
+            e: String,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct JwkSet {
+            keys: Vec<Jwk>,
+        }
+
+        // Decode header (unverified) to get the key ID
+        let header = jsonwebtoken::decode_header(&id_token)
+            .map_err(|_| AppError::unauthorised("invalid Google ID token header"))?;
+        let kid = header
+            .kid
+            .ok_or_else(|| AppError::unauthorised("Google ID token missing kid"))?;
+
+        // Fetch Google's public keys
+        let jwks: JwkSet = self
+            .http
+            .get("https://www.googleapis.com/oauth2/v3/certs")
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|e| AppError::network(format!("failed to parse Google JWKS: {e}")))?;
+
+        let jwk = jwks
+            .keys
+            .iter()
+            .find(|k| k.kid == kid)
+            .ok_or_else(|| AppError::unauthorised("no matching Google public key for kid"))?;
+
+        let decoding_key = DecodingKey::from_rsa_components(&jwk.n, &jwk.e)
+            .map_err(|e| AppError::internal(format!("failed to build Google decoding key: {e}")))?;
+
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_audience(&[&self.google_client_id]);
+        validation.set_issuer(&["accounts.google.com", "https://accounts.google.com"]);
+
+        let token_data = decode::<GoogleIdClaims>(&id_token, &decoding_key, &validation)
+            .map_err(|_| AppError::unauthorised("invalid or expired Google ID token"))?;
+
+        let google_claims = token_data.claims;
+
+        // Upsert the user into the DB
+        upsert_google_user(db, google_claims.email.clone(), google_claims.name.clone())
+            .await
+            .map_err(|e| AppError::internal(format!("failed to upsert Google user: {e}")))?;
+
+        Ok(())
     }
 
     pub fn verify_token(&self, token: &str) -> Result<AuthClaims, AppError> {
@@ -369,6 +436,7 @@ mod tests {
             turnkey_api_private_key: "a".repeat(64),
             jwt_secret: jwt_secret.into(),
             jwt_ttl_secs: 3600,
+            google_client_id: "test-google-client-id".into(),
         }
     }
 
@@ -376,11 +444,7 @@ mod tests {
     fn issue_and_verify_jwt_round_trip() {
         let svc = test_auth_service("test-secret-key-12345");
         let (token, exp) = svc
-            .issue_jwt(
-                "sub-org-1".into(),
-                "0xABCD".into(),
-                "SoLaNaAddr".into(),
-            )
+            .issue_jwt("sub-org-1".into(), "0xABCD".into(), "SoLaNaAddr".into())
             .unwrap();
 
         assert!(!token.is_empty());
@@ -450,8 +514,7 @@ mod tests {
 
     #[test]
     fn parse_evm_address_valid() {
-        let addr = parse_evm_address("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "test")
-            .unwrap();
+        let addr = parse_evm_address("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "test").unwrap();
         assert_eq!(
             addr,
             "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"

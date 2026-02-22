@@ -35,6 +35,9 @@ pub struct Config {
     //Relay
     pub relay_api_key: String,
 
+    // Google OAuth
+    pub google_client_id: String,
+
     // Auth / Turnkey
     pub turnkey_api_base_url: String,
     pub turnkey_parent_org_id: String,
@@ -106,6 +109,9 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(15);
 
+        let google_client_id = std::env::var("GOOGLE_CLIENT_ID")
+            .context("GOOGLE_CLIENT_ID environment variable is required")?;
+
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -123,6 +129,7 @@ impl Config {
             turnkey_api_private_key,
             auth_jwt_secret,
             auth_jwt_ttl_days,
+            google_client_id,
         })
     }
 

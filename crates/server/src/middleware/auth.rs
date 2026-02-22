@@ -8,6 +8,36 @@ use axum::{
 
 use crate::{error::AppError, state::AppState};
 
+/// Method-agnostic auth middleware — verifies the JWT and injects `AuthClaims` for any HTTP method.
+/// Use this on routers that include GET endpoints requiring authentication.
+pub async fn require_auth(
+    State(state): State<AppState>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Result<Response, AppError> {
+    use crate::features::auth::types::AuthClaims;
+
+    // Skip if claims were already injected by an outer middleware (e.g. require_post_auth).
+    if request.extensions().get::<AuthClaims>().is_some() {
+        return Ok(next.run(request).await);
+    }
+
+    let auth_header = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AppError::unauthorised("missing Authorization header"))?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| AppError::unauthorised("Authorization must be `Bearer <token>`"))?;
+
+    let claims = state.auth.verify_token(token)?;
+    request.extensions_mut().insert(claims);
+
+    Ok(next.run(request).await)
+}
+
 pub async fn require_post_auth(
     State(state): State<AppState>,
     mut request: Request<Body>,
@@ -78,6 +108,7 @@ mod tests {
             turnkey_api_private_key: "a".repeat(64),
             auth_jwt_secret: JWT_SECRET.into(),
             auth_jwt_ttl_days: 1,
+            google_client_id: String::from("fake_client"),
         }
     }
 

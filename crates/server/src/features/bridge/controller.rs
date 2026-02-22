@@ -65,11 +65,13 @@ pub async fn get_quote(
         ));
     }
 
-    validate_balance(&payload).await.map_err(|e| {
-        let mut errors = validator::ValidationErrors::new();
-        errors.add("amount", e);
-        AppError::Validation(errors)
-    })?;
+    validate_balance(&payload, &app_state.config.base_rpc_url)
+        .await
+        .map_err(|e| {
+            let mut errors = validator::ValidationErrors::new();
+            errors.add("amount", e);
+            AppError::Validation(errors)
+        })?;
 
     //Deposit only available from base as of now
     let quote_request = QuoteRequest {

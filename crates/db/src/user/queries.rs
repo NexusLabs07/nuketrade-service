@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use sqlx::{Executor, PgPool, Postgres};
 
 use crate::{
@@ -10,6 +11,11 @@ use crate::{
     user::models::User,
     wallet::{models::Wallet, queries::insert_wallet_with_executor},
 };
+
+#[derive(sqlx::FromRow, Serialize, Deserialize)]
+pub struct PacificaClaimResult {
+    is_pacifica_access_claimed: bool,
+}
 
 pub async fn get_referral_count_from_referral_code(
     db_conn: Arc<PgPool>,
@@ -123,6 +129,33 @@ pub async fn get_referral_count_from_user_id(
     Ok(row.0)
 }
 
+pub async fn upsert_google_user(
+    db_conn: Arc<PgPool>,
+    email: String,
+    name: String,
+) -> Result<User, anyhow::Error> {
+    let id = uuid::Uuid::new_v4();
+    let referral_code = uuid::Uuid::new_v4().to_string().replace('-', "")[..10].to_string();
+
+    let query = r#"
+        INSERT INTO users (id, email, name, referral_code)
+        VALUES ($1, LOWER($2), $3, $4)
+        ON CONFLICT (LOWER(email)) DO UPDATE
+        SET name = COALESCE(EXCLUDED.name, users.name), updated_at = now()
+        RETURNING *
+    "#;
+
+    let user = sqlx::query_as::<_, User>(query)
+        .bind(id)
+        .bind(&email)
+        .bind(&name)
+        .bind(&referral_code)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(user)
+}
+
 pub async fn get_user_position(
     db_conn: Arc<PgPool>,
     user_id: uuid::Uuid,
@@ -141,4 +174,29 @@ pub async fn get_user_position(
         .await?;
 
     Ok(row.0)
+}
+
+pub async fn mark_pacifica_claim(
+    db_conn: Arc<PgPool>,
+    user_id: uuid::Uuid,
+) -> Result<(), sqlx::Error> {
+    let query = r#"UPDATE users SET is_pacifica_access_claimed = true WHERE id = $1"#;
+
+    sqlx::query(query).bind(user_id).execute(&*db_conn).await?;
+
+    Ok(())
+}
+
+pub async fn get_pacifica_claim_status(
+    db_conn: Arc<PgPool>,
+    user_id: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let query = r#"SELECT is_pacifica_access_claimed FROM users WHERE id = $1"#;
+
+    let is_claimed = sqlx::query_as::<_, PacificaClaimResult>(query)
+        .bind(user_id)
+        .fetch_one(&*db_conn)
+        .await?;
+
+    Ok(is_claimed.is_pacifica_access_claimed)
 }

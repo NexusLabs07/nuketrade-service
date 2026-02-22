@@ -10,11 +10,12 @@ pub async fn login(
 ) -> Result<Json<LoginResponse>, AppError> {
     let result = state
         .auth
-        .login(
-            payload.suborg_id.trim().to_string(),
-            payload.message,
-            payload.signature,
-        )
+        .login(payload.suborg_id.trim().to_string(), payload.message, payload.signature)
+        .await?;
+
+    state
+        .auth
+        .google_login(state.db.clone(), payload.id_token)
         .await?;
 
     Ok(Json(LoginResponse {
