@@ -26,13 +26,19 @@ pub async fn withdraw(payload: WithdrawRequest) -> Result<bool> {
         .send()
         .await?;
 
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        log::error!("Pacifica withdraw returned HTTP {status}: {body}");
+        return Err(anyhow::anyhow!("Pacifica withdraw failed with HTTP {status}"));
+    }
+
     let data: WithdrawResponse = match response.json().await {
         Ok(d) => d,
         Err(err) => {
-            log::error!("Failed to submit pacifica withdrawal transaction {err:?}");
-
+            log::error!("Failed to parse Pacifica withdrawal response: {err:?}");
             return Err(anyhow::Error::msg(
-                "Pacifica: Failed to get submit withdrawal transaction",
+                "Pacifica: Failed to parse withdrawal response",
             ));
         }
     };

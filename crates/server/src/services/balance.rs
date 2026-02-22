@@ -63,7 +63,12 @@ async fn query_hl_margin_balance(evm_address: &str) -> Result<f64, anyhow::Error
     let state: HlClearinghouseResponse = response.json().await?;
 
     // `withdrawable` represents available USDC not locked in positions.
-    let withdrawable = state.withdrawable.parse::<f64>().unwrap_or(0.0);
+    let withdrawable = state.withdrawable.parse::<f64>().map_err(|e| {
+        anyhow::anyhow!(
+            "Hyperliquid returned non-numeric withdrawable '{}': {e}",
+            state.withdrawable
+        )
+    })?;
 
     Ok(withdrawable)
 }

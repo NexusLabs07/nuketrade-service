@@ -6,6 +6,11 @@ use crate::withdraw::models::{
     NewWithdrawalIntent, NewWithdrawalStep, WithdrawalIntent, WithdrawalStep,
 };
 
+const VALID_INTENT_STATUSES: &[&str] =
+    &["CREATED", "WITHDRAWING", "WITHDRAWN", "BRIDGING", "COMPLETED", "FAILED"];
+
+const VALID_STEP_STATUSES: &[&str] = &["PENDING", "CONFIRMED", "FAILED"];
+
 pub async fn create_withdrawal_intent(
     db: Arc<PgPool>,
     intent: &NewWithdrawalIntent,
@@ -62,6 +67,10 @@ pub async fn update_withdrawal_intent_status(
     id: uuid::Uuid,
     status: &str,
 ) -> Result<(), anyhow::Error> {
+    if !VALID_INTENT_STATUSES.contains(&status) {
+        anyhow::bail!("invalid intent status '{status}': must be one of {VALID_INTENT_STATUSES:?}");
+    }
+
     sqlx::query(
         "UPDATE withdrawal_intents SET status = $1, updated_at = now() WHERE id = $2",
     )
@@ -122,6 +131,10 @@ pub async fn update_withdrawal_step_status(
     tx_hash: Option<&str>,
     status: &str,
 ) -> Result<(), anyhow::Error> {
+    if !VALID_STEP_STATUSES.contains(&status) {
+        anyhow::bail!("invalid step status '{status}': must be one of {VALID_STEP_STATUSES:?}");
+    }
+
     sqlx::query(
         "UPDATE withdrawal_steps SET tx_hash = COALESCE($1, tx_hash), status = $2, updated_at = now() WHERE id = $3",
     )

@@ -6,7 +6,11 @@ use db::user::queries;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::{AppState, error::AppError, middleware::user::validate_addresses_are_null};
+use crate::{
+    AppState,
+    error::AppError,
+    middleware::user::{validate_addresses_are_null, validate_evm_address, validate_solana_address},
+};
 
 #[derive(Serialize)]
 pub struct WaitlistSuccessResponse {
@@ -46,12 +50,15 @@ pub struct CreateUserPayload {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 
+    #[validate(custom(function = "validate_evm_address"))]
     pub connected_evm_address: Option<String>,
 
+    #[validate(custom(function = "validate_solana_address"))]
     pub connected_solana_address: Option<String>,
 
     pub referred_by: Option<String>,
 
+    #[validate(custom(function = "validate_evm_address"))]
     pub turnkey_evm_address: Option<String>,
 }
 
