@@ -71,7 +71,26 @@ impl WithdrawService {
             .await?
             .ok_or_else(|| AppError::not_found(format!("Withdrawal intent {intent_id}")))?;
 
-        let output = withdraw_sm::evaluate(&intent);
+        let output = match withdraw_sm::evaluate(&intent) {
+            Ok(o) => o,
+            Err(reason) => {
+                log::error!(
+                    "Withdrawal intent {} state machine error: {}",
+                    intent_id,
+                    reason
+                );
+                withdraw_db::update_withdrawal_intent_status(
+                    db.clone(),
+                    intent_id,
+                    withdraw_sm::intent_status::FAILED,
+                )
+                .await?;
+                return Err(AppError::internal(format!(
+                    "withdrawal intent {} is in an unrecoverable state: {}",
+                    intent_id, reason
+                )));
+            }
+        };
 
         if let Some(ref new_status) = output.intent_status_update {
             withdraw_db::update_withdrawal_intent_status(db.clone(), intent_id, new_status).await?;

@@ -153,10 +153,22 @@ pub async fn report_action_result(
 
 /// GET /withdraw-intents/user/:user_id — List all withdrawal intents for a user.
 pub async fn list_user_withdrawal_intents(
+    Extension(claims): Extension<AuthClaims>,
     State(state): State<AppState>,
     Path(user_id): Path<uuid::Uuid>,
 ) -> Result<Json<Vec<withdraw_db::WithdrawalIntent>>, AppError> {
     let intents = withdraw_db::get_withdrawal_intents_by_user(state.db, user_id).await?;
+
+    // Verify the authenticated user owns these intents by checking evm_address on the first result.
+    // If there are no intents we can safely return an empty list — the user_id may just have none.
+    if let Some(first) = intents.first() {
+        if !first.evm_address.eq_ignore_ascii_case(&claims.evm_address) {
+            return Err(AppError::unauthorised(
+                "cannot list withdrawal intents for another user",
+            ));
+        }
+    }
+
     Ok(Json(intents))
 }
 
@@ -240,22 +252,25 @@ pub async fn create_withdraw_transaction(
             let value = serde_json::to_value(&response)?;
             Ok(Json(value))
         }
-        _ => unimplemented!(),
+        _ => Err(AppError::parse("exchange", "unsupported exchange for withdrawal")),
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct BridgeRequest {
+    #[validate(custom(function = "validate_evm_address"))]
     pub user: String,
     #[serde(rename = "originChainId")]
     pub origin_chain_id: u64,
     #[serde(rename = "destinationChainId")]
     pub destination_chain_id: u64,
+    #[validate(length(min = 1, message = "amount must not be empty"))]
     pub amount: String,
     #[serde(rename = "tradeType")]
     pub trade_type: String,
     #[serde(rename = "usePermit")]
     pub use_permit: bool,
+    #[validate(custom(function = "validate_evm_address"))]
     pub recipient: String,
 }
 
@@ -264,7 +279,13 @@ pub async fn bridge(
     Extension(claims): Extension<AuthClaims>,
     Json(payload): Json<BridgeRequest>,
 ) -> Result<Json<QuoteResponse>, AppError> {
-    //TODO: validation needed
+    payload.validate()?;
+
+    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
+        return Err(AppError::unauthorised(
+            "payload.user does not match authenticated EVM address",
+        ));
+    }
 
     let validated_origin_chain = Chain::from_id(payload.origin_chain_id);
     let validated_destination_chain = Chain::from_id(payload.destination_chain_id);

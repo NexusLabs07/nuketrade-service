@@ -76,14 +76,14 @@ pub struct StateMachineOutput {
 
 // ============================= State Machine =============================
 
-pub fn evaluate(intent: &WithdrawalIntent) -> StateMachineOutput {
-    match intent.status.as_str() {
+pub fn evaluate(intent: &WithdrawalIntent) -> Result<StateMachineOutput, String> {
+    let output = match intent.status.as_str() {
         intent_status::CREATED => handle_created(intent),
         intent_status::WITHDRAWING => StateMachineOutput {
             response: NextActionResponse::wait(),
             intent_status_update: None,
         },
-        intent_status::WITHDRAWN => handle_withdrawn(intent),
+        intent_status::WITHDRAWN => handle_withdrawn(intent)?,
         intent_status::BRIDGING => StateMachineOutput {
             response: NextActionResponse::wait(),
             intent_status_update: None,
@@ -106,7 +106,8 @@ pub fn evaluate(intent: &WithdrawalIntent) -> StateMachineOutput {
             response: NextActionResponse::noop(),
             intent_status_update: None,
         },
-    }
+    };
+    Ok(output)
 }
 
 // ─── CREATED ──────────────────────────────────────────────────────────────────
@@ -128,37 +129,28 @@ fn handle_created(intent: &WithdrawalIntent) -> StateMachineOutput {
 
 // ─── WITHDRAWN ────────────────────────────────────────────────────────────────
 
-fn handle_withdrawn(intent: &WithdrawalIntent) -> StateMachineOutput {
-    let exchange = PerpetualExchange::from_str(&intent.exchange).ok();
-    let origin_chain = exchange.as_ref().and_then(|e| e.chain());
+fn handle_withdrawn(intent: &WithdrawalIntent) -> Result<StateMachineOutput, String> {
+    let exchange = PerpetualExchange::from_str(&intent.exchange)
+        .map_err(|_| format!("unrecognised exchange '{}' stored in intent", intent.exchange))?;
 
-    let params = if let Some(chain) = origin_chain {
-        json!({
-            "origin_chain_id": chain.id,
-            "destination_chain_id": intent.destination_chain_id,
-            "origin_currency": chain.usdc_address,
-            "destination_currency": Chain::BASE.usdc_address,
-            "amount_usd": intent.amount_usd,
-            "recipient": intent.recipient,
-            "user_address": intent.evm_address,
-        })
-    } else {
-        // Unknown exchange chain — return what we can; client can infer.
-        json!({
-            "destination_chain_id": intent.destination_chain_id,
-            "destination_currency": Chain::BASE.usdc_address,
-            "amount_usd": intent.amount_usd,
-            "recipient": intent.recipient,
-            "user_address": intent.evm_address,
-        })
-    };
+    let chain = exchange
+        .chain()
+        .ok_or_else(|| format!("no chain mapping for exchange '{}'", intent.exchange))?;
 
-    StateMachineOutput {
+    Ok(StateMachineOutput {
         response: NextActionResponse {
             action: action::BRIDGE.to_string(),
-            params: Some(params),
+            params: Some(json!({
+                "origin_chain_id": chain.id,
+                "destination_chain_id": intent.destination_chain_id,
+                "origin_currency": chain.usdc_address,
+                "destination_currency": Chain::BASE.usdc_address,
+                "amount_usd": intent.amount_usd,
+                "recipient": intent.recipient,
+                "user_address": intent.evm_address,
+            })),
         },
         // Advance to BRIDGING so subsequent polls return WAIT.
         intent_status_update: Some(intent_status::BRIDGING.to_string()),
-    }
+    })
 }
