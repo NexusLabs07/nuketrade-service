@@ -9,7 +9,7 @@ use crate::{
         queries::{insert_points_with_executor, update_points_with_executor},
     },
     user::models::User,
-    wallet::{models::Wallet, queries::insert_wallet_with_executor},
+    wallet::{models::Wallet, queries::{insert_wallet_with_executor, upsert_wallet_with_executor}},
 };
 
 #[derive(sqlx::FromRow, Serialize, Deserialize)]
@@ -133,15 +133,30 @@ pub async fn upsert_google_user(
     db_conn: Arc<PgPool>,
     email: String,
     name: String,
+    evm_address: String,
+    solana_address: String,
 ) -> Result<User, anyhow::Error> {
+    let mut tx = db_conn.begin().await?;
+
+    let wallet = Wallet {
+        id: uuid::Uuid::new_v4(),
+        turnkey_evm_address: evm_address,
+        turnkey_solana_address: solana_address,
+        created_at: chrono::NaiveDateTime::default(),
+        updated_at: chrono::NaiveDateTime::default(),
+    };
+    let wallet_id = upsert_wallet_with_executor(&mut *tx, &wallet).await?;
+
     let id = uuid::Uuid::new_v4();
     let referral_code = uuid::Uuid::new_v4().to_string().replace('-', "")[..10].to_string();
 
     let query = r#"
-        INSERT INTO users (id, email, name, referral_code)
-        VALUES ($1, LOWER($2), $3, $4)
+        INSERT INTO users (id, email, name, referral_code, wallet_id)
+        VALUES ($1, LOWER($2), $3, $4, $5)
         ON CONFLICT (LOWER(email)) DO UPDATE
-        SET name = COALESCE(EXCLUDED.name, users.name), updated_at = now()
+        SET name = COALESCE(EXCLUDED.name, users.name),
+            wallet_id = COALESCE(users.wallet_id, EXCLUDED.wallet_id),
+            updated_at = now()
         RETURNING *
     "#;
 
@@ -150,8 +165,11 @@ pub async fn upsert_google_user(
         .bind(&email)
         .bind(&name)
         .bind(&referral_code)
-        .fetch_one(&*db_conn)
+        .bind(wallet_id)
+        .fetch_one(&mut *tx)
         .await?;
+
+    tx.commit().await?;
 
     Ok(user)
 }

@@ -15,7 +15,7 @@ pub async fn login(
 
     state
         .auth
-        .google_login(state.db.clone(), payload.id_token)
+        .google_login(state.db.clone(), payload.id_token, result.evm_address.clone(), result.solana_address.clone())
         .await?;
 
     Ok(Json(LoginResponse {

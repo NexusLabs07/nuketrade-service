@@ -123,6 +123,8 @@ impl AuthService {
         &self,
         db: std::sync::Arc<sqlx::PgPool>,
         id_token: String,
+        evm_address: String,
+        solana_address: String,
     ) -> Result<(), AppError> {
         #[derive(Debug, Deserialize)]
         struct Jwk {
@@ -171,8 +173,8 @@ impl AuthService {
 
         let google_claims = token_data.claims;
 
-        // Upsert the user into the DB
-        upsert_google_user(db, google_claims.email.clone(), google_claims.name.clone())
+        // Upsert wallet then user into the DB
+        upsert_google_user(db, google_claims.email.clone(), google_claims.name.clone(), evm_address, solana_address)
             .await
             .map_err(|e| AppError::internal(format!("failed to upsert Google user: {e}")))?;
 

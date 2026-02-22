@@ -17,7 +17,7 @@ pub struct User {
     pub connected_solana_address: Option<String>,
     pub referral_code: String,
     pub referred_by: Option<uuid::Uuid>,
-    pub wallet_id: Option<uuid::Uuid>,
+    pub wallet_id: uuid::Uuid,
     pub is_pacifica_access_claimed: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
