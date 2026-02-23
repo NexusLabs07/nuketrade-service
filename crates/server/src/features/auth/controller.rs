@@ -15,7 +15,7 @@ pub async fn login(
         }
     }
 
-    let result = state
+    let verify_signature_result = state
         .auth
         .login(
             payload.suborg_id.trim().to_string(),
@@ -29,17 +29,25 @@ pub async fn login(
         .google_login(
             state.db.clone(),
             payload.id_token,
-            result.evm_address.clone(),
-            result.solana_address.clone(),
+            verify_signature_result.evm_address.clone(),
+            verify_signature_result.solana_address.clone(),
         )
         .await?;
+
+    let (token, exp) = state.auth.issue_jwt(
+        payload.suborg_id,
+        user_id.to_string(),
+        wallet_id.to_string(),
+        verify_signature_result.evm_address.clone(),
+        verify_signature_result.solana_address.clone(),
+    )?;
 
     Ok(Json(LoginResponse {
         wallet_id: wallet_id.to_string(),
         user_id: user_id.to_string(),
-        token: result.token,
-        evm_address: result.evm_address,
-        solana_address: result.solana_address,
-        expires_at_unix: result.expires_at_unix,
+        token: token,
+        evm_address: verify_signature_result.evm_address,
+        solana_address: verify_signature_result.solana_address,
+        expires_at_unix: exp,
     }))
 }

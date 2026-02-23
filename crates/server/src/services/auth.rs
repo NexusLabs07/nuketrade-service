@@ -53,11 +53,9 @@ struct WalletAddresses {
 }
 
 #[derive(Debug, Clone)]
-pub struct AuthLoginResult {
-    pub token: String,
+pub struct VerifySignatureResponse {
     pub evm_address: String,
     pub solana_address: String,
-    pub expires_at_unix: u64,
 }
 
 impl AuthService {
@@ -84,14 +82,18 @@ impl AuthService {
         suborg_id: String,
         message: String,
         signature: String,
-    ) -> Result<AuthLoginResult, AppError> {
+    ) -> Result<VerifySignatureResponse, AppError> {
         if suborg_id.is_empty() {
             return Err(AppError::parse("suborgId", "suborgId must not be empty"));
         }
 
+        //recover the evm address from the signature
         let recovered = recover_evm_address(&message, &signature)?;
+
+        //fetch turnkey wallets
         let wallets = self.fetch_turnkey_wallet_addresses(&suborg_id).await?;
 
+        //check if wallet matched and throw error if not
         let matched_wallet = wallets
             .into_iter()
             .find(|wallet| wallet.evm_addresses.contains(&recovered))
@@ -109,14 +111,10 @@ impl AuthService {
             })?;
 
         let evm_address = recovered.to_string();
-        let (token, exp) =
-            self.issue_jwt(suborg_id, evm_address.clone(), solana_address.clone())?;
 
-        Ok(AuthLoginResult {
-            token,
+        Ok(VerifySignatureResponse {
             evm_address,
             solana_address,
-            expires_at_unix: exp,
         })
     }
 
@@ -202,9 +200,11 @@ impl AuthService {
         .map_err(|_| AppError::unauthorised("invalid or expired bearer token"))
     }
 
-    fn issue_jwt(
+    pub fn issue_jwt(
         &self,
         suborg_id: String,
+        user_id: String,
+        wallet_id: String,
         evm_address: String,
         solana_address: String,
     ) -> Result<(String, u64), AppError> {
@@ -213,6 +213,8 @@ impl AuthService {
 
         let claims = AuthClaims {
             suborg_id,
+            user_id,
+            wallet_id,
             evm_address,
             solana_address,
             iat: now,
@@ -453,7 +455,13 @@ mod tests {
     fn issue_and_verify_jwt_round_trip() {
         let svc = test_auth_service("test-secret-key-12345");
         let (token, exp) = svc
-            .issue_jwt("sub-org-1".into(), "0xABCD".into(), "SoLaNaAddr".into())
+            .issue_jwt(
+                "sub-org-1".into(),
+                "user-123".into(),
+                "wallet-456".into(),
+                "0xABCD".into(),
+                "SoLaNaAddr".into(),
+            )
             .unwrap();
 
         assert!(!token.is_empty());
@@ -461,6 +469,8 @@ mod tests {
 
         let claims = svc.verify_token(&token).unwrap();
         assert_eq!(claims.suborg_id, "sub-org-1");
+        assert_eq!(claims.user_id, "user-123");
+        assert_eq!(claims.wallet_id, "wallet-456");
         assert_eq!(claims.evm_address, "0xABCD");
         assert_eq!(claims.solana_address, "SoLaNaAddr");
         assert_eq!(claims.exp, exp);
@@ -482,7 +492,7 @@ mod tests {
         let svc_b = test_auth_service("secret-b");
 
         let (token_a, _) = svc_a
-            .issue_jwt("org".into(), "0x1".into(), "sol1".into())
+            .issue_jwt("org".into(), "user-1".into(), "wallet-1".into(), "0x1".into(), "sol1".into())
             .unwrap();
 
         let err = svc_b.verify_token(&token_a).unwrap_err();
@@ -502,6 +512,8 @@ mod tests {
         // Craft a manually expired token (leeway is 30s so ttl=0 alone won't expire fast enough):
         let expired_claims = AuthClaims {
             suborg_id: "org".into(),
+            user_id: "user-1".into(),
+            wallet_id: "wallet-1".into(),
             evm_address: "0x1".into(),
             solana_address: "sol1".into(),
             iat: 1000,

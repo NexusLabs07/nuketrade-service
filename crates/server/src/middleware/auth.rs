@@ -166,6 +166,8 @@ mod tests {
             .as_secs();
         let claims = AuthClaims {
             suborg_id: "test-sub".into(),
+            user_id: "user-test".into(),
+            wallet_id: "wallet-test".into(),
             evm_address: "0x1234".into(),
             solana_address: "SolAddr".into(),
             iat: now,

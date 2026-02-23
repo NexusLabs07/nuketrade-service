@@ -16,6 +16,8 @@ pub struct GoogleIdClaims {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthClaims {
     pub suborg_id: String,
+    pub user_id: String,
+    pub wallet_id: String,
     pub evm_address: String,
     pub solana_address: String,
     #[serde(alias = "issued_at")]
