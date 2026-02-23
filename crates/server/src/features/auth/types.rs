@@ -49,10 +49,5 @@ pub struct LoginRequest {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
-    pub wallet_id: String,
-    pub user_id: String,
     pub token: String,
-    pub evm_address: String,
-    pub solana_address: String,
-    pub expires_at_unix: u64,
 }

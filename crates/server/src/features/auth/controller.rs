@@ -42,12 +42,5 @@ pub async fn login(
         verify_signature_result.solana_address.clone(),
     )?;
 
-    Ok(Json(LoginResponse {
-        wallet_id: wallet_id.to_string(),
-        user_id: user_id.to_string(),
-        token: token,
-        evm_address: verify_signature_result.evm_address,
-        solana_address: verify_signature_result.solana_address,
-        expires_at_unix: exp,
-    }))
+    Ok(Json(LoginResponse { token: token }))
 }
