@@ -492,7 +492,13 @@ mod tests {
         let svc_b = test_auth_service("secret-b");
 
         let (token_a, _) = svc_a
-            .issue_jwt("org".into(), "user-1".into(), "wallet-1".into(), "0x1".into(), "sol1".into())
+            .issue_jwt(
+                "org".into(),
+                "user-1".into(),
+                "wallet-1".into(),
+                "0x1".into(),
+                "sol1".into(),
+            )
             .unwrap();
 
         let err = svc_b.verify_token(&token_a).unwrap_err();

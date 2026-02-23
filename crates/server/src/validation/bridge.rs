@@ -30,16 +30,17 @@ pub fn validate_destination_usdc_address(
 
 /// Validates that the user has sufficient USDC balance on Base chain
 pub async fn validate_balance(
-    payload: &QuotePayload,
+    evm_address: String,
+    amount: &String,
     base_rpc_url: &String,
 ) -> Result<(), validator::ValidationError> {
-    let user_address: Address = payload.user.parse().map_err(|_| {
+    let user_address: Address = evm_address.parse().map_err(|_| {
         let mut err = ValidationError::new("invalid_user_address");
         err.message = Some("Invalid user address format".into());
         err
     })?;
 
-    let amount: U256 = payload.amount.parse().map_err(|_| {
+    let amount: U256 = amount.parse().map_err(|_| {
         let mut err = ValidationError::new("invalid_amount");
         err.message = Some("Amount must be a valid numeric string".into());
         err

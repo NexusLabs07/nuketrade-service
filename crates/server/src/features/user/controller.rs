@@ -1,12 +1,13 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, State},
 };
-use db::user::queries;
+use db::user::{self, queries};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use validator::Validate;
 
-use crate::{AppState, error::AppError};
+use crate::{AppState, error::AppError, features::auth::types::AuthClaims};
 
 #[derive(Serialize)]
 pub struct WaitlistSuccessResponse {
@@ -91,9 +92,12 @@ pub async fn get_user_position(
 
 pub async fn mark_pacifica_claim(
     State(state): State<AppState>,
-    Json(payload): Json<PacificaClaimRequest>,
+    Extension(claims): Extension<AuthClaims>,
 ) -> Result<(), AppError> {
-    if let Err(err) = queries::mark_pacifica_claim(state.db, payload.user_id).await {
+    let user_id = Uuid::parse_str(&claims.user_id)
+        .map_err(|_| AppError::unauthorised("authenticated suborg_id is not a valid UUID"))?;
+
+    if let Err(err) = queries::mark_pacifica_claim(state.db, user_id).await {
         return Err(AppError::Database(err));
     };
 

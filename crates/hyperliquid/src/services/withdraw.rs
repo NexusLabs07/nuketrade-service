@@ -69,7 +69,7 @@ pub fn create_withdraw_typed_data(destination: &str, amount: &str, time: u128) -
 
 //TODO: add idempotency key to prevent double withdrawals while waiting
 pub async fn withdraw(
-    destination_address: Option<String>,
+    destination_address: String,
     amount: String,
 ) -> Result<WithdrawResponse, WithdrawError> {
     //TODO: verify the amount is greater than user balance
@@ -83,11 +83,6 @@ pub async fn withdraw(
         return Err(WithdrawError::InvalidAmount);
     }
 
-    if destination_address.is_none() {
-        return Err(WithdrawError::MissingDestinationAddress);
-    }
-
-    let destination_address = destination_address.unwrap();
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

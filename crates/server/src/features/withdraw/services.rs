@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     error::AppError,
     features::withdraw::controller::{ActionResultRequest, CreateWithdrawalIntentRequest},
-    services::withdraw::{self as withdraw_sm, NextActionResponse, MAX_RETRIES},
+    services::withdraw::{self as withdraw_sm, MAX_RETRIES, NextActionResponse},
 };
 
 pub struct WithdrawService;
@@ -19,9 +19,13 @@ impl WithdrawService {
         db: Arc<PgPool>,
         payload: CreateWithdrawalIntentRequest,
         user_id: Uuid,
+        evm_address: String,
     ) -> Result<Uuid, AppError> {
         if payload.amount_usd <= 0.0 {
-            return Err(AppError::parse("amount_usd", "Amount must be greater than 0"));
+            return Err(AppError::parse(
+                "amount_usd",
+                "Amount must be greater than 0",
+            ));
         }
 
         let intent_id = Uuid::new_v4();
@@ -36,7 +40,7 @@ impl WithdrawService {
             user_id,
             exchange: exchange_enum.to_string(),
             amount_usd: payload.amount_usd,
-            evm_address: payload.evm_address.clone(),
+            evm_address,
             recipient: payload.recipient.clone(),
             destination_chain_id: payload.destination_chain_id,
         };
@@ -140,13 +144,10 @@ async fn handle_withdraw_result(
     intent: &withdraw_db::WithdrawalIntent,
     payload: &ActionResultRequest,
 ) -> Result<(), AppError> {
-    let step = withdraw_db::get_pending_step(
-        db.clone(),
-        intent.id,
-        withdraw_sm::step_name::WITHDRAW,
-    )
-    .await?
-    .ok_or_else(|| AppError::not_found("Pending WITHDRAW step"))?;
+    let step =
+        withdraw_db::get_pending_step(db.clone(), intent.id, withdraw_sm::step_name::WITHDRAW)
+            .await?
+            .ok_or_else(|| AppError::not_found("Pending WITHDRAW step"))?;
 
     if payload.success {
         withdraw_db::update_withdrawal_step_status(
@@ -185,9 +186,12 @@ async fn handle_withdraw_result(
             payload.tx_hash
         );
     } else {
-        let new_retry_count =
-            withdraw_db::increment_withdrawal_intent_retry(db.clone(), intent.id, payload.error.as_deref())
-                .await?;
+        let new_retry_count = withdraw_db::increment_withdrawal_intent_retry(
+            db.clone(),
+            intent.id,
+            payload.error.as_deref(),
+        )
+        .await?;
 
         log::warn!(
             "WITHDRAW failed for intent {}, retry {}/{}: {:?}",
@@ -227,10 +231,9 @@ async fn handle_bridge_result(
     intent: &withdraw_db::WithdrawalIntent,
     payload: &ActionResultRequest,
 ) -> Result<(), AppError> {
-    let step =
-        withdraw_db::get_pending_step(db.clone(), intent.id, withdraw_sm::step_name::BRIDGE)
-            .await?
-            .ok_or_else(|| AppError::not_found("Pending BRIDGE step"))?;
+    let step = withdraw_db::get_pending_step(db.clone(), intent.id, withdraw_sm::step_name::BRIDGE)
+        .await?
+        .ok_or_else(|| AppError::not_found("Pending BRIDGE step"))?;
 
     if payload.success {
         withdraw_db::update_withdrawal_step_status(
@@ -254,9 +257,12 @@ async fn handle_bridge_result(
             payload.tx_hash
         );
     } else {
-        let new_retry_count =
-            withdraw_db::increment_withdrawal_intent_retry(db.clone(), intent.id, payload.error.as_deref())
-                .await?;
+        let new_retry_count = withdraw_db::increment_withdrawal_intent_retry(
+            db.clone(),
+            intent.id,
+            payload.error.as_deref(),
+        )
+        .await?;
 
         log::warn!(
             "BRIDGE failed for intent {}, retry {}/{}: {:?}",

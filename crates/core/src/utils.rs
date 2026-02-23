@@ -4,7 +4,7 @@
 ///
 /// # Examples
 /// ```
-/// use core::utils::parse_f64;
+/// use perp_core::utils::parse_f64;
 /// assert_eq!(parse_f64("123.45"), Some(123.45));
 /// assert_eq!(parse_f64("invalid"), None);
 /// ```
@@ -19,7 +19,7 @@ pub fn parse_f64(s: &str) -> Option<f64> {
 ///
 /// # Examples
 /// ```
-/// use core::utils::parse_f64_or_zero;
+/// use perp_core::utils::parse_f64_or_zero;
 /// assert_eq!(parse_f64_or_zero("123.45"), 123.45);
 /// assert_eq!(parse_f64_or_zero("invalid"), 0.0);
 /// ```
@@ -32,7 +32,7 @@ pub fn parse_f64_or_zero(s: &str) -> f64 {
 ///
 /// # Examples
 /// ```
-/// use core::utils::parse_f64_or;
+/// use perp_core::utils::parse_f64_or;
 /// assert_eq!(parse_f64_or("123.45", -1.0), 123.45);
 /// assert_eq!(parse_f64_or("invalid", -1.0), -1.0);
 /// ```
@@ -69,7 +69,7 @@ pub fn parse_u32_or_zero(s: &str) -> u32 {
 ///
 /// # Examples
 /// ```
-/// use core::utils::truncate_decimals;
+/// use perp_core::utils::truncate_decimals;
 /// assert_eq!(truncate_decimals(123.456789, 2), 123.45);
 /// ```
 #[inline]

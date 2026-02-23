@@ -4,6 +4,7 @@ use axum::{
 };
 use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
@@ -19,13 +20,15 @@ use crate::{
     },
 };
 
-use db::hedge::{self as hedge_db};
+use db::{
+    hedge::{self as hedge_db, NewHedgeIntent},
+    user,
+};
 
 // ============================= Request / Response Types =============================
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CreateHedgeIntentRequest {
-    pub user_id: uuid::Uuid,
     #[validate(length(min = 1, message = "Asset must not be empty"))]
     pub asset: String,
     #[validate(custom(function = "validate_distinct_exchanges"))]
@@ -34,10 +37,6 @@ pub struct CreateHedgeIntentRequest {
     pub margin_usd: f64,
     #[validate(range(min = 1.0, message = "Leverage must be >= 1"))]
     pub leverage: f64,
-    #[validate(custom(function = "validate_evm_address"))]
-    pub evm_address: String,
-    #[validate(custom(function = "validate_solana_address"))]
-    pub solana_address: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -84,34 +83,22 @@ pub async fn create_hedge_intent(
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<CreateHedgeIntentRequest>,
 ) -> Result<Json<CreateHedgeIntentResponse>, AppError> {
-    if !payload
-        .evm_address
-        .eq_ignore_ascii_case(&claims.evm_address)
-    {
-        return Err(AppError::unauthorised(
-            "payload.evm_address does not match authenticated EVM address",
-        ));
-    }
-
-    if payload.solana_address != claims.solana_address {
-        return Err(AppError::unauthorised(
-            "payload.solana_address does not match authenticated Solana address",
-        ));
-    }
-
-    let user_id = uuid::Uuid::parse_str(&claims.suborg_id)
+    let user_id = uuid::Uuid::parse_str(&claims.user_id)
         .map_err(|_| AppError::unauthorised("authenticated suborg_id is not a valid UUID"))?;
 
-    let mut payload = payload;
-    payload.user_id = user_id;
-
-    HedgeService::create_hedge_intent(state.db.clone(), payload)
-        .await
-        .map(|id| {
-            Json(CreateHedgeIntentResponse {
-                hedge_intent_id: id,
-            })
+    HedgeService::create_hedge_intent(
+        state.db.clone(),
+        user_id,
+        claims.evm_address,
+        claims.solana_address,
+        payload,
+    )
+    .await
+    .map(|id| {
+        Json(CreateHedgeIntentResponse {
+            hedge_intent_id: id,
         })
+    })
 }
 
 /// GET /hedge-intents/:id/next-action — Compute and return the next executable action.

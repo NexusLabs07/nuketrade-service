@@ -24,12 +24,9 @@ use db::withdraw::{self as withdraw_db};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CreateWithdrawalIntentRequest {
-    pub user_id: Uuid,
     pub exchange: PerpetualExchange,
     #[validate(range(exclusive_min = 0.0, message = "Amount must be greater than 0"))]
     pub amount_usd: f64,
-    #[validate(custom(function = "validate_evm_address"))]
-    pub evm_address: String,
     #[validate(custom(function = "validate_evm_address"))]
     pub recipient: String,
     /// Chain ID of the destination (defaults to Base = 8453).
@@ -78,18 +75,10 @@ pub async fn create_withdrawal_intent(
 ) -> Result<Json<CreateWithdrawalIntentResponse>, AppError> {
     payload.validate()?;
 
-    if !payload
-        .evm_address
-        .eq_ignore_ascii_case(&claims.evm_address)
-    {
-        return Err(AppError::unauthorised(
-            "payload.evm_address does not match authenticated EVM address",
-        ));
-    }
+    let user_id = Uuid::parse_str(&claims.user_id)
+        .map_err(|_| AppError::unauthorised("authenticated suborg_id is not a valid UUID"))?;
 
-    let user_id = payload.user_id;
-
-    WithdrawService::create_withdrawal_intent(state.db, payload, user_id)
+    WithdrawService::create_withdrawal_intent(state.db, payload, user_id, claims.evm_address)
         .await
         .map(|id| {
             Json(CreateWithdrawalIntentResponse {
@@ -176,12 +165,6 @@ pub async fn list_user_withdrawal_intents(
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct HyperliquidTransactionRequest {
-    /// The user's address on the source chain (must match auth claims).
-    #[validate(custom(function = "validate_evm_address"))]
-    pub evm_address: String,
-    /// Where the withdrawn USDC should land (e.g. user's Arbitrum address for Hyperliquid).
-    #[validate(custom(function = "validate_evm_address"))]
-    pub destination: String,
     /// Amount in USDC as a decimal string (e.g. "100.5").
     #[validate(length(min = 1, message = "Amount must not be empty"))]
     pub amount: String,
@@ -189,8 +172,6 @@ pub struct HyperliquidTransactionRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct PacificaTransactionRequest {
-    #[validate(custom(function = "validate_solana_address"))]
-    pub account: String,
     pub signature: String,
     pub amount: String,
 }
@@ -214,31 +195,16 @@ pub async fn create_withdraw_transaction(
 
     match payload {
         CreateWithdrawTransactionRequest::Hyperliquid(payload) => {
-            if !payload
-                .evm_address
-                .eq_ignore_ascii_case(&claims.evm_address)
-            {
-                return Err(AppError::unauthorised(
-                    "payload.evm_address does not match authenticated EVM address",
-                ));
-            }
-            let response =
-                hyperliquid::services::withdraw(Some(payload.destination), payload.amount)
-                    .await
-                    .map_err(|e| AppError::internal(format!("{e:?}")))?;
+            let response = hyperliquid::services::withdraw(claims.evm_address, payload.amount)
+                .await
+                .map_err(|e| AppError::internal(format!("{e:?}")))?;
 
             let value = serde_json::to_value(response)?;
             Ok(Json(value))
         }
         CreateWithdrawTransactionRequest::Pacifica(payload) => {
-            if !payload.account.eq_ignore_ascii_case(&claims.solana_address) {
-                return Err(AppError::Unauthorised(String::from(
-                    "payload.account does not match authenticated solana address",
-                )));
-            }
-
             let withdrawal_request = WithdrawRequest {
-                account: payload.account,
+                account: claims.solana_address,
                 signature: payload.signature,
                 timestamp: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -261,8 +227,6 @@ pub async fn create_withdraw_transaction(
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct BridgeRequest {
-    #[validate(custom(function = "validate_evm_address"))]
-    pub user: String,
     #[serde(rename = "originChainId")]
     pub origin_chain_id: u64,
     #[serde(rename = "destinationChainId")]
@@ -284,12 +248,6 @@ pub async fn bridge(
 ) -> Result<Json<QuoteResponse>, AppError> {
     payload.validate()?;
 
-    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
-        return Err(AppError::unauthorised(
-            "payload.user does not match authenticated EVM address",
-        ));
-    }
-
     let validated_origin_chain = Chain::from_id(payload.origin_chain_id);
     let validated_destination_chain = Chain::from_id(payload.destination_chain_id);
 
@@ -303,7 +261,7 @@ pub async fn bridge(
     let validated_destination_chain = validated_destination_chain.unwrap();
 
     let quote_request = QuoteRequest {
-        user: payload.user,
+        user: claims.evm_address,
         origin_chain_id: validated_origin_chain.id,
         destination_chain_id: validated_destination_chain.id,
         origin_currency: validated_origin_chain.usdc_address.to_string(),

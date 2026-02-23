@@ -36,6 +36,9 @@ impl HedgeService {
     // Add any shared business logic methods for hedge operations here
     pub async fn create_hedge_intent(
         db: Arc<PgPool>,
+        user_id: Uuid,
+        evm_address: String,
+        solana_address: String,
         payload: CreateHedgeIntentRequest,
     ) -> Result<Uuid, AppError> {
         let exchange_a = &payload.exchanges[0];
@@ -49,14 +52,14 @@ impl HedgeService {
 
         let intent = NewHedgeIntent {
             id: intent_id,
-            user_id: payload.user_id,
+            user_id: user_id,
             asset: payload.asset.clone(),
             exchange_a: exchange_a_str.clone(),
             exchange_b: exchange_b_str.clone(),
             margin_usd: payload.margin_usd,
             leverage: payload.leverage,
-            evm_address: payload.evm_address.clone(),
-            solana_address: payload.solana_address.clone(),
+            evm_address: evm_address.clone(),
+            solana_address: solana_address.clone(),
         };
 
         let legs = vec![
@@ -78,11 +81,7 @@ impl HedgeService {
 
         hedge_db::create_hedge_intent_with_legs(db.clone(), &intent, &legs).await?;
 
-        log::info!(
-            "Created hedge intent {} for user {}",
-            intent_id,
-            payload.user_id
-        );
+        log::info!("Created hedge intent {} for user {}", intent_id, user_id);
 
         Ok(intent_id)
     }

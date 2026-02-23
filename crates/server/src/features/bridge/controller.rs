@@ -2,10 +2,7 @@ use crate::error::AppError;
 use crate::extractors::ValidatedJson;
 use crate::features::auth::types::AuthClaims;
 use crate::state::AppState;
-use crate::validation::{
-    address::validate_evm_address,
-    bridge::{validate_balance, validate_destination_usdc_address},
-};
+use crate::validation::bridge::{validate_balance, validate_destination_usdc_address};
 use axum::extract::State;
 use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
@@ -16,8 +13,6 @@ use validator::Validate;
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_destination_usdc_address"))]
 pub struct QuotePayload {
-    #[validate(custom(function = "validate_evm_address"))]
-    pub user: String,
     #[serde(rename = "destinationChainId")]
     pub destination_chain_id: u64,
     #[validate(length(min = 1, message = "Amount must not be empty"))]
@@ -59,23 +54,21 @@ pub async fn get_quote(
     Extension(claims): Extension<AuthClaims>,
     ValidatedJson(payload): ValidatedJson<QuotePayload>,
 ) -> Result<Json<QuoteResponse>, AppError> {
-    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
-        return Err(AppError::unauthorised(
-            "payload.user does not match authenticated EVM address",
-        ));
-    }
-
-    validate_balance(&payload, &app_state.config.base_rpc_url)
-        .await
-        .map_err(|e| {
-            let mut errors = validator::ValidationErrors::new();
-            errors.add("amount", e);
-            AppError::Validation(errors)
-        })?;
+    validate_balance(
+        claims.evm_address.clone(),
+        &payload.amount,
+        &app_state.config.base_rpc_url,
+    )
+    .await
+    .map_err(|e| {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("amount", e);
+        AppError::Validation(errors)
+    })?;
 
     //Deposit only available from base as of now
     let quote_request = QuoteRequest {
-        user: payload.user,
+        user: claims.evm_address,
         origin_chain_id: Chain::BASE.id,
         destination_chain_id: payload.destination_chain_id,
         origin_currency: Chain::BASE.usdc_address.to_string(),
