@@ -5,10 +5,11 @@ use axum::{
     response::IntoResponse,
 };
 use hyperliquid::{
-    apis::user::{ClearinghouseState, UserInfo},
-    perp_metadata::PERP_META,
-    services::{DepositPayload, deposit_to_hyperliquid},
-    spot_metadata::SPOT_META,
+    metadata::{perp_metadata::PERP_META, spot_metadata::SPOT_META},
+    ops::{
+        deposit::{DepositPayload, deposit_to_hyperliquid},
+        types::{ClearinghouseState, HyperliquidPositions},
+    },
 };
 
 use crate::{
@@ -19,7 +20,7 @@ use crate::{
         auth::types::AuthClaims,
         hyperliquid::types::{HyperliquidDepositRequest, HyperliquidUserPath},
     },
-    services::PositionService,
+    helpers::PositionService,
     types::OpenPositionsResponse,
 };
 
@@ -43,7 +44,7 @@ pub async fn get_perp_metadata() -> impl IntoResponse {
 pub async fn get_user_open_positions(
     ValidatedPath(params): ValidatedPath<HyperliquidUserPath>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
-    let user_info_client = UserInfo::new(Some(params.user_evm_address), None);
+    let user_info_client = HyperliquidPositions::new(Some(params.user_evm_address), None);
 
     let open_positions: ClearinghouseState = user_info_client.get_open_positions().await?;
 

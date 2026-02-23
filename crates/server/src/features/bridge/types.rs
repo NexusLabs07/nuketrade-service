@@ -1,5 +1,4 @@
-use crate::validation::bridge::validate_destination_usdc_address;
-use bridge::client::PermitRequest;
+use crate::validation::validate_destination_usdc_address;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 

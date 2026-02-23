@@ -4,7 +4,7 @@ use perp_core::{SevenDayApr, config::Config};
 use sqlx::PgPool;
 use tokio::sync::watch;
 
-use crate::{services::auth::AuthService, types::FeedSnapshot};
+use crate::{features::auth::services::AuthService, types::FeedSnapshot};
 
 #[derive(Clone, Debug)]
 pub struct AppState {

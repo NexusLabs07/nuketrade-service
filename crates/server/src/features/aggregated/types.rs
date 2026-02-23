@@ -1,6 +1,4 @@
-use crate::validation::address::{
-    validate_evm_address, validate_solana_address, validate_timeframe,
-};
+use crate::validation::{validate_evm_address, validate_solana_address, validate_timeframe};
 use serde::Deserialize;
 use validator::Validate;
 

@@ -12,7 +12,7 @@ use crate::{
         hedge::types::ActionResultRequest,
         withdraw::types::{CreateWithdrawalIntentRequest, WithdrawService},
     },
-    services::withdraw::{self as withdraw_sm, MAX_RETRIES, NextActionResponse},
+    helpers::withdraw::{self as withdraw_sm, MAX_RETRIES, NextActionResponse},
 };
 
 impl WithdrawService {

@@ -1,3 +1,7 @@
+use perp_core::chains::get_usdc_address;
+
+use crate::features::bridge::types::QuotePayload;
+
 pub fn validate_evm_address(address: &str) -> Result<(), validator::ValidationError> {
     if !address.starts_with("0x") {
         let mut err = validator::ValidationError::new("must_start_with_0x");
@@ -52,4 +56,16 @@ pub fn validate_timeframe(timeframe: &str) -> Result<(), validator::ValidationEr
             Err(err)
         }
     }
+}
+
+pub fn validate_destination_usdc_address(
+    payload: &QuotePayload,
+) -> Result<(), validator::ValidationError> {
+    let usdc_address = get_usdc_address(payload.destination_chain_id);
+
+    if usdc_address.is_none() {
+        return Err(validator::ValidationError::new("invalid_chain_id"));
+    }
+
+    Ok(())
 }

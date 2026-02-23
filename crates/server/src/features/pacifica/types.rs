@@ -1,4 +1,4 @@
-use crate::validation::address::validate_solana_address;
+use crate::validation::validate_solana_address;
 use serde::Deserialize;
 use validator::Validate;
 

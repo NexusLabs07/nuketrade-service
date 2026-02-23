@@ -3,7 +3,7 @@ use crate::extractors::ValidatedJson;
 use crate::features::auth::types::AuthClaims;
 use crate::features::bridge::types::{ExecutePermitPayload, QuotePayload};
 use crate::state::AppState;
-use crate::validation::bridge::validate_balance;
+use crate::validation::validate_balance;
 
 use axum::extract::State;
 use axum::{Extension, Json};

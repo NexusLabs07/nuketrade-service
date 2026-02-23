@@ -4,28 +4,14 @@ use alloy::{
     sol,
 };
 use bridge::MIN_BRIDGE_AMOUNT;
-use perp_core::{Chain, chains::get_usdc_address, has_sufficient_balance};
+use perp_core::{Chain, has_sufficient_balance};
 use validator::ValidationError;
-
-use crate::features::bridge::types::QuotePayload;
 
 sol! {
     #[sol(rpc)]
     interface IERC20 {
         function balanceOf(address account) external view returns (uint256);
     }
-}
-
-pub fn validate_destination_usdc_address(
-    payload: &QuotePayload,
-) -> Result<(), validator::ValidationError> {
-    let usdc_address = get_usdc_address(payload.destination_chain_id);
-
-    if usdc_address.is_none() {
-        return Err(validator::ValidationError::new("invalid_chain_id"));
-    }
-
-    Ok(())
 }
 
 /// Validates that the user has sufficient USDC balance on Base chain

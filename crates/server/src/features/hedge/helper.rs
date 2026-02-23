@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::features::hedge::types::ActionResultRequest;
-use crate::services::balance::compute_funding_needs;
-use crate::services::hedge::{MAX_RETRIES, action, intent_status, leg_status};
-use crate::{error::AppError, services::balance};
+use crate::helpers::balance::compute_funding_needs;
+use crate::helpers::hedge::{MAX_RETRIES, action, intent_status, leg_status};
+use crate::{error::AppError, helpers::balance};
 use db::hedge::{self as hedge_db};
 use db::hedge::{HedgeLeg, NewTxReference};
 use perp_core::config::Config;

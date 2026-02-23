@@ -17,7 +17,7 @@ use crate::{
         },
         types::{ActionResultRequest, CreateHedgeIntentRequest, HedgeService},
     },
-    services::hedge::{self, NextActionResponse, action, intent_status},
+    helpers::hedge::{self, NextActionResponse, action, intent_status},
 };
 
 impl Default for HedgeService {

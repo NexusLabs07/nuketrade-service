@@ -1,5 +1,5 @@
-use crate::validation::address::validate_evm_address;
-use hyperliquid::services::PermitSignature;
+use crate::validation::validate_evm_address;
+use hyperliquid::ops::deposit::PermitSignature;
 use serde::Deserialize;
 use validator::Validate;
 

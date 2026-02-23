@@ -37,7 +37,7 @@ impl PositionService {
 
     /// Convert Hyperliquid ClearinghouseState position to OpenPositionsResponse.
     pub fn from_hyperliquid_position(
-        pos: &hyperliquid::apis::user::Position,
+        pos: &hyperliquid::ops::types::Position,
     ) -> OpenPositionsResponse {
         let size_value = parse_f64_or_zero(&pos.szi);
         let side = if size_value > 0.0 {
@@ -149,7 +149,7 @@ impl PositionService {
     }
 
     pub fn from_hyperliquid_closed_fill(
-        fill: &hyperliquid::apis::user::UserFill,
+        fill: &hyperliquid::ops::types::UserFill,
     ) -> Option<ClosedPositionResponse> {
         if fill.coin.is_empty() {
             return None;

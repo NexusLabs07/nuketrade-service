@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::perp_metadata::PERP_META;
+use crate::metadata::perp_metadata::PERP_META;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PerpAsset {

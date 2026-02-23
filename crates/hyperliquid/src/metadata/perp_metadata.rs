@@ -6,4 +6,4 @@
 /// Hyperliquid perpetual market metadata as a JSON string.
 ///
 /// This data is loaded at compile time from the data file.
-pub const PERP_META: &str = include_str!("../data/perp_metadata.json");
+pub const PERP_META: &str = include_str!("./perp_metadata.json");

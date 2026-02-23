@@ -20,7 +20,7 @@ use crate::{
             CreateWithdrawalIntentResponse, WithdrawService, WithdrawalIntentDetailResponse,
         },
     },
-    services::withdraw::NextActionResponse,
+    helpers::withdraw::NextActionResponse,
     state::AppState,
 };
 use db::withdraw::{self as withdraw_db};
@@ -134,7 +134,7 @@ pub async fn create_withdraw_transaction(
 
     match payload {
         CreateWithdrawTransactionRequest::Hyperliquid(payload) => {
-            let response = hyperliquid::services::withdraw(claims.evm_address, payload.amount)
+            let response = hyperliquid::ops::withdraw::withdraw(claims.evm_address, payload.amount)
                 .await
                 .map_err(|e| AppError::internal(format!("{e:?}")))?;
 

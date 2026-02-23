@@ -6,14 +6,16 @@ use tokio::sync::watch;
 
 use std::net::SocketAddr;
 
-use crate::{app::create_app, services::auth::AuthService, state::AppState, types::FeedSnapshot};
+use crate::{
+    app::create_app, features::auth::services::AuthService, state::AppState, types::FeedSnapshot,
+};
 
 pub mod app;
 pub mod error;
 pub mod extractors;
 pub mod features;
+pub mod helpers;
 pub mod middleware;
-pub mod services;
 pub mod state;
 pub mod types;
 pub mod validation;

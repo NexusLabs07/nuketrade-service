@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, State},
 };
 use db::funding::{FundingRate, get_token_chart_info};
-use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
+use hyperliquid::ops::types::{ClearinghouseState, HyperliquidPositions, UserFill};
 use pacifica::{
     apis::user::{
         AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
@@ -21,7 +21,7 @@ use crate::{
     error::AppError,
     extractors::{ValidatedPath, ValidatedQuery},
     features::aggregated::types::{ChartParams, MergedPositionsParams},
-    services::PositionService,
+    helpers::PositionService,
     types::{
         LiveMarketFeedResponse, MergedClosedPositionResponse, MergedPositionResponse,
         OpenPositionsResponse,
@@ -32,7 +32,7 @@ pub async fn get_merged_open_positions(
     ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
-    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let hl_client = HyperliquidPositions::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
     let (hl_result, pacifica_result, pacifica_account_result): (
@@ -123,7 +123,7 @@ pub async fn get_merged_open_positions(
 pub async fn get_merged_closed_positions(
     ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
 ) -> Result<Json<Vec<MergedClosedPositionResponse>>, AppError> {
-    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let hl_client = HyperliquidPositions::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
 
     let (hl_result, pacifica_result): (

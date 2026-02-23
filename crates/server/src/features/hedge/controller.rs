@@ -13,7 +13,7 @@ use crate::{
             CreateHedgeIntentResponse, HedgeIntentDetailResponse, HedgeService,
         },
     },
-    services::hedge::NextActionResponse,
+    helpers::hedge::NextActionResponse,
     state::AppState,
 };
 

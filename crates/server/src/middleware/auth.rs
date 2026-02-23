@@ -85,7 +85,8 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::{
-        features::auth::types::AuthClaims, services::auth::AuthService, types::FeedSnapshot,
+        features::auth::{services::AuthService, types::AuthClaims},
+        types::FeedSnapshot,
     };
 
     const JWT_SECRET: &str = "test-middleware-secret";

@@ -1,6 +1,6 @@
 // ============================= Request / Response Types =============================
 
-use crate::validation::hedge::validate_distinct_exchanges;
+use crate::validation::validate_distinct_exchanges;
 use db::hedge::{HedgeIntent, HedgeLeg};
 use perp_core::exchange::PerpetualExchange;
 use serde::{Deserialize, Serialize};

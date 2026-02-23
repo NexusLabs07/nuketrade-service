@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use hyperliquid::services::DepositError;
+use hyperliquid::ops::deposit::DepositError;
 use perp_core::ExchangeError;
 use serde_json::json;
 use validator::ValidationErrors;

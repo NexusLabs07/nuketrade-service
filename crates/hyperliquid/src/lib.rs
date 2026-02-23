@@ -1,10 +1,7 @@
-pub mod apis;
-mod exchange_impl;
+pub mod exchange_impl;
 pub mod helpers;
-pub mod perp_metadata;
-pub mod services;
-pub mod spot_metadata;
-pub mod types;
+pub mod metadata;
+pub mod ops;
 pub mod ws;
 
 pub use exchange_impl::HyperliquidExchange;

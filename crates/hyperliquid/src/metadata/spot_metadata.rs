@@ -6,4 +6,4 @@
 /// Hyperliquid spot market metadata as a JSON string.
 ///
 /// This data is loaded at compile time from the data file.
-pub const SPOT_META: &str = include_str!("../data/spot_metadata.json");
+pub const SPOT_META: &str = include_str!("./spot_metadata.json");

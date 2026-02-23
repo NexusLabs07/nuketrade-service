@@ -1,4 +1,9 @@
 pub mod address;
-pub mod bridge;
-pub mod hedge;
+pub mod balance;
+pub mod exchange;
 pub mod user;
+
+pub use address::*;
+pub use balance::*;
+pub use exchange::*;
+pub use user::*;

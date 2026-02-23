@@ -1,6 +1,6 @@
 // ============================= Request / Response Types =============================
 
-use crate::validation::address::validate_evm_address;
+use crate::validation::validate_evm_address;
 use db::withdraw::{WithdrawalIntent, WithdrawalStep};
 use perp_core::{Chain, exchange::PerpetualExchange};
 use serde::{Deserialize, Serialize};

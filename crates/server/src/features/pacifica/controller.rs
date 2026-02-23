@@ -18,7 +18,7 @@ use crate::{
         auth::types::AuthClaims,
         pacifica::types::{PacificaDepositRequest, PacificaUserPath},
     },
-    services::PositionService,
+    helpers::PositionService,
     types::OpenPositionsResponse,
 };
 

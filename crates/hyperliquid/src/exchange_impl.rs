@@ -11,9 +11,9 @@ use serde_json::json;
 
 use crate::{
     HYPERLIQUID_HTTP_URL, HYPERLIQUID_WS_URL,
-    apis::user::{ClearinghouseState, OpenPositionRequest},
     helpers::markets::HL_MARKETS,
-    types::ActiveAssetCtxMsg,
+    ops::types::{ClearinghouseState, OpenPositionRequest},
+    ws::types::ActiveAssetCtxMsg,
 };
 
 /// Hyperliquid exchange client implementing the unified Exchange trait.
