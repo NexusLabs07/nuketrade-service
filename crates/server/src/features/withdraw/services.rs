@@ -8,11 +8,12 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    features::withdraw::controller::{ActionResultRequest, CreateWithdrawalIntentRequest},
+    features::{
+        hedge::types::ActionResultRequest,
+        withdraw::types::{CreateWithdrawalIntentRequest, WithdrawService},
+    },
     services::withdraw::{self as withdraw_sm, MAX_RETRIES, NextActionResponse},
 };
-
-pub struct WithdrawService;
 
 impl WithdrawService {
     pub async fn create_withdrawal_intent(

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::features::hedge::controller::ActionResultRequest;
+use crate::features::hedge::types::ActionResultRequest;
 use crate::services::balance::compute_funding_needs;
 use crate::services::hedge::{MAX_RETRIES, action, intent_status, leg_status};
 use crate::{error::AppError, services::balance};

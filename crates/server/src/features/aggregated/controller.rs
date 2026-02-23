@@ -15,34 +15,18 @@ use pacifica::{
     helpers::markets::PACIFICA_MARKETS,
 };
 use perp_core::SevenDayApr;
-use serde::Deserialize;
-use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
     extractors::{ValidatedPath, ValidatedQuery},
+    features::aggregated::types::{ChartParams, MergedPositionsParams},
     services::PositionService,
     types::{
         LiveMarketFeedResponse, MergedClosedPositionResponse, MergedPositionResponse,
         OpenPositionsResponse,
     },
-    validation::address::{validate_evm_address, validate_solana_address, validate_timeframe},
 };
-
-#[derive(Deserialize, Validate)]
-pub struct MergedPositionsParams {
-    #[validate(custom(function = "validate_evm_address"))]
-    pub user_evm_address: String,
-    #[validate(custom(function = "validate_solana_address"))]
-    pub user_solana_address: String,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct ChartParams {
-    #[validate(custom(function = "validate_timeframe"))]
-    timeframe: String,
-}
 
 pub async fn get_merged_open_positions(
     ValidatedPath(params): ValidatedPath<MergedPositionsParams>,

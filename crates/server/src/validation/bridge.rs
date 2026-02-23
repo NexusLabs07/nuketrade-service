@@ -7,7 +7,7 @@ use bridge::MIN_BRIDGE_AMOUNT;
 use perp_core::{Chain, chains::get_usdc_address, has_sufficient_balance};
 use validator::ValidationError;
 
-use crate::features::bridge::controller::QuotePayload;
+use crate::features::bridge::types::QuotePayload;
 
 sol! {
     #[sol(rpc)]

@@ -34,7 +34,7 @@ pub async fn login(
         )
         .await?;
 
-    let (token, exp) = state.auth.issue_jwt(
+    let (token, _) = state.auth.issue_jwt(
         payload.suborg_id,
         user_id.to_string(),
         wallet_id.to_string(),

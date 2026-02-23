@@ -2,7 +2,7 @@ use axum::{
     Extension, Json,
     extract::{Path, State},
 };
-use db::user::{self, queries};
+use db::user::queries;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;

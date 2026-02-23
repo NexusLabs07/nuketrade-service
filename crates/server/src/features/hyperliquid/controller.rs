@@ -7,33 +7,21 @@ use axum::{
 use hyperliquid::{
     apis::user::{ClearinghouseState, UserInfo},
     perp_metadata::PERP_META,
-    services::{DepositPayload, PermitSignature, deposit_to_hyperliquid},
+    services::{DepositPayload, deposit_to_hyperliquid},
     spot_metadata::SPOT_META,
 };
-use serde::Deserialize;
-use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
     extractors::{ValidatedJson, ValidatedPath},
-    features::auth::types::AuthClaims,
+    features::{
+        auth::types::AuthClaims,
+        hyperliquid::types::{HyperliquidDepositRequest, HyperliquidUserPath},
+    },
     services::PositionService,
     types::OpenPositionsResponse,
-    validation::address::validate_evm_address,
 };
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct HyperliquidUserPath {
-    #[validate(custom(function = "validate_evm_address"))]
-    pub user_evm_address: String,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct HyperliquidDepositRequest {
-    pub amount: String,
-    pub permit: PermitSignature,
-}
 
 //TODO: make them dynamic using cron later
 pub async fn get_spot_metadata() -> impl IntoResponse {

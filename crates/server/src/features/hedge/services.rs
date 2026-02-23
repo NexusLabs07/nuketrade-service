@@ -11,16 +11,14 @@ use uuid::Uuid;
 use crate::{
     error::AppError,
     features::hedge::{
-        controller::{ActionResultRequest, CreateHedgeIntentRequest},
         helper::{
             check_and_apply_existing_balances, handle_bridge_result, handle_close_position_result,
             handle_deposit_result, handle_open_position_result,
         },
+        types::{ActionResultRequest, CreateHedgeIntentRequest, HedgeService},
     },
     services::hedge::{self, NextActionResponse, action, intent_status},
 };
-
-pub struct HedgeService;
 
 impl Default for HedgeService {
     fn default() -> Self {

@@ -4,36 +4,23 @@ use axum::{
     http::{StatusCode, header},
     response::IntoResponse,
 };
-use db::user::queries;
 use pacifica::{
     apis::user::{AccountSettingsResponse, UserInfo, UserPositionsResponse},
     perp_metadata::PERP_META,
     services::deposit::{DepositPayload, deposit_to_pacifica},
 };
-use serde::{Deserialize, Serialize};
-use validator::Validate;
 
 use crate::{
     AppState,
     error::AppError,
     extractors::{ValidatedJson, ValidatedPath},
-    features::auth::types::AuthClaims,
+    features::{
+        auth::types::AuthClaims,
+        pacifica::types::{PacificaDepositRequest, PacificaUserPath},
+    },
     services::PositionService,
     types::OpenPositionsResponse,
-    validation::address::validate_solana_address,
 };
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct PacificaUserPath {
-    #[validate(custom(function = "validate_solana_address"))]
-    pub user_solana_address: String,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct PacificaDepositRequest {
-    #[validate(range(min = 1, message = "Amount must be greater than 0"))]
-    pub amount: u64,
-}
 
 //TODO: make them dynamic using cron later
 pub async fn get_perp_metadata() -> impl IntoResponse {
