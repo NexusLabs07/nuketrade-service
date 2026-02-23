@@ -31,19 +31,8 @@ pub struct PacificaUserPath {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct PacificaDepositRequest {
-    #[validate(custom(function = "validate_solana_address"))]
-    pub user_address: String,
     #[validate(range(min = 1, message = "Amount must be greater than 0"))]
     pub amount: u64,
-}
-
-impl From<PacificaDepositRequest> for DepositPayload {
-    fn from(value: PacificaDepositRequest) -> Self {
-        Self {
-            user_address: value.user_address,
-            amount: value.amount,
-        }
-    }
 }
 
 //TODO: make them dynamic using cron later
@@ -125,17 +114,16 @@ pub async fn bridge_to_pacifica(
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<PacificaDepositRequest>,
 ) -> Result<Json<String>, AppError> {
-    if payload.user_address != claims.solana_address {
-        return Err(AppError::unauthorised(
-            "payload.userAddress does not match authenticated Solana address",
-        ));
-    }
-
     let solana_rpc_url = state.config.solana_rpc_url;
     let fee_payer_private_key = state.config.solana_fee_payer_private_key;
 
+    let deposit_payload = DepositPayload {
+        user_address: claims.solana_address,
+        amount: payload.amount,
+    };
+
     let serialized_tx =
-        deposit_to_pacifica(solana_rpc_url, fee_payer_private_key, payload.into()).await?;
+        deposit_to_pacifica(solana_rpc_url, fee_payer_private_key, deposit_payload).await?;
 
     Ok(Json(serialized_tx))
 }

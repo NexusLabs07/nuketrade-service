@@ -31,20 +31,8 @@ pub struct HyperliquidUserPath {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct HyperliquidDepositRequest {
-    #[validate(custom(function = "validate_evm_address"))]
-    pub user: String,
     pub amount: String,
     pub permit: PermitSignature,
-}
-
-impl From<HyperliquidDepositRequest> for DepositPayload {
-    fn from(value: HyperliquidDepositRequest) -> Self {
-        Self {
-            amount: value.amount,
-            user: value.user,
-            permit: value.permit,
-        }
-    }
 }
 
 //TODO: make them dynamic using cron later
@@ -87,17 +75,17 @@ pub async fn bridge_to_hyperliquid(
     State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<HyperliquidDepositRequest>,
 ) -> Result<Json<String>, AppError> {
-    if !payload.user.eq_ignore_ascii_case(&claims.evm_address) {
-        return Err(AppError::unauthorised(
-            "payload.user does not match authenticated EVM address",
-        ));
-    }
-
     let arbitrum_rpc_url = &state.config.arbitrum_rpc_url;
     let fee_payer_private_key = state.config.evm_fee_payer_private_key;
 
+    let deposit_payload = DepositPayload {
+        user: claims.evm_address,
+        amount: payload.amount,
+        permit: payload.permit,
+    };
+
     let tx_hash =
-        deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, payload.into()).await?;
+        deposit_to_hyperliquid(arbitrum_rpc_url, fee_payer_private_key, deposit_payload).await?;
 
     Ok(Json(tx_hash))
 }
