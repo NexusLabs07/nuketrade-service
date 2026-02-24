@@ -42,5 +42,8 @@ pub async fn login(
         verify_signature_result.solana_address.clone(),
     )?;
 
-    Ok(Json(LoginResponse { token: token }))
+    Ok(Json(LoginResponse {
+        token: token,
+        expiry: exp,
+    }))
 }

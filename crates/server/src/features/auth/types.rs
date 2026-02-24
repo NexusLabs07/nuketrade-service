@@ -50,4 +50,5 @@ pub struct LoginRequest {
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     pub token: String,
+    pub expiry: u64,
 }
