@@ -25,6 +25,9 @@ use crate::{
 // 0.2 USDC = 200_000 (USDC has 6 decimals)
 const GAS_REIMBURSEMENT_AMOUNT: u64 = 200_000;
 
+// 0.01 USDC buffer to avoid edge cases when depositing full balance
+const DEPOSIT_BUFFER: u64 = 10_000;
+
 const MINIMUM_DEPOSIT_AMOUNT: u64 = 11_000_000; // 11 USDC
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +76,14 @@ pub async fn deposit_to_pacifica(
         );
     }
 
+    if !has_sufficient_balance(&user_usdc_balance, &payload.amount) {
+        anyhow::bail!(
+            "Insufficient USDC balance for deposit. Required: {}, User balance: {}",
+            payload.amount,
+            user_usdc_balance
+        );
+    }
+
     let central_state_pubkey = Pubkey::from_str(PACIFICA_CENTRAL_STATE_ADDRESS)?;
 
     let vault_pubkey = Pubkey::from_str(PACIFICA_VAULT_ADDRESS)?;
@@ -84,7 +95,7 @@ pub async fn deposit_to_pacifica(
     let event_authority_pubkey = Pubkey::from_str(EVENT_AUTHORITY)?;
     let pacifica_program_pubkey = Pubkey::from_str(PACIFICA_PROGRAM_ADDRESS)?;
 
-    let amount_to_deposit = payload.amount - GAS_REIMBURSEMENT_AMOUNT;
+    let amount_to_deposit = payload.amount - GAS_REIMBURSEMENT_AMOUNT - DEPOSIT_BUFFER;
 
     log::info!(
         "Derived accounts: user_usdc_ata={}, fee_payer_usdc_ata={}, amount_to_deposit={}",
