@@ -11,6 +11,7 @@ use solana_instruction::{AccountMeta, Instruction};
 use solana_keypair::Keypair;
 use solana_message::Message;
 use solana_pubkey::Pubkey;
+use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcSimulateTransactionConfig;
 use solana_signer::Signer;
@@ -59,11 +60,11 @@ pub async fn deposit_to_pacifica(
     let user_usdc_ata = get_associated_token_address(&user_pubkey, &usdc_pubkey);
     let fee_payer_usdc_ata = get_associated_token_address(&fee_payer_pubkey, &usdc_pubkey);
 
-    //get user balanace
+    //get user balance using confirmed commitment for most recent state
     let user_usdc_balance = rpc
-        .get_token_account_balance(&user_usdc_ata)
+        .get_token_account_balance_with_commitment(&user_usdc_ata, CommitmentConfig::confirmed())
         .await
-        .map(|resp| resp.amount.parse::<u64>().unwrap_or(0))
+        .map(|resp| resp.value.amount.parse::<u64>().unwrap_or(0))
         .context("Invalid token balance returned by RPC")?;
 
     log::info!("User USDC balance: {}", user_usdc_balance);

@@ -24,6 +24,7 @@ reqwest = { workspace = true }
 anyhow = { workspace = true }
 solana-transaction = { workspace = true }
 solana-keypair = { workspace = true }
+solana-commitment-config = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-instruction = { workspace = true }
