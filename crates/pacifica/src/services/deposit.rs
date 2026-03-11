@@ -154,7 +154,7 @@ pub async fn deposit_to_pacifica(
         let config = RpcSimulateTransactionConfig {
             sig_verify: false,
             replace_recent_blockhash: true,
-            commitment: Some(rpc.commitment()),
+            commitment: Some(CommitmentConfig::confirmed()),
             ..Default::default()
         };
 
