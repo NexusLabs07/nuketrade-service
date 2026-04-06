@@ -31,6 +31,7 @@ pub async fn run_feed_manager(
                                 .entry(symbol.clone())
                                 .or_insert_with(|| LiveMarketFeedResponse {
                                     symbol: symbol.clone(),
+                                    backpack: None,
                                     hyperliquid: None,
                                     pacifica: None,
                                 });
@@ -39,6 +40,7 @@ pub async fn run_feed_manager(
                                 mark_px: Some(mark_px),
                                 funding: Some(funding_rate),
                                 max_leverage: match &update.exchange {
+                                    PerpetualExchange::Backpack => None,
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Lighter => None,
@@ -46,6 +48,7 @@ pub async fn run_feed_manager(
                             };
 
                             match &update.exchange {
+                                PerpetualExchange::Backpack => entry.backpack = Some(value),
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
                                 PerpetualExchange::Lighter => {}

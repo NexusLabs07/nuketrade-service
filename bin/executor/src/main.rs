@@ -88,6 +88,13 @@ async fn main() -> anyhow::Result<()> {
         pacifica::start_pacifica_funding_feed(db_clone_2, feed_tx_clone_2).await;
     });
 
+    log::info!("Starting Backpack live feed....");
+    let db_clone_3 = db.clone();
+    let feed_tx_clone_3 = feed_tx.clone();
+    tokio::spawn(async move {
+        backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
+    });
+
     drop(feed_tx);
 
     run_server(config, db, watch_rx, seven_day_apr_rx).await?;

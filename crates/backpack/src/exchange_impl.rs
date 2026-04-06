@@ -170,7 +170,7 @@ impl Exchange for BackpackExchange {
             symbol,
             mark_price,
             funding_rate,
-            timestamp_ms: parsed.data.event_time_us / 1000,
+            timestamp_ms: parsed.data.engine_time_us / 1000,
         }]
     }
 
