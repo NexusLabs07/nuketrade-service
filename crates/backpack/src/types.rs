@@ -1,6 +1,14 @@
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct MarginFunction {
+    #[serde(rename = "type")]
+    pub function_type: String,
+    pub base: String,
+    pub factor: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct BackpackMarket {
     pub symbol: String,
     #[serde(rename = "baseSymbol")]
@@ -12,6 +20,10 @@ pub struct BackpackMarket {
     #[serde(rename = "orderBookState")]
     pub order_book_state: Option<String>,
     pub visible: Option<bool>,
+    #[serde(rename = "imfFunction")]
+    pub imf_function: Option<MarginFunction>,
+    #[serde(rename = "mmfFunction")]
+    pub mmf_function: Option<MarginFunction>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

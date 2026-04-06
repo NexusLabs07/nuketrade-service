@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use async_trait::async_trait;
 use perp_core::{
@@ -10,7 +10,9 @@ use serde_json::json;
 
 use crate::{
     BACKPACK_HTTP_URL, BACKPACK_WS_URL,
-    helpers::markets::{canonical_symbol_from_backpack_symbol, is_active_perp_market},
+    helpers::markets::{
+        canonical_symbol_from_backpack_symbol, is_active_perp_market, max_leverage_from_market,
+    },
     types::{BackpackMarket, MarkPriceData, StreamEnvelope},
 };
 
@@ -49,10 +51,7 @@ impl BackpackExchange {
         }
     }
 
-    /// Finding visible active PERP symbols from Backpack REST
-    /// Using Backpack's REST discovery because symbols can vary (`*_USDC`, `*_USDC_PERP`, etc.), and this keeps the
-    /// websocket bootstrap accurate
-    pub async fn fetch_active_funding_symbols(&self) -> Result<Vec<String>, ExchangeError> {
+    pub async fn fetch_active_markets(&self) -> Result<Vec<BackpackMarket>, ExchangeError> {
         let response = self
             .client
             .get(format!("{}/markets", self.http_url))
@@ -73,15 +72,44 @@ impl BackpackExchange {
             .await
             .map_err(|e| ExchangeError::parse("markets", e.to_string()))?;
 
-        let symbols = markets
+        Ok(markets.into_iter().filter(is_active_perp_market).collect())
+    }
+
+    /// Finding visible active PERP symbols from Backpack REST
+    /// Using Backpack's REST discovery because symbols can vary (`*_USDC`, `*_USDC_PERP`, etc.), and this keeps the
+    /// websocket bootstrap accurate
+    pub async fn fetch_active_funding_symbols(&self) -> Result<Vec<String>, ExchangeError> {
+        let symbols = self
+            .fetch_active_markets()
+            .await?
             .into_iter()
-            .filter(is_active_perp_market)
             .map(|market| market.symbol)
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
 
         Ok(symbols)
+    }
+
+    pub async fn fetch_max_leverage_map(&self) -> Result<HashMap<String, u32>, ExchangeError> {
+        let mut leverage_by_symbol = HashMap::new();
+
+        for market in self.fetch_active_markets().await? {
+            let Some(symbol) = canonical_symbol_from_backpack_symbol(&market.symbol) else {
+                continue;
+            };
+
+            let Some(max_leverage) = max_leverage_from_market(&market) else {
+                continue;
+            };
+
+            leverage_by_symbol
+                .entry(symbol)
+                .and_modify(|current: &mut u32| *current = (*current).max(max_leverage))
+                .or_insert(max_leverage);
+        }
+
+        Ok(leverage_by_symbol)
     }
 }
 
