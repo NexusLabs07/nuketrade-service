@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
+use backpack::BackpackExchange;
 use tokio::sync::{mpsc, watch};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -59,6 +60,17 @@ async fn main() -> anyhow::Result<()> {
         .map(|m| (m.symbol.to_string(), m.max_leverage))
         .collect();
 
+    let backpack_leverage: HashMap<String, u32> =
+        match BackpackExchange::new().fetch_max_leverage_map().await {
+            Ok(map) => map,
+            Err(err) => {
+                log::warn!(
+                    "Backpack: failed to fetch leverage metadata, continuing with empty map:{err}"
+                );
+                HashMap::new()
+            }
+        };
+
     let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
 
     let initial_snapshot = Arc::new(FeedSnapshot {
@@ -72,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
         watch_tx,
         hl_leverage,
         pacifica_leverage,
+        backpack_leverage,
     ));
 
     log::info!("Starting Hyperliquid live feed....");
@@ -86,6 +99,13 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_2 = feed_tx.clone();
     tokio::spawn(async move {
         pacifica::start_pacifica_funding_feed(db_clone_2, feed_tx_clone_2).await;
+    });
+
+    log::info!("Starting Backpack live feed....");
+    let db_clone_3 = db.clone();
+    let feed_tx_clone_3 = feed_tx.clone();
+    tokio::spawn(async move {
+        backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
     });
 
     drop(feed_tx);

@@ -24,3 +24,4 @@ hyperliquid = { path = "../../crates/hyperliquid" }
 perp_core = { path = "../../crates/core" }
 server = { path = "../../crates/server" }
 pacifica = { path = "../../crates/pacifica" }
+backpack ={ path = "../../crates/backpack" }

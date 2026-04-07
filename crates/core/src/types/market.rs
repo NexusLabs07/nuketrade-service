@@ -22,6 +22,7 @@ pub struct MarketInfo {
 /// Live feed to store current token price and funding rate.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RawMarketData {
+    pub backpack: HashMap<String, (f64, f64)>,
     pub hyperliquid: HashMap<String, (f64, f64)>,
     pub lighter: HashMap<String, (f64, f64)>,
     pub pacifica: HashMap<String, (f64, f64)>,
