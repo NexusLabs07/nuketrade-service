@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use perp_core::parse_f64;
 
 use crate::types::BackpackMarket;
@@ -13,6 +15,13 @@ pub fn canonical_symbol_from_backpack_symbol(symbol: &str) -> Option<String> {
     } else {
         Some(base.to_string())
     }
+}
+
+pub fn is_allowed_backpack_symbol(symbol: &str, allowed_symbols: &HashSet<&str>) -> bool {
+    canonical_symbol_from_backpack_symbol(symbol)
+        .as_deref()
+        .map(|canonical| allowed_symbols.contains(canonical))
+        .unwrap_or(false)
 }
 
 /// we only subscribe to active PERP markets for now
@@ -51,6 +60,8 @@ pub fn max_leverage_from_market(market: &BackpackMarket) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::types::{BackpackMarket, MarginFunction};
 
     use super::*;
@@ -69,6 +80,15 @@ mod tests {
             canonical_symbol_from_backpack_symbol("1000PEPE_USDC").as_deref(),
             Some("1000PEPE")
         );
+    }
+
+    #[test]
+    fn allowlist_matches_against_canonical_symbol() {
+        let allowed = HashSet::from(["SOL", "BTC"]);
+
+        assert!(is_allowed_backpack_symbol("SOL_USDC", &allowed));
+        assert!(is_allowed_backpack_symbol("BTC_USDC_PERP", &allowed));
+        assert!(!is_allowed_backpack_symbol("AVNT_USDC", &allowed));
     }
 
     #[test]

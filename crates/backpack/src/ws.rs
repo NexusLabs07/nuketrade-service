@@ -1,16 +1,20 @@
-use std::sync::Arc;
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
 
-use perp_core::{MarketFeedUpdate, WsConfig, run_funding_feed};
+use perp_core::{MarketFeedUpdate, WsConfig, run_funding_feed, token_list::TOKEN_LIST};
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 
-use crate::BackpackExchange;
+use crate::{BackpackExchange, helpers::markets::is_allowed_backpack_symbol};
 
 /// this starts the backpack public funding feed
 ///
 /// flow is something like:
 /// - Discover active PERP symbols from REST
-/// - Subscribe to `markPrice.<symbol>` for each discovered symbol
+/// - Keep only markets whose canonical symbol exists in TOKEN_LIST
+/// - Subscribe to `markPrice.<symbol>` for each filtered market
 /// - shared core websocket handler manage reconnects and ping/pong
 pub async fn start_backpack_funding_feed(
     db_conn: Arc<PgPool>,
@@ -28,12 +32,25 @@ pub async fn start_backpack_funding_feed(
         use_custom_ws_config: false,
     };
 
+    let allowed_symbols: HashSet<&str> = TOKEN_LIST.iter().copied().collect();
+
     let backpack_symbols = loop {
-        match exchange.fetch_active_funding_symbols().await {
-            Ok(symbols) if !symbols.is_empty() => break symbols,
-            Ok(_) => {
+        match exchange.fetch_active_markets().await {
+            Ok(markets) => {
+                let symbols: Vec<String> = markets
+                    .into_iter()
+                    .filter(|market| is_allowed_backpack_symbol(&market.symbol, &allowed_symbols))
+                    .map(|market| market.symbol)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+
+                if !symbols.is_empty() {
+                    break symbols;
+                }
+
                 log::warn!(
-                    "Backpack: no active PERP markets found, retrying in {} seconds",
+                    "Backpack: no TOKEN_LIST PERP markets found, retrying in {} seconds",
                     config.reconnect_delay_secs
                 );
             }
@@ -41,11 +58,12 @@ pub async fn start_backpack_funding_feed(
                 log::error!("Backpack: failed to fetch PERP markets before WS start: {err}");
             }
         };
+
         tokio::time::sleep(config.reconnect_delay()).await;
     };
 
     log::info!(
-        "Backpack: starting funding feed for {} markets",
+        "Backpack: starting funding feed for {} TOKEN_LIST markets",
         backpack_symbols.len()
     );
 
