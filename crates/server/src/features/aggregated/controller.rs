@@ -14,7 +14,7 @@ use pacifica::{
     },
     helpers::markets::PACIFICA_MARKETS,
 };
-use perp_core::SevenDayApr;
+use perp_core::{SevenDayApr, token_list::TOKEN_LIST};
 use serde::Deserialize;
 use validator::Validate;
 
@@ -42,6 +42,10 @@ pub struct MergedPositionsParams {
 pub struct ChartParams {
     #[validate(custom(function = "validate_timeframe"))]
     timeframe: String,
+}
+
+fn is_supported_token(symbol: &str) -> bool {
+    TOKEN_LIST.contains(&symbol)
 }
 
 pub async fn get_merged_open_positions(
@@ -174,7 +178,14 @@ pub async fn get_live_market_feed(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LiveMarketFeedResponse>>, AppError> {
     let snapshot = state.feed.borrow().clone();
-    Ok(Json(snapshot.formatted.clone()))
+
+    let filtered: Vec<LiveMarketFeedResponse> = snapshot
+        .formatted
+        .iter()
+        .filter(|entry| is_supported_token(&entry.symbol))
+        .cloned()
+        .collect();
+    Ok(Json(filtered))
 }
 
 pub async fn get_token_chart(
@@ -182,6 +193,10 @@ pub async fn get_token_chart(
     ValidatedQuery(params): ValidatedQuery<ChartParams>,
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<String, Vec<FundingRate>>>, AppError> {
+    if !is_supported_token(&symbol) {
+        return Ok(Json(HashMap::new()));
+    }
+
     let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
@@ -194,5 +209,19 @@ pub async fn get_token_chart(
 
 pub async fn get_average_apr(State(state): State<AppState>) -> Result<Json<SevenDayApr>, AppError> {
     let seven_day_apr = state.seven_day_apr.borrow().clone();
-    Ok(Json(seven_day_apr))
+
+    let filtered = SevenDayApr {
+        seven_day_avg_apr: seven_day_apr
+            .seven_day_avg_apr
+            .into_iter()
+            .filter(|(symbol, _)| is_supported_token(symbol))
+            .collect(),
+        seven_day_spread_apr: seven_day_apr
+            .seven_day_spread_apr
+            .into_iter()
+            .filter(|(symbol, _)| is_supported_token(symbol))
+            .collect(),
+    };
+
+    Ok(Json(filtered))
 }
