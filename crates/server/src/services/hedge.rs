@@ -167,11 +167,28 @@ fn handle_funding(intent: &HedgeIntent, legs: &[HedgeLeg]) -> StateMachineOutput
     for leg in legs {
         match leg.status.as_str() {
             leg_status::PENDING => {
-                return StateMachineOutput {
-                    response: bridge_action_for(intent, leg),
-                    intent_status_update: None,
-                    leg_status_updates: vec![],
-                };
+                let exchange = PerpetualExchange::from_str(&leg.exchange).ok();
+                let needs_bridge = exchange
+                    .as_ref()
+                    .and_then(|e| e.bridge_action())
+                    .is_some();
+
+                if needs_bridge {
+                    // Leg needs a bridge (e.g. Solana → Arbitrum for Hyperliquid).
+                    return StateMachineOutput {
+                        response: bridge_action_for(intent, leg),
+                        intent_status_update: None,
+                        leg_status_updates: vec![],
+                    };
+                } else {
+                    // No bridge needed (e.g. Pacifica — funds already on Solana).
+                    // Auto-advance to BRIDGE_CONFIRMED so the next pass picks up deposit.
+                    return StateMachineOutput {
+                        response: deposit_action_for(intent, leg),
+                        intent_status_update: None,
+                        leg_status_updates: vec![(leg.id, leg_status::BRIDGE_CONFIRMED.to_string())],
+                    };
+                }
             }
             leg_status::BRIDGE_CONFIRMED => {
                 return StateMachineOutput {
@@ -338,11 +355,11 @@ fn bridge_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse
         leg: Some(leg.exchange.clone()),
         amount_usd: Some(bridge_amount),
         params: Some(json!({
-            "origin_chain_id": Chain::BASE.id,
+            "origin_chain_id": Chain::SOLANA.id,
             "destination_chain_id": dest_chain.id,
-            "origin_currency": Chain::BASE.usdc_address,
+            "origin_currency": Chain::SOLANA.usdc_address,
             "destination_currency": dest_chain.usdc_address,
-            "user_address": user_address,
+            "user_address": intent.solana_address,
             "recipient": user_address,
             "leg_id": leg.id.to_string(),
             "existing_margin_usd": leg.existing_margin_usd,
@@ -383,18 +400,29 @@ fn deposit_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionRespons
 /// For a FAILED leg that still has retries left, figure out which action to retry.
 fn retry_action_for(intent: &HedgeIntent, leg: &HedgeLeg) -> NextActionResponse {
     // The leg failed — we need to figure out *what* failed.
-    // If it has no successful bridge tx → retry bridge.
+    // If it has no successful bridge tx → retry bridge (if needed).
     // If it has a bridge but no deposit → retry deposit.
     // We infer this from the last known good status before failure.
     // For simplicity, we look at funded_amount_usd:
-    //   - 0 means bridge never completed → retry bridge
+    //   - 0 means bridge/deposit never completed
     //   - > 0 means bridge completed but deposit failed → retry deposit
     // This is a heuristic; a more robust approach would check tx_references.
 
     if leg.funded_amount_usd > 0.0 {
-        deposit_action_for(intent, leg)
-    } else {
+        return deposit_action_for(intent, leg);
+    }
+
+    // Check whether this exchange requires a bridge at all.
+    let has_bridge = PerpetualExchange::from_str(&leg.exchange)
+        .ok()
+        .and_then(|e| e.bridge_action())
+        .is_some();
+
+    if has_bridge {
         bridge_action_for(intent, leg)
+    } else {
+        // No bridge for this exchange (e.g. Pacifica — already on Solana).
+        deposit_action_for(intent, leg)
     }
 }
 

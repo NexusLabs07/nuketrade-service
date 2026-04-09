@@ -21,8 +21,6 @@ pub struct QuoteRequest {
     pub amount: String,
     #[serde(rename = "tradeType")]
     pub trade_type: String,
-    #[serde(rename = "usePermit")]
-    pub use_permit: bool,
     pub recipient: String,
 }
 

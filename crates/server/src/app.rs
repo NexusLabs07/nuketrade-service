@@ -128,8 +128,10 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/hedge-intents", hedge::routes::routes())
         .nest(
             "/withdraw-intents",
-            withdraw::routes::routes()
-                .layer(axum__middleware::from_fn_with_state(auth_state.clone(), require_auth)),
+            withdraw::routes::routes().layer(axum__middleware::from_fn_with_state(
+                auth_state.clone(),
+                require_auth,
+            )),
         )
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))

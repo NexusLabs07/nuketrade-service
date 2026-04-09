@@ -133,18 +133,29 @@ fn handle_withdrawn(intent: &WithdrawalIntent) -> Result<StateMachineOutput, Str
     let exchange = PerpetualExchange::from_str(&intent.exchange)
         .map_err(|_| format!("unrecognised exchange '{}' stored in intent", intent.exchange))?;
 
-    let chain = exchange
+    let origin_chain = exchange
         .chain()
         .ok_or_else(|| format!("no chain mapping for exchange '{}'", intent.exchange))?;
+
+    let destination_chain = Chain::from_id(intent.destination_chain_id as u64)
+        .ok_or_else(|| format!("unsupported destination chain id '{}'", intent.destination_chain_id))?;
+
+    // If funds are already on the destination chain, no bridge needed.
+    if origin_chain.id == destination_chain.id {
+        return Ok(StateMachineOutput {
+            response: NextActionResponse::noop(),
+            intent_status_update: Some(intent_status::COMPLETED.to_string()),
+        });
+    }
 
     Ok(StateMachineOutput {
         response: NextActionResponse {
             action: action::BRIDGE.to_string(),
             params: Some(json!({
-                "origin_chain_id": chain.id,
-                "destination_chain_id": intent.destination_chain_id,
-                "origin_currency": chain.usdc_address,
-                "destination_currency": Chain::BASE.usdc_address,
+                "origin_chain_id": origin_chain.id,
+                "destination_chain_id": destination_chain.id,
+                "origin_currency": origin_chain.usdc_address,
+                "destination_currency": destination_chain.usdc_address,
                 "amount_usd": intent.amount_usd,
                 "recipient": intent.recipient,
                 "user_address": intent.evm_address,

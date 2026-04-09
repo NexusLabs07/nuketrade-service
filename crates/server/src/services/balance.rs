@@ -211,6 +211,28 @@ pub async fn check_hl_balances(config: &Config, evm_address: &str) -> LegBalance
     }
 }
 
+/// Query all relevant balances for a Backpack leg.
+///
+/// Backpack account queries require ED25519 auth which is not yet implemented,
+/// so margin defaults to 0. On-chain USDC is queried from Solana.
+pub async fn check_backpack_balances(config: &Config, solana_address: &str) -> LegBalances {
+    let onchain = query_sol_onchain_usdc(config, solana_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to query Solana on-chain USDC balance for Backpack: {e}, defaulting to 0");
+            0.0
+        });
+
+    log::info!(
+        "Backpack balance check for {solana_address}: margin=0.00 (unauthenticated), on-chain={onchain:.2}"
+    );
+
+    LegBalances {
+        exchange_margin_used: 0.0,
+        onchain_usd: onchain,
+    }
+}
+
 /// Query all relevant balances for a Pacifica leg.
 pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> LegBalances {
     let margin = query_pacifica_margin_balance(solana_address)
@@ -248,6 +270,7 @@ pub async fn check_leg_balances(
     match exchange {
         "hyperliquid" => check_hl_balances(config, evm_address).await,
         "pacifica" => check_pacifica_balances(config, solana_address).await,
+        "backpack" => check_backpack_balances(config, solana_address).await,
         _ => {
             log::warn!("Unknown exchange {exchange}, returning zero balances");
             LegBalances::default()

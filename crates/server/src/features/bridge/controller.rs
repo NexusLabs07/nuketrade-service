@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::extractors::ValidatedJson;
 use crate::features::auth::types::AuthClaims;
 use crate::state::AppState;
-use crate::validation::bridge::{validate_balance, validate_destination_usdc_address};
+use crate::validation::bridge::{validate_destination_usdc_address, validate_solana_balance};
 use axum::extract::State;
 use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
@@ -19,8 +19,6 @@ pub struct QuotePayload {
     pub amount: String,
     #[serde(rename = "tradeType")]
     pub trade_type: String,
-    #[serde(rename = "usePermit")]
-    pub use_permit: bool,
     #[validate(length(min = 1, message = "Recipient must not be empty"))]
     pub recipient: String,
 }
@@ -48,16 +46,16 @@ impl From<ExecutePermitPayload> for PermitRequest {
     }
 }
 
-//* Bridge only supports base to other chains for now */
+/// Bridge originates from Solana to other chains (e.g. Solana → Arbitrum).
 pub async fn get_quote(
     State(app_state): State<AppState>,
     Extension(claims): Extension<AuthClaims>,
     ValidatedJson(payload): ValidatedJson<QuotePayload>,
 ) -> Result<Json<QuoteResponse>, AppError> {
-    validate_balance(
-        claims.evm_address.clone(),
+    validate_solana_balance(
+        &claims.solana_address,
         &payload.amount,
-        &app_state.config.base_rpc_url,
+        &app_state.config.solana_rpc_url,
     )
     .await
     .map_err(|e| {
@@ -66,19 +64,17 @@ pub async fn get_quote(
         AppError::Validation(errors)
     })?;
 
-    //Deposit only available from base as of now
     let quote_request = QuoteRequest {
-        user: claims.evm_address,
-        origin_chain_id: Chain::BASE.id,
+        user: claims.solana_address,
+        origin_chain_id: Chain::SOLANA.id,
         destination_chain_id: payload.destination_chain_id,
-        origin_currency: Chain::BASE.usdc_address.to_string(),
+        origin_currency: Chain::SOLANA.usdc_address.to_string(),
         destination_currency: Chain::from_id(payload.destination_chain_id)
             .unwrap()
             .usdc_address
             .to_string(), //already verified at validation layer
         amount: payload.amount,
         trade_type: payload.trade_type,
-        use_permit: payload.use_permit,
         recipient: payload.recipient,
     };
 

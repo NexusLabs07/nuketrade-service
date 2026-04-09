@@ -35,7 +35,7 @@ pub struct CreateWithdrawalIntentRequest {
 }
 
 fn default_destination_chain_id() -> i32 {
-    Chain::BASE.id as i32
+    Chain::SOLANA.id as i32
 }
 
 #[derive(Debug, Serialize)]
@@ -235,8 +235,6 @@ pub struct BridgeRequest {
     pub amount: String,
     #[serde(rename = "tradeType")]
     pub trade_type: String,
-    #[serde(rename = "usePermit")]
-    pub use_permit: bool,
     #[validate(custom(function = "validate_evm_address"))]
     pub recipient: String,
 }
@@ -268,7 +266,6 @@ pub async fn bridge(
         destination_currency: validated_destination_chain.usdc_address.to_string(),
         amount: payload.amount,
         trade_type: payload.trade_type,
-        use_permit: payload.use_permit,
         recipient: payload.recipient,
     };
 

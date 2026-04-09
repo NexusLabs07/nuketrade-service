@@ -87,7 +87,7 @@ pub async fn check_and_apply_existing_balances(
 }
 
 // ============================= Action Result Handlers =============================
-/// Handle bridge action result (BRIDGE_BASE_TO_ARB / BRIDGE_BASE_TO_SOL).
+/// Handle bridge action result (BRIDGE_SOL_TO_ARB).
 pub async fn handle_bridge_result(
     db: Arc<PgPool>,
     intent: &hedge_db::HedgeIntent,

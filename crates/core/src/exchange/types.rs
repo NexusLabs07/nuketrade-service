@@ -15,8 +15,11 @@ pub enum PerpetualExchange {
 
 impl PerpetualExchange {
     /// All exchanges that participate in hedging (bridge + deposit flows).
-    pub const HEDGEABLE: &'static [PerpetualExchange] =
-        &[PerpetualExchange::Hyperliquid, PerpetualExchange::Pacifica];
+    pub const HEDGEABLE: &'static [PerpetualExchange] = &[
+        PerpetualExchange::Hyperliquid,
+        PerpetualExchange::Pacifica,
+        PerpetualExchange::Backpack,
+    ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -30,7 +33,7 @@ impl PerpetualExchange {
     /// The destination chain for this exchange (None for exchanges without a chain mapping).
     pub fn chain(&self) -> Option<Chain> {
         match self {
-            PerpetualExchange::Backpack => None,
+            PerpetualExchange::Backpack => Some(Chain::SOLANA),
             PerpetualExchange::Hyperliquid => Some(Chain::ARBITRUM),
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
             PerpetualExchange::Lighter => None,
@@ -42,12 +45,13 @@ impl PerpetualExchange {
         self.chain().map(|c| c.id).unwrap_or(0)
     }
 
-    /// The bridge action name (e.g. "BRIDGE_BASE_TO_ARB").
+    /// The bridge action name (e.g. "BRIDGE_SOL_TO_ARB").
+    /// Bridges originate from Solana. Pacifica needs no bridge (already on Solana).
     pub fn bridge_action(&self) -> Option<&'static str> {
         match self {
             PerpetualExchange::Backpack => None,
-            PerpetualExchange::Hyperliquid => Some("BRIDGE_BASE_TO_ARB"),
-            PerpetualExchange::Pacifica => Some("BRIDGE_BASE_TO_SOL"),
+            PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
+            PerpetualExchange::Pacifica => None,
             PerpetualExchange::Lighter => None,
         }
     }
@@ -55,7 +59,7 @@ impl PerpetualExchange {
     /// The deposit action name (e.g. "DEPOSIT_TO_HYPERLIQUID").
     pub fn deposit_action(&self) -> Option<&'static str> {
         match self {
-            PerpetualExchange::Backpack => None,
+            PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
             PerpetualExchange::Lighter => None,
