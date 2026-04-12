@@ -1,5 +1,6 @@
 pub mod exchange_impl;
 pub mod helpers;
+pub mod services;
 pub mod types;
 pub mod ws;
 

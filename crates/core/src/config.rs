@@ -35,6 +35,10 @@ pub struct Config {
     //Relay
     pub relay_api_key: String,
 
+    // Backpack
+    pub backpack_api_key: String,
+    pub backpack_api_secret: String,
+
     // Google OAuth
     pub google_client_id: String,
 
@@ -90,6 +94,11 @@ impl Config {
 
         let relay_api_key = std::env::var("RELAY_API_KEY").context("RELAY API KEY is required")?;
 
+        let backpack_api_key = std::env::var("BACKPACK_API_KEY")
+            .context("BACKPACK_API_KEY is required")?;
+        let backpack_api_secret = std::env::var("BACKPACK_API_SECRET")
+            .context("BACKPACK_API_SECRET is required")?;
+
         let turnkey_api_base_url = std::env::var("TURNKEY_API_BASE_URL")
             .unwrap_or_else(|_| "https://api.turnkey.com".to_string());
 
@@ -122,6 +131,8 @@ impl Config {
             evm_fee_payer_private_key,
             solana_fee_payer_private_key,
             relay_api_key,
+            backpack_api_key,
+            backpack_api_secret,
             solana_rpc_url,
             arbitrum_rpc_url,
             base_rpc_url,

@@ -32,6 +32,7 @@ base64 = { workspace = true }
 db = { path = "../db" }
 bridge = { path = "../bridge" }
 perp_core = { path = "../core" }
+backpack = { path = "../backpack" }
 pacifica = { path = "../pacifica" }
 hyperliquid = { path = "../hyperliquid" }
 
