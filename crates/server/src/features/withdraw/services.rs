@@ -57,7 +57,7 @@ impl WithdrawService {
         withdraw_db::insert_withdrawal_step(db.clone(), &withdraw_step).await?;
 
         log::info!(
-            "Created withdrawal intent {} for user {} ({} → Base, {:.2} USD)",
+            "Created withdrawal intent {} for user {} ({} → Solana, {:.2} USD)",
             intent_id,
             user_id,
             payload.exchange,
@@ -252,7 +252,7 @@ async fn handle_bridge_result(
         .await?;
 
         log::info!(
-            "Withdrawal intent {} COMPLETED. USDC bridged to Base, tx: {:?}",
+            "Withdrawal intent {} COMPLETED. USDC bridged to Solana, tx: {:?}",
             intent.id,
             payload.tx_hash
         );

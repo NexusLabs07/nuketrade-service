@@ -298,7 +298,7 @@ pub fn compute_funding_needs(
 pub struct FundingNeeds {
     /// How much USDC needs to be deposited into the protocol margin.
     pub deposit_needed: f64,
-    /// How much USDC needs to be bridged from Base to the destination chain.
+    /// How much USDC needs to be bridged from Solana to the destination chain.
     pub bridge_needed: f64,
 }
 

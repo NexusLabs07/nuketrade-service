@@ -452,7 +452,7 @@ pub fn compute_deposit_needed(leg: &HedgeLeg) -> f64 {
     (leg.target_amount_usd - leg.existing_margin_usd).max(0.0)
 }
 
-/// Compute how much USDC needs to be bridged from Base.
+/// Compute how much USDC needs to be bridged from Solana.
 /// bridge_needed = max(0, deposit_needed - existing_onchain)
 pub fn compute_bridge_needed(leg: &HedgeLeg) -> f64 {
     let deposit_needed = compute_deposit_needed(leg);

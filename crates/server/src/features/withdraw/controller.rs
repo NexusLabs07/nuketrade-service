@@ -22,20 +22,33 @@ use db::withdraw::{self as withdraw_db};
 
 // ============================= Request / Response Types =============================
 
+fn default_destination_chain_id() -> i32 {
+    Chain::SOLANA.id as i32
+}
+
+pub fn validate_destination_chain_is_solana(
+    destination_chain_id: i32,
+) -> Result<(), validator::ValidationError> {
+    if destination_chain_id != Chain::SOLANA.id as i32 {
+        return Err(validator::ValidationError::new(
+            "destination_chain_must_be_solana",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CreateWithdrawalIntentRequest {
     pub exchange: PerpetualExchange,
     #[validate(range(exclusive_min = 0.0, message = "Amount must be greater than 0"))]
     pub amount_usd: f64,
-    #[validate(custom(function = "validate_evm_address"))]
+    /// Destination address (Solana). Withdrawals are delivered to Solana USDC.
+    #[validate(custom(function = "validate_solana_address"))]
     pub recipient: String,
-    /// Chain ID of the destination (defaults to Base = 8453).
+    /// Chain ID of the destination (Solana only).
     #[serde(default = "default_destination_chain_id")]
+    #[validate(custom(function = "validate_destination_chain_is_solana"))]
     pub destination_chain_id: i32,
-}
-
-fn default_destination_chain_id() -> i32 {
-    Chain::SOLANA.id as i32
 }
 
 #[derive(Debug, Serialize)]
@@ -218,10 +231,6 @@ pub async fn create_withdraw_transaction(
             let value = serde_json::to_value(&response)?;
             Ok(Json(value))
         }
-        _ => Err(AppError::parse(
-            "exchange",
-            "unsupported exchange for withdrawal",
-        )),
     }
 }
 
