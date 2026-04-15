@@ -13,6 +13,7 @@ pub async fn run_feed_manager(
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
     backpack_leverage: HashMap<String, u32>,
+    bulk_leverage: HashMap<String, u32>,
 ) {
     let mut by_symbol: HashMap<String, LiveMarketFeedResponse> = HashMap::new();
     let mut dirty = false;
@@ -33,6 +34,7 @@ pub async fn run_feed_manager(
                                 .or_insert_with(|| LiveMarketFeedResponse {
                                     symbol: symbol.clone(),
                                     backpack: None,
+                                    bulk: None,
                                     hyperliquid: None,
                                     pacifica: None,
                                 });
@@ -42,6 +44,7 @@ pub async fn run_feed_manager(
                                 funding: Some(funding_rate),
                                 max_leverage: match &update.exchange {
                                     PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
+                                    PerpetualExchange::Bulk => bulk_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Lighter => None,
@@ -50,10 +53,12 @@ pub async fn run_feed_manager(
 
                             match &update.exchange {
                                 PerpetualExchange::Backpack => entry.backpack = Some(value),
+                                PerpetualExchange::Bulk => entry.bulk = Some(value),
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
                                 PerpetualExchange::Lighter => {}
                             }
+
 
                             changed = true;
                         }

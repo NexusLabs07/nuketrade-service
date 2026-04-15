@@ -8,6 +8,7 @@ use crate::chains::{AddressType, Chain};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PerpetualExchange {
     Backpack,
+    Bulk,
     Hyperliquid,
     Lighter,
     Pacifica,
@@ -24,6 +25,7 @@ impl PerpetualExchange {
     pub fn as_str(&self) -> &'static str {
         match self {
             PerpetualExchange::Backpack => "backpack",
+            PerpetualExchange::Bulk => "bulk",
             PerpetualExchange::Hyperliquid => "hyperliquid",
             PerpetualExchange::Lighter => "lighter",
             PerpetualExchange::Pacifica => "pacifica",
@@ -34,6 +36,7 @@ impl PerpetualExchange {
     pub fn chain(&self) -> Option<Chain> {
         match self {
             PerpetualExchange::Backpack => Some(Chain::SOLANA),
+            PerpetualExchange::Bulk => Some(Chain::SOLANA),
             PerpetualExchange::Hyperliquid => Some(Chain::ARBITRUM),
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
             PerpetualExchange::Lighter => None,
@@ -50,6 +53,7 @@ impl PerpetualExchange {
     pub fn bridge_action(&self) -> Option<&'static str> {
         match self {
             PerpetualExchange::Backpack => None,
+            PerpetualExchange::Bulk => None,
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
             PerpetualExchange::Lighter => None,
@@ -60,6 +64,7 @@ impl PerpetualExchange {
     pub fn deposit_action(&self) -> Option<&'static str> {
         match self {
             PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
+            PerpetualExchange::Bulk => None,
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
             PerpetualExchange::Lighter => None,
@@ -70,7 +75,9 @@ impl PerpetualExchange {
     pub fn address_type(&self) -> AddressType {
         match self {
             PerpetualExchange::Hyperliquid | PerpetualExchange::Lighter => AddressType::Evm,
-            PerpetualExchange::Pacifica | PerpetualExchange::Backpack => AddressType::Solana,
+            PerpetualExchange::Pacifica | PerpetualExchange::Backpack | PerpetualExchange::Bulk => {
+                AddressType::Solana
+            }
         }
     }
 
@@ -124,6 +131,7 @@ impl std::str::FromStr for PerpetualExchange {
             "lighter" => Ok(PerpetualExchange::Lighter),
             "pacifica" => Ok(PerpetualExchange::Pacifica),
             "backpack" => Ok(PerpetualExchange::Backpack),
+            "bulk" => Ok(PerpetualExchange::Bulk),
             _ => Err(format!("Unknown exchange: {s}")),
         }
     }
