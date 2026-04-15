@@ -1,0 +1,20 @@
+[package]
+name = "bulk"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+
+perp_core = { path = "../core" }

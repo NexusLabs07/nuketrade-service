@@ -40,6 +40,7 @@ pub struct LiveMarketFeedResponse {
     pub hyperliquid: Option<MarketFeedValueStruct>,
     pub pacifica: Option<MarketFeedValueStruct>,
     pub backpack: Option<MarketFeedValueStruct>,
+    pub bulk: Option<MarketFeedValueStruct>,
 }
 
 #[derive(Clone, Debug)]

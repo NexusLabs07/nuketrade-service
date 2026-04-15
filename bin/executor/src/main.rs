@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
 use backpack::BackpackExchange;
+use bulk::BulkExchange;
 use tokio::sync::{mpsc, watch};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -71,6 +72,17 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
+    let bulk_leverage: HashMap<String, u32> = match BulkExchange::new()
+        .fetch_max_leverage_map()
+        .await
+    {
+        Ok(map) => map,
+        Err(err) => {
+            log::warn!("Bulk: failed to fetch leverage metadata, continuing with empty map:{err}");
+            HashMap::new()
+        }
+    };
+
     let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
 
     let initial_snapshot = Arc::new(FeedSnapshot {
@@ -85,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
         hl_leverage,
         pacifica_leverage,
         backpack_leverage,
+        bulk_leverage,
     ));
 
     log::info!("Starting Hyperliquid live feed....");
@@ -106,6 +119,13 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_3 = feed_tx.clone();
     tokio::spawn(async move {
         backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
+    });
+
+    log::info!("Starting Bulk live feed....");
+    let db_clone_4 = db.clone();
+    let feed_tx_clone_4 = feed_tx.clone();
+    tokio::spawn(async move {
+        bulk::start_bulk_funding_feed(db_clone_4, feed_tx_clone_4).await;
     });
 
     drop(feed_tx);

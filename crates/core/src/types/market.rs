@@ -23,6 +23,7 @@ pub struct MarketInfo {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RawMarketData {
     pub backpack: HashMap<String, (f64, f64)>,
+    pub bulk: HashMap<String, (f64, f64)>,
     pub hyperliquid: HashMap<String, (f64, f64)>,
     pub lighter: HashMap<String, (f64, f64)>,
     pub pacifica: HashMap<String, (f64, f64)>,
