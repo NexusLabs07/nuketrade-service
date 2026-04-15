@@ -2,7 +2,7 @@ use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bincode::serialize;
 use ed25519_dalek::{Signer, SigningKey};
-use perp_core::{Chain, TOKEN_PROGRAM, has_sufficient_balance};
+use perp_core::{ASSOCIATED_TOKEN_PROGRAM, SYSTEM_PROGRAM, Chain, TOKEN_PROGRAM, has_sufficient_balance};
 use serde::{Deserialize, Serialize};
 use solana_commitment_config::CommitmentConfig;
 use solana_instruction::{AccountMeta, Instruction};
@@ -21,6 +21,7 @@ const MINIMUM_DEPOSIT_AMOUNT: u64 = 1_000_000; // 1 USDC (6 decimals)
 const BACKPACK_SIGNATURE_WINDOW: &str = "5000";
 const BACKPACK_DEPOSIT_ADDRESS_URL: &str =
     "https://api.backpack.exchange/wapi/v1/capital/deposit/address";
+const SYSVAR_RENT_PUBKEY: &str = "SysvarRent111111111111111111111111111111111";
 
 // ============================= Request Types =============================
 
@@ -40,11 +41,10 @@ struct DepositAddressResponse {
 
 /// Build the Backpack ED25519 signature for a GET request.
 ///
-/// Backpack's signing scheme:
-/// 1. Collect all query params + `instruction` + `timestamp` + `window`
-/// 2. Sort keys alphabetically, join as `key=value&...`
-/// 3. Sign the resulting string with the ED25519 secret key
-/// 4. Base64-encode the 64-byte signature
+/// Backpack's documented signing scheme for private endpoints:
+/// - Start with `instruction=<instruction>`
+/// - Append request params ordered alphabetically: `&k1=v1&k2=v2...`
+/// - Append `&timestamp=<ms>&window=<ms_window>`
 fn sign_backpack_get(
     api_secret: &str,
     instruction: &str,
@@ -56,18 +56,24 @@ fn sign_backpack_get(
         .as_millis()
         .to_string();
 
-    // Build the sorted parameter list.
+    // Build signature string exactly as documented:
+    // instruction first, then sorted params, then timestamp/window last.
+    let mut message = format!("instruction={instruction}");
+
     let mut params: Vec<(&str, &str)> = extra_params.to_vec();
-    params.push(("instruction", instruction));
-    params.push(("timestamp", &timestamp));
-    params.push(("window", BACKPACK_SIGNATURE_WINDOW));
     params.sort_by_key(|(k, _)| *k);
 
-    let message = params
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("&");
+    for (k, v) in params {
+        message.push('&');
+        message.push_str(k);
+        message.push('=');
+        message.push_str(v);
+    }
+
+    message.push_str("&timestamp=");
+    message.push_str(&timestamp);
+    message.push_str("&window=");
+    message.push_str(BACKPACK_SIGNATURE_WINDOW);
 
     // Decode the base64 API secret (raw 32-byte ED25519 seed).
     let secret_bytes = STANDARD
@@ -85,6 +91,36 @@ fn sign_backpack_get(
 }
 
 // ============================= Internal Helpers =============================
+
+async fn account_exists(rpc: &RpcClient, pubkey: &Pubkey) -> bool {
+    rpc.get_account_with_commitment(pubkey, CommitmentConfig::confirmed())
+        .await
+        .ok()
+        .and_then(|r| r.value)
+        .is_some()
+}
+
+fn create_ata_ix(payer: Pubkey, ata: Pubkey, owner: Pubkey, mint: Pubkey) -> anyhow::Result<Instruction> {
+    let associated_token_program =
+        Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM).context("Invalid ASSOCIATED_TOKEN_PROGRAM")?;
+    let system_program = Pubkey::from_str(SYSTEM_PROGRAM).context("Invalid SYSTEM_PROGRAM")?;
+    let token_program = Pubkey::from_str(TOKEN_PROGRAM).context("Invalid TOKEN_PROGRAM")?;
+    let rent = Pubkey::from_str(SYSVAR_RENT_PUBKEY).context("Invalid SYSVAR_RENT_PUBKEY")?;
+
+    Ok(Instruction {
+        program_id: associated_token_program,
+        accounts: vec![
+            AccountMeta::new(payer, true),           // payer (signer)
+            AccountMeta::new(ata, false),            // associated token account (writable)
+            AccountMeta::new_readonly(owner, false), // owner
+            AccountMeta::new_readonly(mint, false),  // mint
+            AccountMeta::new_readonly(system_program, false),
+            AccountMeta::new_readonly(token_program, false),
+            AccountMeta::new_readonly(rent, false),
+        ],
+        data: vec![], // Associated Token Account program uses empty data
+    })
+}
 
 /// Fetch the Backpack USDC deposit wallet address via their authenticated API.
 async fn fetch_deposit_address(api_key: &str, api_secret: &str) -> anyhow::Result<String> {
@@ -185,7 +221,31 @@ pub async fn deposit_to_backpack(
         );
     }
 
-    // ── 4. Build SPL token transfer instruction ───────────────────────────
+    // ── 4. Build instructions (Create ATA(s) if missing + transfer) ───────
+    let mut ixs: Vec<Instruction> = Vec::new();
+
+    // Create user's USDC ATA if missing (rare, but possible).
+    if !account_exists(&rpc, &user_usdc_ata).await {
+        log::info!("User USDC ATA missing; adding create ATA instruction");
+        ixs.push(create_ata_ix(
+            fee_payer_pubkey,
+            user_usdc_ata,
+            user_pubkey,
+            usdc_pubkey,
+        )?);
+    }
+
+    // Create deposit USDC ATA if missing.
+    if !account_exists(&rpc, &deposit_usdc_ata).await {
+        log::info!("Backpack deposit USDC ATA missing; adding create ATA instruction");
+        ixs.push(create_ata_ix(
+            fee_payer_pubkey,
+            deposit_usdc_ata,
+            deposit_pubkey,
+            usdc_pubkey,
+        )?);
+    }
+
     let token_program_pubkey =
         Pubkey::from_str(TOKEN_PROGRAM).context("Invalid TOKEN_PROGRAM address")?;
 
@@ -204,7 +264,9 @@ pub async fn deposit_to_backpack(
         },
     };
 
-    let message = Message::new(&[transfer_ix], Some(&fee_payer_pubkey));
+    ixs.push(transfer_ix);
+
+    let message = Message::new(&ixs, Some(&fee_payer_pubkey));
     let mut transaction = Transaction::new_unsigned(message);
 
     // ── 5. Simulate (3 retries) ───────────────────────────────────────────
