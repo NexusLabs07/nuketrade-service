@@ -108,6 +108,13 @@ async fn main() -> anyhow::Result<()> {
         backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
     });
 
+    log::info!("Starting Lighter live feed....");
+    let db_clone_4 = db.clone();
+    let feed_tx_clone_4 = feed_tx.clone();
+    tokio::spawn(async move {
+        lighter::start_lighter_funding_feed(db_clone_4, feed_tx_clone_4).await;
+    });
+
     drop(feed_tx);
 
     run_server(config, db, watch_rx, seven_day_apr_rx).await?;

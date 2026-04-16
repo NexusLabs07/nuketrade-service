@@ -35,13 +35,16 @@ pub async fn run_feed_manager(
                                     backpack: None,
                                     hyperliquid: None,
                                     pacifica: None,
+                                    lighter: None,
                                 });
+
 
                             let value = MarketFeedValueStruct {
                                 mark_px: Some(mark_px),
                                 funding: Some(funding_rate),
                                 max_leverage: match &update.exchange {
                                     PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
+
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Lighter => None,
@@ -52,7 +55,7 @@ pub async fn run_feed_manager(
                                 PerpetualExchange::Backpack => entry.backpack = Some(value),
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
-                                PerpetualExchange::Lighter => {}
+                                PerpetualExchange::Lighter => entry.lighter = Some(value),
                             }
 
                             changed = true;

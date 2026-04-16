@@ -5,6 +5,7 @@ use perp_core::{
     Exchange, UnifiedPosition, WsMessage,
     exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange},
     parse_f64,
+    token_list::TOKEN_LIST,
 };
 use serde_json::json;
 
@@ -87,7 +88,6 @@ impl Exchange for LighterExchange {
         symbols
             .iter()
             .filter_map(|symbol| {
-                // Find the market index for this symbol
                 let market = MARKETS.iter().find(|m| m.symbol == *symbol)?;
                 Some(
                     json!({
@@ -101,40 +101,68 @@ impl Exchange for LighterExchange {
     }
 
     fn parse_ws_message(&self, raw: &str) -> Vec<WsMessage> {
-        // Check for ping messages
-        if raw.contains("ping") {
+        if raw == "ping" || raw.contains(r#""type":"ping""#) {
             return vec![WsMessage::Ping];
         }
 
-        // Try to parse as MarketStatsMsg
         let parsed: MarketStatsMsg = match serde_json::from_str(raw) {
             Ok(v) => v,
             Err(_) => return vec![],
         };
 
-        // Find the market by index
-        let market = match self.find_market_by_index(parsed.market_stats.market_id) {
-            Some(m) => m,
-            None => return vec![],
+        if !matches!(
+            parsed.lighter_type.as_str(),
+            "update/market_stats" | "subscribed/market_stats"
+        ) {
+            return vec![];
+        }
+
+        let symbol = if !parsed.market_stats.symbol.is_empty() {
+            parsed.market_stats.symbol
+        } else {
+            match self.find_market_by_index(parsed.market_stats.market_id) {
+                Some(market) => market.symbol.to_string(),
+                None => return vec![],
+            }
         };
+
+        if !TOKEN_LIST.contains(&symbol.as_str()) {
+            return vec![];
+        }
 
         let mark_price = match parse_f64(&parsed.market_stats.mark_price) {
             Some(v) => v,
             None => return vec![],
         };
 
-        // Lighter returns 8-hour funding rate, convert to hourly
-        let funding_8h = match parse_f64(&parsed.market_stats.funding_rate) {
+        let funding_rate = parsed
+            .market_stats
+            .current_funding_rate
+            .as_deref()
+            .and_then(parse_f64)
+            .or_else(|| {
+                parsed
+                    .market_stats
+                    .funding_rate
+                    .as_deref()
+                    .and_then(parse_f64)
+            });
+
+        let funding_rate = match funding_rate {
             Some(v) => v,
             None => return vec![],
         };
-        let funding_rate = funding_8h / 8.0;
+
+        let timestamp_ms = parsed
+            .timestamp
+            .or(parsed.market_stats.funding_timestamp)
+            .unwrap_or_default();
 
         vec![WsMessage::FundingUpdate {
-            symbol: market.symbol.to_string(),
+            symbol,
             mark_price,
             funding_rate,
-            timestamp_ms: (parsed.market_stats.funding_timestamp * 1000) as i64,
+            timestamp_ms,
         }]
     }
 
@@ -151,5 +179,100 @@ impl Exchange for LighterExchange {
                 exchange_id: Some(market.market_index),
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use perp_core::{Exchange, WsMessage};
+    use serde_json::{Value, json};
+
+    use super::LighterExchange;
+
+    #[test]
+    #[test]
+    fn build_subscribe_message_uses_market_index_channels() {
+        let exchange = LighterExchange::new();
+        let messages = exchange.build_subscribe_message(&["BTC", "ETH"]);
+
+        assert_eq!(messages.len(), 2);
+
+        let first: Value = serde_json::from_str(&messages[0]).expect("valid json");
+        let second: Value = serde_json::from_str(&messages[1]).expect("valid json");
+
+        assert_eq!(
+            first,
+            json!({
+                "type": "subscribe",
+                "channel": "market_stats/1"
+            })
+        );
+
+        assert_eq!(
+            second,
+            json!({
+                "type": "subscribe",
+                "channel": "market_stats/0"
+            })
+        );
+    }
+
+    #[test]
+    fn parse_market_stats_uses_current_funding_rate_and_message_timestamp() {
+        let exchange = LighterExchange::new();
+
+        let raw = r#"{
+            "channel":"market_stats:1",
+            "market_stats":{
+                "symbol":"BTC",
+                "market_id":1,
+                "mark_price":"74080.2",
+                "current_funding_rate":"-0.0019",
+                "funding_rate":"-0.0044",
+                "funding_timestamp":1776207600000
+            },
+            "timestamp":1776209969847,
+            "type":"update/market_stats"
+        }"#;
+
+        let messages = exchange.parse_ws_message(raw);
+        assert_eq!(messages.len(), 1);
+
+        match &messages[0] {
+            WsMessage::FundingUpdate {
+                symbol,
+                mark_price,
+                funding_rate,
+                timestamp_ms,
+            } => {
+                assert_eq!(symbol, "BTC");
+                assert_eq!(*mark_price, 74080.2);
+                assert_eq!(*funding_rate, -0.0019);
+                assert_eq!(*timestamp_ms, 1776209969847);
+            }
+            other => panic!("unexpected ws message: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_market_stats_ignores_unsupported_symbols() {
+        let exchange = LighterExchange::new();
+
+        let raw = r#"{
+            "channel":"market_stats:96",
+            "market_stats":{
+                "symbol":"EURUSD",
+                "market_id":96,
+                "mark_price":"1.08",
+                "current_funding_rate":"0.0001",
+                "funding_rate":"0.0001",
+                "funding_timestamp":1776207600000
+            },
+            "timestamp":1776209969847,
+            "type":"update/market_stats"
+        }"#;
+
+        let messages = exchange.parse_ws_message(raw);
+        assert!(messages.is_empty());
     }
 }
