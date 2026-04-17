@@ -7,12 +7,17 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
+fn round_rate(value: f64) -> f64 {
+    (value * 1e12).round() / 1e12
+}
+
 pub async fn run_feed_manager(
     mut feed_rx: mpsc::Receiver<MarketFeedUpdate>,
     watch_tx: watch::Sender<Arc<FeedSnapshot>>,
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
     backpack_leverage: HashMap<String, u32>,
+    lighter_leverage: HashMap<String, u32>,
 ) {
     let mut by_symbol: HashMap<String, LiveMarketFeedResponse> = HashMap::new();
     let mut dirty = false;
@@ -41,13 +46,12 @@ pub async fn run_feed_manager(
 
                             let value = MarketFeedValueStruct {
                                 mark_px: Some(mark_px),
-                                funding: Some(funding_rate),
+                                funding: Some(round_rate(funding_rate)),
                                 max_leverage: match &update.exchange {
                                     PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
-
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
-                                    PerpetualExchange::Lighter => None,
+                                    PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
                                 },
                             };
 
