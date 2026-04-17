@@ -1,15 +1,7 @@
-// use axum::routing::{get, post};
+use axum::routing::get;
 
-// use crate::{
-//     AppState,
-//     features::lighter::controller::{bridge_to_pacifica, get_user_open_positions},
-// };
+use crate::{AppState, features::lighter::controller::get_perp_metadata};
 
-// pub fn routes() -> axum::Router<AppState> {
-//     axum::Router::new()
-//         .route(
-//             "/open-positions/{user_solana_address}",
-//             get(get_user_open_positions),
-//         )
-//         .route("/deposit", post(bridge_to_pacifica))
-// }
+pub fn routes() -> axum::Router<AppState> {
+    axum::Router::new().route("/perp-metadata", get(get_perp_metadata))
+}

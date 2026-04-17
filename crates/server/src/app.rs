@@ -1,4 +1,7 @@
-use crate::features::{aggregated, auth, bridge, hedge, hyperliquid, pacifica, user, withdraw};
+use crate::features::{
+    aggregated, auth, bridge, hedge, hyperliquid, lighter, pacifica, user, withdraw,
+};
+
 use crate::middleware::auth::{require_auth, require_post_auth};
 use crate::state::AppState;
 // use axum::extract::State;
@@ -123,6 +126,7 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/user", user::routes::routes())
         .nest("/hyperliquid", hyperliquid::routes::routes())
         .nest("/pacifica", pacifica::routes::routes())
+        .nest("/lighter", lighter::routes::routes())
         .nest("/aggregated", aggregated::routes::routes())
         .nest("/bridge", bridge::routes::routes())
         .nest("/hedge-intents", hedge::routes::routes())

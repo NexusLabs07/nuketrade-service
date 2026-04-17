@@ -1,31 +1,25 @@
-use axum::{Extension, Json, extract::State};
+use axum::Json;
+use lighter::LighterExchange;
+use perp_core::MarketInfo;
 
-use crate::{
-    AppState,
-    error::AppError,
-    extractors::{ValidatedJson, ValidatedPath},
-    features::{
-        auth::types::AuthClaims,
-        pacifica::controller::{
-            PacificaDepositRequest, PacificaUserPath,
-            bridge_to_pacifica as pacifica_bridge_to_pacifica,
-            get_user_open_positions as pacifica_get_user_open_positions,
-        },
-    },
-    types::OpenPositionsResponse,
-};
+use crate::error::AppError;
 
-pub async fn get_user_open_positions(
-    params: ValidatedPath<PacificaUserPath>,
-    state: State<AppState>,
-) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
-    pacifica_get_user_open_positions(params, state).await
-}
+pub async fn get_perp_metadata() -> Result<Json<Vec<MarketInfo>>, AppError> {
+    let exchange = LighterExchange::new();
+    let markets = exchange.fetch_active_perp_markets().await?;
 
-pub async fn bridge_to_pacifica(
-    claims: Extension<AuthClaims>,
-    state: State<AppState>,
-    payload: ValidatedJson<PacificaDepositRequest>,
-) -> Result<Json<String>, AppError> {
-    pacifica_bridge_to_pacifica(claims, state, payload).await
+    let response = markets
+        .into_iter()
+        .map(|market| MarketInfo {
+            symbol: market.symbol,
+            max_leverage: market.max_leverage,
+            tick_size: market.tick_size,
+            min_order_size: market.min_order_size,
+            size_decimals: market.size_decimals,
+            is_active: true,
+            exchange_id: Some(market.market_index),
+        })
+        .collect();
+
+    Ok(Json(response))
 }

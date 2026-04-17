@@ -10,7 +10,7 @@ use executor::{SevenDayApr, cron::calculate_best_pair, feed_manager::run_feed_ma
 use hyperliquid::helpers::markets::HL_MARKETS;
 use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
-use perp_core::{Exchange, MarketFeedUpdate, config::Config};
+use perp_core::{MarketFeedUpdate, config::Config};
 use server::{run_server, types::FeedSnapshot};
 
 #[tokio::main]

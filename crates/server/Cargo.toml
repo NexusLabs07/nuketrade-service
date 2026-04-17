@@ -34,6 +34,7 @@ bridge = { path = "../bridge" }
 perp_core = { path = "../core" }
 pacifica = { path = "../pacifica" }
 hyperliquid = { path = "../hyperliquid" }
+lighter ={ path = "../lighter"}
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
