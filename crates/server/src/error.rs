@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use hyperliquid::services::DepositError;
+use lighter::services::deposit::DepositError as LighterDepositError;
 use perp_core::ExchangeError;
 use serde_json::json;
 use validator::ValidationErrors;
@@ -259,6 +260,31 @@ impl From<DepositError> for AppError {
                 AppError::Internal(msg)
             }
             DepositError::InvalidAmount(msg) => AppError::Parse {
+                field: "amount".to_string(),
+                message: msg,
+            },
+        }
+    }
+}
+
+impl From<LighterDepositError> for AppError {
+    fn from(error: LighterDepositError) -> Self {
+        match error {
+            LighterDepositError::InsufficientBalance { .. }
+            | LighterDepositError::BelowMinimumDeposit { .. } => AppError::Parse {
+                field: "deposit".to_string(),
+                message: error.to_string(),
+            },
+            LighterDepositError::InvalidAddress(msg) => AppError::Parse {
+                field: "address".to_string(),
+                message: msg,
+            },
+            LighterDepositError::ProviderError(msg)
+            | LighterDepositError::SimulationFailed(msg) => AppError::Network(msg),
+            LighterDepositError::ContractError(msg)
+            | LighterDepositError::SignerError(msg)
+            | LighterDepositError::PermitFailed(msg) => AppError::Internal(msg),
+            LighterDepositError::InvalidAmount(msg) => AppError::Parse {
                 field: "amount".to_string(),
                 message: msg,
             },

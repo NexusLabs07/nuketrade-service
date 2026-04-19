@@ -97,6 +97,42 @@ async fn query_arb_onchain_usdc(config: &Config, evm_address: &str) -> Result<f6
     Ok(balance_usd)
 }
 
+/// Query on-chain USDC balance on Ethereum mainnet via ERC20 balanceOf.
+async fn query_eth_onchain_usdc(config: &Config, evm_address: &str) -> Result<f64, anyhow::Error> {
+    let user_address: Address = evm_address
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Invalid EVM address: {e:?}"))?;
+
+    let usdc_address: Address = Chain::ETHEREUM
+        .usdc_address
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Invalid USDC address: {e:?}"))?;
+
+    let provider = ProviderBuilder::new().connect_http(config.ethereum_rpc_url.parse()?);
+    let usdc = IERC20::new(usdc_address, provider);
+
+    let balance: U256 = usdc
+        .balanceOf(user_address)
+        .call()
+        .await
+        .map_err(|e| anyhow::anyhow!("Ethereum balanceOf failed: {e:?}"))?;
+
+    let balance_usd = balance.to::<u128>() as f64 / USDC_DECIMALS;
+    Ok(balance_usd)
+}
+
+// ============================= Lighter Balance Checks =============================
+
+/// Query Lighter margin balance.
+///
+/// Lighter's account endpoint requires an L2 account index rather than raw L1
+/// address. Until we have that mapping wired up we fall back to 0, which means
+/// existing Lighter margin isn't short-circuited — callers will bridge + deposit
+/// the full amount. This is safe (no double-spend), just slightly sub-optimal.
+async fn query_lighter_margin_balance(_evm_address: &str) -> Result<f64, anyhow::Error> {
+    Ok(0.0)
+}
+
 // ============================= Pacifica Balance Checks =============================
 
 /// Query Pacifica margin/collateral balance via Pacifica API.
@@ -233,6 +269,34 @@ pub async fn check_backpack_balances(config: &Config, solana_address: &str) -> L
     }
 }
 
+/// Query all relevant balances for a Lighter leg.
+pub async fn check_lighter_balances(config: &Config, evm_address: &str) -> LegBalances {
+    let margin = query_lighter_margin_balance(evm_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to query Lighter margin balance: {e}, defaulting to 0");
+            0.0
+        });
+
+    let onchain = query_eth_onchain_usdc(config, evm_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!(
+                "Failed to query Ethereum on-chain USDC balance: {e}, defaulting to 0"
+            );
+            0.0
+        });
+
+    log::info!(
+        "Lighter balance check for {evm_address}: margin={margin:.2}, on-chain={onchain:.2}"
+    );
+
+    LegBalances {
+        exchange_margin_used: margin,
+        onchain_usd: onchain,
+    }
+}
+
 /// Query all relevant balances for a Pacifica leg.
 pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> LegBalances {
     let margin = query_pacifica_margin_balance(solana_address)
@@ -271,6 +335,7 @@ pub async fn check_leg_balances(
         "hyperliquid" => check_hl_balances(config, evm_address).await,
         "pacifica" => check_pacifica_balances(config, solana_address).await,
         "backpack" => check_backpack_balances(config, solana_address).await,
+        "lighter" => check_lighter_balances(config, evm_address).await,
         _ => {
             log::warn!("Unknown exchange {exchange}, returning zero balances");
             LegBalances::default()

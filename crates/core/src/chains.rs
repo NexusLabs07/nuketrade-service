@@ -18,6 +18,12 @@ impl Chain {
         usdc_address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     };
 
+    pub const ETHEREUM: Chain = Chain {
+        id: 1,
+        name: "Ethereum",
+        usdc_address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    };
+
     pub const SOLANA: Chain = Chain {
         id: 792703809,
         name: "Solana",
@@ -25,7 +31,8 @@ impl Chain {
     };
 
     /// All supported chains for iteration
-    pub const ALL: &'static [Chain] = &[Chain::ARBITRUM, Chain::BASE, Chain::SOLANA];
+    pub const ALL: &'static [Chain] =
+        &[Chain::ARBITRUM, Chain::BASE, Chain::ETHEREUM, Chain::SOLANA];
 
     /// Find a chain by its ID
     pub fn from_id(chain_id: u64) -> Option<&'static Chain> {
