@@ -19,6 +19,7 @@ impl PerpetualExchange {
         PerpetualExchange::Hyperliquid,
         PerpetualExchange::Pacifica,
         PerpetualExchange::Backpack,
+        PerpetualExchange::Lighter,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -36,7 +37,7 @@ impl PerpetualExchange {
             PerpetualExchange::Backpack => Some(Chain::SOLANA),
             PerpetualExchange::Hyperliquid => Some(Chain::ARBITRUM),
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
-            PerpetualExchange::Lighter => None,
+            PerpetualExchange::Lighter => Some(Chain::ETHEREUM),
         }
     }
 
@@ -52,7 +53,7 @@ impl PerpetualExchange {
             PerpetualExchange::Backpack => None,
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
-            PerpetualExchange::Lighter => None,
+            PerpetualExchange::Lighter => Some("BRIDGE_SOL_TO_ETH"),
         }
     }
 
@@ -62,7 +63,7 @@ impl PerpetualExchange {
             PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
-            PerpetualExchange::Lighter => None,
+            PerpetualExchange::Lighter => Some("DEPOSIT_TO_LIGHTER"),
         }
     }
 

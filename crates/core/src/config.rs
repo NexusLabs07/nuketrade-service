@@ -23,6 +23,9 @@ pub struct Config {
     // Base
     pub base_rpc_url: String,
 
+    // Ethereum
+    pub ethereum_rpc_url: String,
+
     // Server
     pub server_host: String,
     pub server_port: u16,
@@ -69,6 +72,9 @@ impl Config {
 
         let base_rpc_url =
             std::env::var("BASE_RPC_URL").unwrap_or_else(|_| "https://1rpc.io/base".to_string());
+
+        let ethereum_rpc_url = std::env::var("ETHEREUM_RPC_URL")
+            .unwrap_or_else(|_| "https://eth.llamarpc.com".to_string());
 
         // Server config
         let server_host = std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
@@ -125,6 +131,7 @@ impl Config {
             solana_rpc_url,
             arbitrum_rpc_url,
             base_rpc_url,
+            ethereum_rpc_url,
             server_host,
             server_port,
             cors_allowed_origins,

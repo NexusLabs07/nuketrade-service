@@ -96,6 +96,7 @@ mod tests {
             solana_rpc_url: "https://fake".into(),
             arbitrum_rpc_url: "https://fake".into(),
             base_rpc_url: "https://fake".into(),
+            ethereum_rpc_url: "https://fake".into(),
             server_host: "127.0.0.1".into(),
             server_port: 9999,
             cors_allowed_origins: vec![],
