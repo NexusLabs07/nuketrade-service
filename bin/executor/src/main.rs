@@ -8,6 +8,7 @@ use tokio_cron_scheduler::JobScheduler;
 use db::connect_db;
 use executor::{SevenDayApr, cron::calculate_best_pair, feed_manager::run_feed_manager};
 use hyperliquid::helpers::markets::HL_MARKETS;
+use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
 use perp_core::{MarketFeedUpdate, config::Config};
 use server::{run_server, types::FeedSnapshot};
@@ -71,6 +72,20 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
+    let lighter_leverage: HashMap<String, u32> =
+        match LighterExchange::new().fetch_active_perp_markets().await {
+            Ok(markets) => markets
+                .into_iter()
+                .map(|market| (market.symbol, market.max_leverage))
+                .collect(),
+            Err(err) => {
+                log::warn!(
+                    "Lighter: failed to fetch leverage metadata, continuing with empty map:{err}"
+                );
+                HashMap::new()
+            }
+        };
+
     let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
 
     let initial_snapshot = Arc::new(FeedSnapshot {
@@ -85,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
         hl_leverage,
         pacifica_leverage,
         backpack_leverage,
+        lighter_leverage,
     ));
 
     log::info!("Starting Hyperliquid live feed....");
@@ -106,6 +122,13 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_3 = feed_tx.clone();
     tokio::spawn(async move {
         backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
+    });
+
+    log::info!("Starting Lighter live feed....");
+    let db_clone_4 = db.clone();
+    let feed_tx_clone_4 = feed_tx.clone();
+    tokio::spawn(async move {
+        lighter::start_lighter_funding_feed(db_clone_4, feed_tx_clone_4).await;
     });
 
     drop(feed_tx);
