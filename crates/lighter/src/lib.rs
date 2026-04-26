@@ -1,3 +1,4 @@
+pub mod apis;
 mod exchange_impl;
 pub mod helpers;
 pub mod services;
