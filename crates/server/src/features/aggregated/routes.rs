@@ -1,14 +1,18 @@
-use axum::routing::get;
+use axum::{middleware as axum_mw, routing::get};
 
 use crate::{
     AppState,
-    features::aggregated::controller::{
-        get_average_apr, get_live_market_feed, get_merged_closed_positions,
-        get_merged_open_positions, get_token_chart,
+    features::aggregated::{
+        controller::{
+            get_average_apr, get_live_market_feed, get_merged_closed_positions,
+            get_merged_open_positions, get_token_chart,
+        },
+        portfolio,
     },
+    middleware::auth::require_auth,
 };
 
-pub fn routes() -> axum::Router<AppState> {
+pub fn routes(auth_state: AppState) -> axum::Router<AppState> {
     axum::Router::new()
         .route(
             "/open-positions/{user_evm_address}/{user_solana_address}",
@@ -21,4 +25,9 @@ pub fn routes() -> axum::Router<AppState> {
         .route("/chart/{symbol}", get(get_token_chart))
         .route("/live/market-feed", get(get_live_market_feed))
         .route("/average/apr", get(get_average_apr))
+        .nest(
+            "/portfolio",
+            portfolio::routes::routes()
+                .layer(axum_mw::from_fn_with_state(auth_state, require_auth)),
+        )
 }

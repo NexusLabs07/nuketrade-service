@@ -84,6 +84,56 @@ pub struct UserPositionHistory {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountInfoResponse {
+    pub success: bool,
+    pub data: Option<AccountInfo>,
+    pub error: Option<String>,
+    pub code: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AccountInfo {
+    #[serde(default)]
+    pub balance: String,
+    #[serde(default)]
+    pub account_equity: String,
+    #[serde(default)]
+    pub available_to_spend: String,
+    #[serde(default)]
+    pub available_to_withdraw: String,
+    #[serde(default)]
+    pub total_margin_used: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeHistoryResponse {
+    pub success: bool,
+    pub data: Option<Vec<TradeHistoryEntry>>,
+    pub error: Option<String>,
+    pub code: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TradeHistoryEntry {
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub side: String,
+    #[serde(default)]
+    pub amount: String,
+    #[serde(default)]
+    pub price: String,
+    #[serde(default)]
+    pub entry_price: String,
+    #[serde(default)]
+    pub pnl: String,
+    #[serde(default)]
+    pub fee: String,
+    #[serde(default)]
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct UserInfo {
     pub client: Client,
@@ -158,6 +208,46 @@ impl UserInfo {
                 return Err(anyhow::Error::msg(
                     "Failed to get pacifica closed positions",
                 ));
+            }
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_account_info(&self) -> Result<AccountInfoResponse> {
+        let response = self
+            .client
+            .get(format!(
+                "{}/account?account={}",
+                self.base_url, self.solana_address
+            ))
+            .send()
+            .await?;
+
+        let data: AccountInfoResponse = match response.json().await {
+            Ok(d) => d,
+            Err(_err) => {
+                return Err(anyhow::Error::msg("Failed to get pacifica account info"));
+            }
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_trade_history(&self) -> Result<TradeHistoryResponse> {
+        let response = self
+            .client
+            .get(format!(
+                "{}/trades/history?account={}&limit=1000",
+                self.base_url, self.solana_address
+            ))
+            .send()
+            .await?;
+
+        let data: TradeHistoryResponse = match response.json().await {
+            Ok(d) => d,
+            Err(_err) => {
+                return Err(anyhow::Error::msg("Failed to get pacifica trade history"));
             }
         };
 
