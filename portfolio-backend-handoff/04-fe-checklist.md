@@ -8,7 +8,6 @@ Create three functions that hit the new endpoints. They MUST attach the JWT bear
 
 ```ts
 // All three: GET, JSON response, requires Bearer JWT.
-// Endpoints currently return MOCK data by default — no extra param needed.
 
 getPortfolioPerformance(evm: string, sol: string)
   -> Promise<PerformanceResponse>
@@ -21,8 +20,6 @@ getPortfolioExchanges(evm: string, sol: string)
 ```
 
 Base URL: `${NEXT_PUBLIC_API_URL}/aggregated/portfolio/...`
-
-**Mock is the default.** You'll see populated UI immediately. When the backend is ready to switch to real data, this default flips and the FE doesn't need to change.
 
 ## 2. Drop in the types
 

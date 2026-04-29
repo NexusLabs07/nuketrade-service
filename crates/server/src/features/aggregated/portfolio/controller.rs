@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-    Json,
-    extract::{Query, State},
-};
+use axum::{Json, extract::State};
 use chrono::{DateTime, Duration, Utc};
 use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
 use lighter::apis::user::{AccountByL1Response, UserInfo as LighterUserInfo};
@@ -17,29 +14,12 @@ use crate::{
     AppState,
     error::AppError,
     extractors::{ValidatedPath, ValidatedQuery},
-    features::aggregated::portfolio::{
-        mock,
-        types::{
-            ExchangeRow, ExchangeTotals, ExchangesResponse, PerformanceBucket, PerformanceResponse,
-            PnlChartPoint, PnlChartResponse, Timeframe,
-        },
+    features::aggregated::portfolio::types::{
+        ExchangeRow, ExchangeTotals, ExchangesResponse, PerformanceBucket, PerformanceResponse,
+        PnlChartPoint, PnlChartResponse, Timeframe,
     },
     validation::address::{validate_evm_address, validate_solana_address},
 };
-
-#[derive(Debug, Default, Deserialize)]
-pub struct MockFlag {
-    #[serde(default)]
-    pub mock: Option<bool>,
-}
-
-impl MockFlag {
-    /// Mock is the default for these endpoints while real venue plumbing matures.
-    /// Pass `?mock=false` to bypass the mock and hit upstream venue APIs.
-    fn enabled(&self) -> bool {
-        self.mock.unwrap_or(true)
-    }
-}
 
 #[derive(Deserialize, Validate)]
 pub struct PortfolioPathParams {
@@ -55,8 +35,6 @@ pub struct PnlChartQuery {
     pub timeframe: String,
     #[serde(default)]
     pub tz: Option<String>,
-    #[serde(default)]
-    pub mock: Option<bool>,
 }
 
 fn default_timeframe() -> String {
@@ -91,12 +69,8 @@ struct NormalizedFill {
 
 pub async fn get_performance(
     ValidatedPath(params): ValidatedPath<PortfolioPathParams>,
-    Query(mock_flag): Query<MockFlag>,
     State(state): State<AppState>,
 ) -> Result<Json<PerformanceResponse>, AppError> {
-    if mock_flag.enabled() {
-        return Ok(Json(mock::performance()));
-    }
     let now = Utc::now();
     let day_start = now - Duration::days(1);
     let week_start = now - Duration::days(7);
@@ -159,9 +133,6 @@ pub async fn get_pnl_chart(
     State(_state): State<AppState>,
 ) -> Result<Json<PnlChartResponse>, AppError> {
     let timeframe = parse_timeframe(&query.timeframe)?;
-    if query.mock.unwrap_or(true) {
-        return Ok(Json(mock::pnl_chart(timeframe)));
-    }
     let now = Utc::now();
 
     let (range_start, bucket_minutes) = match timeframe {
@@ -222,12 +193,8 @@ pub async fn get_pnl_chart(
 
 pub async fn get_exchanges(
     ValidatedPath(params): ValidatedPath<PortfolioPathParams>,
-    Query(mock_flag): Query<MockFlag>,
     State(_state): State<AppState>,
 ) -> Result<Json<ExchangesResponse>, AppError> {
-    if mock_flag.enabled() {
-        return Ok(Json(mock::exchanges()));
-    }
     let (hl, pacifica, lighter, backpack) = tokio::join!(
         fetch_hl_balance(&params.user_evm_address),
         fetch_pacifica_balance(&params.user_solana_address),

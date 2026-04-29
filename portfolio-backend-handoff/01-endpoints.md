@@ -13,25 +13,6 @@ A missing or invalid token returns `401`:
 
 Validation errors on the path params return `400` with the existing error envelope.
 
-## Mock mode (default while venue plumbing matures)
-
-**These endpoints currently return mock data by default.** No FE change is needed — just call the endpoints normally and you'll see populated UI.
-
-To bypass mock and hit real upstream APIs, pass `?mock=false`:
-
-```
-GET /aggregated/portfolio/performance/{evm}/{sol}              # mock (default)
-GET /aggregated/portfolio/performance/{evm}/{sol}?mock=false   # real upstream
-
-GET /aggregated/portfolio/pnl-chart/{evm}/{sol}?timeframe=day              # mock
-GET /aggregated/portfolio/pnl-chart/{evm}/{sol}?timeframe=day&mock=false   # real
-
-GET /aggregated/portfolio/exchanges/{evm}/{sol}              # mock
-GET /aggregated/portfolio/exchanges/{evm}/{sol}?mock=false   # real
-```
-
-Path params are validated either way (must be a real-shaped EVM/Solana address). When the real path is mature this default will be flipped back.
-
 ---
 
 ## 1. Performance stats

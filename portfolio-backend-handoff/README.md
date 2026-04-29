@@ -20,5 +20,3 @@ The 3 portfolio endpoints from the PRD are live. This folder explains what shipp
 **Auth changed from PRD**: these endpoints **require JWT** (`Authorization: Bearer <token>`) — different from `/aggregated/open-positions/...` which is public. The FE client must attach the bearer token.
 
 **Venues returned**: `hyperliquid`, `backpack`, `pacifica`, `lighter`. The mock card "trade[xyz]" was dropped.
-
-**Mock data is on by default** while venue plumbing matures — the FE will see populated UI without any extra params. Pass `?mock=false` to hit real upstream APIs.
