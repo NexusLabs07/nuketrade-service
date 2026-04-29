@@ -97,23 +97,6 @@ mod tests {
     }
 
     #[test]
-    fn mock_shapes() {
-        use crate::features::aggregated::portfolio::mock;
-        println!(
-            "MOCK_PERF {}",
-            serde_json::to_string(&mock::performance()).unwrap()
-        );
-        println!(
-            "MOCK_PNL {}",
-            serde_json::to_string(&mock::pnl_chart(Timeframe::Day)).unwrap()
-        );
-        println!(
-            "MOCK_EX {}",
-            serde_json::to_string(&mock::exchanges()).unwrap()
-        );
-    }
-
-    #[test]
     fn ex_shape() {
         let v = ExchangesResponse {
             exchanges: vec![
