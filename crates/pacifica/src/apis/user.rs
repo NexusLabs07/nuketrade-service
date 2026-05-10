@@ -31,20 +31,49 @@ pub struct UserPosition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountSettingsResponse {
-    pub success: bool,
-    pub data: Option<Vec<AccountSetting>>,
-    pub error: Option<String>,
-    pub code: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountSetting {
     pub symbol: String,
     pub isolated: bool,
     pub leverage: u64,
     pub created_at: u64,
     pub updated_at: u64,
+}
+
+/// Body of `data` for `GET /account/settings` (current Pacifica API).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountSettingsData {
+    #[serde(default)]
+    pub auto_lend_disabled: Option<bool>,
+    #[serde(default)]
+    pub margin_settings: Vec<AccountSetting>,
+    #[serde(default)]
+    pub spot_settings: Vec<serde_json::Value>,
+}
+
+/// Pacifica has returned `data` as either a bare list or a structured object.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AccountSettingsPayload {
+    LegacyMarginSettings(Vec<AccountSetting>),
+    Structured(AccountSettingsData),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountSettingsResponse {
+    pub success: bool,
+    pub data: Option<AccountSettingsPayload>,
+    pub error: Option<String>,
+    pub code: Option<String>,
+}
+
+impl AccountSettingsResponse {
+    /// Per-symbol margin mode + leverage rows (empty slice if structured but no rows).
+    pub fn margin_settings(&self) -> Option<&[AccountSetting]> {
+        self.data.as_ref().map(|p| match p {
+            AccountSettingsPayload::LegacyMarginSettings(rows) => rows.as_slice(),
+            AccountSettingsPayload::Structured(s) => s.margin_settings.as_slice(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

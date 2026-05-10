@@ -2015,12 +2015,14 @@ dependencies = [
  "log",
  "pacifica",
  "perp_core",
+ "serde_json",
  "server",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tokio-cron-scheduler",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -4682,6 +4684,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bridge",
+ "chrono",
  "db",
  "governor",
  "hex",

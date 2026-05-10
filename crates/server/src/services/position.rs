@@ -1,7 +1,18 @@
 //! Position-related business logic.
 
+use pacifica::apis::user::AccountSetting;
 use perp_core::{PositionSide, UnifiedPosition, parse_f64_or_zero};
 use std::collections::HashMap;
+
+fn pacifica_symbol_norm_base(symbol: &str) -> String {
+    symbol
+        .trim()
+        .split('-')
+        .next()
+        .unwrap_or(symbol)
+        .trim()
+        .to_ascii_uppercase()
+}
 
 // replace existing types import
 use crate::types::{
@@ -13,6 +24,33 @@ use crate::types::{
 pub struct PositionService;
 
 impl PositionService {
+    /// Resolve user leverage from `/account/settings` for a position symbol.
+    ///
+    /// Pacifica may use the same base symbol with different suffixes (e.g. `JUP` vs `JUP-PERP`).
+    /// When nothing matches, returns `0` — do not substitute market max leverage; that is not the
+    /// user's selected leverage.
+    pub fn resolve_pacifica_leverage(
+        settings: Option<&[AccountSetting]>,
+        position_symbol: &str,
+    ) -> u32 {
+        let Some(settings) = settings else {
+            return 0;
+        };
+        let pos_full = position_symbol.trim().to_ascii_uppercase();
+        let pos_base = pacifica_symbol_norm_base(position_symbol);
+
+        for row in settings {
+            let set_full = row.symbol.trim().to_ascii_uppercase();
+            if set_full == pos_full {
+                return row.leverage as u32;
+            }
+            if pacifica_symbol_norm_base(&row.symbol) == pos_base {
+                return row.leverage as u32;
+            }
+        }
+        0
+    }
+
     /// Convert a UnifiedPosition to an OpenPositionsResponse.
     pub fn to_response(pos: &UnifiedPosition) -> OpenPositionsResponse {
         let side = match pos.side {

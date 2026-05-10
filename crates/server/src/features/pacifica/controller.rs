@@ -55,9 +55,7 @@ pub async fn get_user_open_positions(
 
     let mut open_position_response: Vec<OpenPositionsResponse> = Vec::new();
 
-    let (Some(positions_data), Some(account_setting_data)) =
-        (open_positions.data, account_setting.data)
-    else {
+    let Some(positions_data) = open_positions.data.as_ref() else {
         return Ok(Json(open_position_response));
     };
 
@@ -65,14 +63,14 @@ pub async fn get_user_open_positions(
         return Ok(Json(open_position_response));
     }
 
+    let settings_slice = account_setting.margin_settings().unwrap_or(&[]);
     let snapshot = state.feed.borrow().clone();
 
     for asset_position in positions_data.iter() {
-        let leverage: u32 = account_setting_data
-            .iter()
-            .find(|x| x.symbol == asset_position.symbol)
-            .and_then(|s| s.leverage.try_into().ok())
-            .unwrap_or(0);
+        let leverage = PositionService::resolve_pacifica_leverage(
+            Some(settings_slice),
+            &asset_position.symbol,
+        );
 
         let current_mark_px = snapshot
             .by_symbol
@@ -86,7 +84,11 @@ pub async fn get_user_open_positions(
         } else {
             match asset_position.amount.parse::<f64>().ok() {
                 Some(amt) if leverage > 0 => (amt * current_mark_px / leverage as f64).to_string(),
-                _ => "0".to_string(),
+                _ => asset_position
+                    .margin
+                    .clone()
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| "0".to_string()),
             }
         };
 
