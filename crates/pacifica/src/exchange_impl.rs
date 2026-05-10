@@ -177,20 +177,10 @@ impl Exchange for PacificaExchange {
             });
         }
 
-        // Use the first setting's leverage as default if available
-        let leverage = data
-            .data
-            .as_ref()
-            .and_then(|settings| settings.first())
-            .map(|s| s.leverage as u32)
-            .unwrap_or(1);
-
-        let isolated = data
-            .data
-            .as_ref()
-            .and_then(|settings| settings.first())
-            .map(|s| s.isolated)
-            .unwrap_or(false);
+        // Use the first margin setting's leverage as default if available
+        let first = data.margin_settings().and_then(|settings| settings.first());
+        let leverage = first.map(|s| s.leverage as u32).unwrap_or(1);
+        let isolated = first.map(|s| s.isolated).unwrap_or(false);
 
         Ok(AccountSettings {
             leverage,

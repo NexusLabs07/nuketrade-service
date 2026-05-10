@@ -4,6 +4,7 @@
 //! across different controllers and endpoints.
 
 pub mod auth;
+pub mod automation;
 pub mod balance;
 pub mod hedge;
 pub mod position;

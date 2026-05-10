@@ -12,7 +12,6 @@ use pacifica::{
         AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
         UserPositionsResponse,
     },
-    helpers::markets::PACIFICA_MARKETS,
 };
 use perp_core::{SevenDayApr, token_list::TOKEN_LIST};
 use serde::Deserialize;
@@ -78,23 +77,14 @@ pub async fn get_merged_open_positions(
     if let Ok(pacifica_positions) = pacifica_result {
         if let Some(positions_data) = pacifica_positions.data {
             if pacifica_positions.success {
-                let account_settings = pacifica_account_result.ok().and_then(|r| r.data);
+                let account_resp = pacifica_account_result.ok();
                 let snapshot = state.feed.borrow().clone();
 
                 for asset_position in &positions_data {
-                    let symbol = asset_position.symbol.clone();
-
-                    let leverage: u32 = account_settings
-                        .as_ref()
-                        .and_then(|settings| settings.iter().find(|x| x.symbol == symbol))
-                        .map(|s| s.leverage as u32)
-                        .unwrap_or(
-                            PACIFICA_MARKETS
-                                .iter()
-                                .find(|x| x.symbol == symbol)
-                                .map(|s| s.max_leverage)
-                                .unwrap_or_default(),
-                        );
+                    let leverage = PositionService::resolve_pacifica_leverage(
+                        account_resp.as_ref().and_then(|r| r.margin_settings()),
+                        &asset_position.symbol,
+                    );
 
                     let current_mark_px = snapshot
                         .by_symbol
@@ -110,7 +100,11 @@ pub async fn get_merged_open_positions(
                             Some(amt) if leverage > 0 => {
                                 (amt * current_mark_px / leverage as f64).to_string()
                             }
-                            _ => "0".to_string(),
+                            _ => asset_position
+                                .margin
+                                .clone()
+                                .filter(|m| !m.is_empty())
+                                .unwrap_or_else(|| "0".to_string()),
                         }
                     };
 

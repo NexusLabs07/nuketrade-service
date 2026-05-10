@@ -1,3 +1,4 @@
+pub mod automation;
 pub mod funding;
 pub mod hedge;
 pub mod points;

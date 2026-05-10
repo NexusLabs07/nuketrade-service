@@ -1,8 +1,9 @@
 use crate::features::{
-    aggregated, auth, bridge, hedge, hyperliquid, lighter, pacifica, user, withdraw,
+    aggregated, auth, automation, bridge, hedge, hyperliquid, lighter, pacifica, user, withdraw,
 };
 
 use crate::middleware::auth::{require_auth, require_post_auth};
+use crate::middleware::internal_auth::require_internal_auth;
 use crate::state::AppState;
 // use axum::extract::State;
 use axum::Router;
@@ -11,6 +12,7 @@ use axum::routing::get;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
+use tower_http::cors::Any;
 
 use axum::{
     body::Body,
@@ -111,12 +113,14 @@ pub async fn root() -> &'static str {
 pub fn create_app(app_state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(get_cors_origins())
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-        ])
-        .allow_credentials(true);
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
+        // Browsers send many headers (sec-ch-ua*, etc.) and will preflight if
+        // any custom header is present. We allow all headers to keep local
+        // iteration frictionless.
+        .allow_headers(Any)
+        // We authenticate via Authorization header (Bearer), not cookies.
+        // tower-http rejects `allow_credentials(true)` with `allow_headers(*)`.
+        .allow_credentials(false);
 
     let auth_state = app_state.clone();
 
@@ -130,6 +134,20 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/aggregated", aggregated::routes::routes(auth_state.clone()))
         .nest("/bridge", bridge::routes::routes())
         .nest("/hedge-intents", hedge::routes::routes())
+        .nest(
+            "/automation",
+            automation::routes::routes().layer(axum__middleware::from_fn_with_state(
+                auth_state.clone(),
+                require_auth,
+            )),
+        )
+        .nest(
+            "/internal/automation",
+            automation::internal_routes::routes().layer(axum__middleware::from_fn_with_state(
+                auth_state.clone(),
+                require_internal_auth,
+            )),
+        )
         .nest(
             "/withdraw-intents",
             withdraw::routes::routes().layer(axum__middleware::from_fn_with_state(

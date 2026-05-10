@@ -22,6 +22,47 @@ pub async fn require_auth(
         return Ok(next.run(request).await);
     }
 
+    // Temporary local-testing bypass for automation routes.
+    // If DISABLE_AUTOMATION_AUTH=1, allow calls to /automation/* without a JWT
+    // by injecting a minimal AuthClaims derived from X-User-Id.
+    let path = request.uri().path();
+    if path.starts_with("/automation")
+        && std::env::var("DISABLE_AUTOMATION_AUTH")
+            .ok()
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+    {
+        let user_id = request
+            .headers()
+            .get("x-user-id")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| {
+                AppError::unauthorised(
+                    "DISABLE_AUTOMATION_AUTH enabled; provide X-User-Id header (UUID)",
+                )
+            })?;
+        let user_id = user_id.to_string();
+        // Validate it's a UUID so downstream DB queries behave predictably.
+        let _ = uuid::Uuid::parse_str(&user_id).map_err(|_| {
+            AppError::unauthorised("X-User-Id must be a valid UUID when auth is disabled")
+        })?;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        request.extensions_mut().insert(AuthClaims {
+            suborg_id: "local-test".into(),
+            user_id,
+            wallet_id: "local-test".into(),
+            evm_address: "0x0".into(),
+            solana_address: "local-test".into(),
+            iat: now,
+            exp: now + 365 * 24 * 60 * 60,
+        });
+
+        return Ok(next.run(request).await);
+    }
+
     let auth_header = request
         .headers()
         .get(header::AUTHORIZATION)
@@ -49,6 +90,14 @@ pub async fn require_post_auth(
 
     let path = request.uri().path();
     if path == "/auth" || path.starts_with("/auth/") {
+        return Ok(next.run(request).await);
+    }
+    // Internal endpoints are guarded by require_internal_auth (service token).
+    if path.starts_with("/internal/") {
+        return Ok(next.run(request).await);
+    }
+    // Automation routes use require_auth (GET+POST) at the nest-level.
+    if path.starts_with("/automation") {
         return Ok(next.run(request).await);
     }
 
@@ -111,6 +160,8 @@ mod tests {
             auth_jwt_ttl_days: 1,
             google_client_id: String::from("fake_client"),
             access_code: Some(String::from("ABCD")),
+            automation_internal_token: None,
+            automation_lease_ttl_sec: 60,
         }
     }
 

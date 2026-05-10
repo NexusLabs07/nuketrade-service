@@ -133,6 +133,11 @@ async fn main() -> anyhow::Result<()> {
 
     drop(feed_tx);
 
+    // Automation execution is delegated to the external Node executor via
+    // the `/internal/automation/intents/{due,result}` endpoints. The
+    // previous in-process polling loop that created hedge_intents has been
+    // removed — see docs/AUTOMATION.md.
+
     run_server(config, db, watch_rx, seven_day_apr_rx).await?;
 
     Ok(())

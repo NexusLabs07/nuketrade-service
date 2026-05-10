@@ -51,6 +51,13 @@ pub struct Config {
 
     // Optional access code gate for login
     pub access_code: Option<String>,
+
+    // Automation: shared bearer token for the Node executor's /internal API.
+    // Required only when /internal/automation/* is exposed.
+    pub automation_internal_token: Option<String>,
+    /// Lease TTL (in seconds) issued to a Node worker when it picks up an
+    /// intent. Defaults to 60s.
+    pub automation_lease_ttl_sec: i64,
 }
 
 impl Config {
@@ -123,6 +130,14 @@ impl Config {
 
         let access_code = std::env::var("ACCESS_CODE").ok();
 
+        let automation_internal_token = std::env::var("AUTOMATION_INTERNAL_TOKEN")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let automation_lease_ttl_sec = std::env::var("AUTOMATION_LEASE_TTL_SEC")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(60);
+
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -143,6 +158,8 @@ impl Config {
             auth_jwt_ttl_days,
             google_client_id,
             access_code,
+            automation_internal_token,
+            automation_lease_ttl_sec,
         })
     }
 
