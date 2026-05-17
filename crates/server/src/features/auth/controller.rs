@@ -24,15 +24,33 @@ pub async fn login(
         )
         .await?;
 
-    let (wallet_id, user_id) = state
-        .auth
-        .google_login(
-            state.db.clone(),
-            payload.id_token,
-            verify_signature_result.evm_address.clone(),
-            verify_signature_result.solana_address.clone(),
-        )
-        .await?;
+    let evm_address = verify_signature_result.evm_address.clone();
+    let solana_address = verify_signature_result.solana_address.clone();
+
+    let (wallet_id, user_id) = match payload
+        .id_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        Some(id_token) => {
+            state
+                .auth
+                .google_login(
+                    state.db.clone(),
+                    id_token.to_string(),
+                    evm_address.clone(),
+                    solana_address.clone(),
+                )
+                .await?
+        }
+        None => {
+            state
+                .auth
+                .wallet_login(state.db.clone(), evm_address.clone(), solana_address.clone())
+                .await?
+        }
+    };
 
     let (token, exp) = state.auth.issue_jwt(
         payload.suborg_id,
