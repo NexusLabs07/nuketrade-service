@@ -1,5 +1,6 @@
 use crate::features::{
-    aggregated, auth, automation, bridge, hedge, hyperliquid, lighter, pacifica, user, withdraw,
+    aggregated, auth, automation, bridge, hedge, hyperliquid, lighter, pacifica, phoenix, user,
+    withdraw,
 };
 
 use crate::middleware::auth::{require_auth, require_post_auth};
@@ -11,8 +12,8 @@ use axum::routing::get;
 // use perp_core::LiveMarketFeed;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
 use tower_http::cors::Any;
+use tower_http::cors::CorsLayer;
 
 use axum::{
     body::Body,
@@ -131,7 +132,11 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/hyperliquid", hyperliquid::routes::routes())
         .nest("/pacifica", pacifica::routes::routes())
         .nest("/lighter", lighter::routes::routes())
-        .nest("/aggregated", aggregated::routes::routes(auth_state.clone()))
+        .nest("/phoenix", phoenix::routes::routes())
+        .nest(
+            "/aggregated",
+            aggregated::routes::routes(auth_state.clone()),
+        )
         .nest("/bridge", bridge::routes::routes())
         .nest("/hedge-intents", hedge::routes::routes())
         .nest(

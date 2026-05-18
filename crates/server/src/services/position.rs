@@ -14,6 +14,22 @@ fn pacifica_symbol_norm_base(symbol: &str) -> String {
         .to_ascii_uppercase()
 }
 
+// fn json_value_to_f64(value: &serde_json::Value) -> f64 {
+//     match value {
+//         serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
+//         serde_json::Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+//         _ => 0.0,
+//     }
+// }
+
+// fn json_value_to_i64(value: &serde_json::Value) -> i64 {
+//     match value {
+//         serde_json::Value::Number(n) => n.as_i64().unwrap_or(0),
+//         serde_json::Value::String(s) => s.parse::<i64>().unwrap_or(0),
+//         _ => 0,
+//     }
+// }
+
 // replace existing types import
 use crate::types::{
     ClosedPositionResponse, MergedClosedPositionResponse, MergedPositionResponse,
@@ -122,6 +138,41 @@ impl PositionService {
         }
     }
 
+    pub fn from_phoenix_position(
+        pos: &phoenix::apis::user::PhoenixPosition,
+    ) -> Option<OpenPositionsResponse> {
+        let size_value = perp_core::parse_f64_or_zero(&pos.position_size);
+
+        if size_value.abs() < f64::EPSILON {
+            return None;
+        }
+
+        let side = if size_value > 0.0 {
+            Side::Long
+        } else {
+            Side::Short
+        };
+
+        Some(OpenPositionsResponse {
+            symbol: phoenix::helpers::markets::normalize_phoenix_symbol(&pos.symbol),
+            size: size_value.abs().to_string(),
+            side,
+            margin: if pos.position_initial_margin.is_empty() {
+                pos.initial_margin.clone()
+            } else {
+                pos.position_initial_margin.clone()
+            },
+            pnl: pos.unrealized_pnl.clone(),
+            funding: if pos.accumulated_funding.is_empty() {
+                pos.unsettled_funding.clone()
+            } else {
+                pos.accumulated_funding.clone()
+            },
+            leverage: 0,
+            liquidation_price: pos.liquidation_price.clone(),
+        })
+    }
+
     /// Merge positions from multiple exchanges into a unified view.
     ///
     /// Positions are grouped by symbol, with each exchange's position
@@ -129,10 +180,10 @@ impl PositionService {
     pub fn merge_positions(
         hl_positions: Vec<OpenPositionsResponse>,
         pacifica_positions: Vec<OpenPositionsResponse>,
+        phoenix_positions: Vec<OpenPositionsResponse>,
     ) -> Vec<MergedPositionResponse> {
         let mut positions_map: HashMap<String, MergedPositionResponse> = HashMap::new();
 
-        // Add Hyperliquid positions
         for pos in hl_positions {
             let symbol = pos.symbol.clone();
             positions_map
@@ -141,11 +192,11 @@ impl PositionService {
                     symbol,
                     hyperliquid: None,
                     pacifica: None,
+                    phoenix: None,
                 })
                 .hyperliquid = Some(pos);
         }
 
-        // Add Pacifica positions
         for pos in pacifica_positions {
             let symbol = pos.symbol.clone();
             positions_map
@@ -154,8 +205,22 @@ impl PositionService {
                     symbol,
                     hyperliquid: None,
                     pacifica: None,
+                    phoenix: None,
                 })
                 .pacifica = Some(pos);
+        }
+
+        for pos in phoenix_positions {
+            let symbol = pos.symbol.clone();
+            positions_map
+                .entry(symbol.clone())
+                .or_insert_with(|| MergedPositionResponse {
+                    symbol,
+                    hyperliquid: None,
+                    pacifica: None,
+                    phoenix: None,
+                })
+                .phoenix = Some(pos);
         }
 
         positions_map.into_values().collect()
@@ -252,9 +317,40 @@ impl PositionService {
         })
     }
 
+    pub fn from_phoenix_closed_trade(
+        trade: &phoenix::apis::user::PhoenixTrade,
+    ) -> Option<ClosedPositionResponse> {
+        if trade.market_symbol.is_empty() {
+            return None;
+        }
+
+        let pnl = trade.realized_pnl.parse::<f64>().unwrap_or(0.0);
+        if pnl.abs() < f64::EPSILON {
+            return None;
+        }
+
+        let size = trade.base_lots_delta.parse::<f64>().unwrap_or(0.0);
+        let side = if size > 0.0 { Side::Long } else { Side::Short };
+
+        let closed_at = chrono::DateTime::parse_from_rfc3339(&trade.timestamp)
+            .map(|t| t.timestamp_millis())
+            .unwrap_or(0);
+
+        Some(ClosedPositionResponse {
+            symbol: phoenix::helpers::markets::normalize_phoenix_symbol(&trade.market_symbol),
+            size: size.abs().to_string(),
+            side,
+            pnl: pnl.to_string(),
+            entry_price: String::new(),
+            exit_price: trade.price.clone(),
+            closed_at,
+        })
+    }
+
     pub fn merge_closed_positions(
         hl_positions: Vec<ClosedPositionResponse>,
         pacifica_positions: Vec<ClosedPositionResponse>,
+        phoenix_positions: Vec<ClosedPositionResponse>,
     ) -> Vec<MergedClosedPositionResponse> {
         let mut positions_map: HashMap<(String, i64), MergedClosedPositionResponse> =
             HashMap::new();
@@ -269,6 +365,7 @@ impl PositionService {
                     closed_at,
                     hyperliquid: None,
                     pacifica: None,
+                    phoenix: None,
                 },
             );
 
@@ -285,10 +382,28 @@ impl PositionService {
                     closed_at,
                     hyperliquid: None,
                     pacifica: None,
+                    phoenix: None,
                 },
             );
 
             entry.pacifica = Some(pos);
+        }
+
+        for pos in phoenix_positions {
+            let symbol = pos.symbol.clone();
+            let closed_at = pos.closed_at;
+
+            let entry = positions_map.entry((symbol.clone(), closed_at)).or_insert(
+                MergedClosedPositionResponse {
+                    symbol,
+                    closed_at,
+                    hyperliquid: None,
+                    pacifica: None,
+                    phoenix: None,
+                },
+            );
+
+            entry.phoenix = Some(pos);
         }
 
         let mut merged_positions: Vec<MergedClosedPositionResponse> =

@@ -2029,6 +2029,7 @@ dependencies = [
  "log",
  "pacifica",
  "perp_core",
+ "phoenix",
  "serde_json",
  "server",
  "sqlx",
@@ -3594,6 +3595,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "validator",
 ]
 
 [[package]]
@@ -4728,6 +4730,7 @@ dependencies = [
  "p256",
  "pacifica",
  "perp_core",
+ "phoenix",
  "reqwest",
  "serde",
  "serde_json",

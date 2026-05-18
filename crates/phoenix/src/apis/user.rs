@@ -179,7 +179,7 @@ pub struct PhoenixPosition {
 #[serde(rename_all = "camelCase")]
 pub struct TradeHistoryResponse {
     #[serde(default)]
-    pub trades: Vec<PhoenixTrade>,
+    pub data: Vec<PhoenixTrade>,
     #[serde(default)]
     pub has_more: bool,
     pub next_cursor: Option<String>,
@@ -190,21 +190,17 @@ pub struct TradeHistoryResponse {
 #[serde(rename_all = "camelCase")]
 pub struct PhoenixTrade {
     #[serde(default)]
-    pub timestamp: Value,
+    pub timestamp: String,
     #[serde(default)]
-    pub symbol: String,
+    pub market_symbol: String,
     #[serde(default)]
-    pub side: String,
+    pub price: String,
     #[serde(default)]
-    pub base_amount: Value,
+    pub realized_pnl: String,
     #[serde(default)]
-    pub quote_amount: Value,
+    pub base_lots_delta: String,
     #[serde(default)]
-    pub price: Value,
-    #[serde(default)]
-    pub realized_pnl: Option<Value>,
-    #[serde(default)]
-    pub fee: Option<Value>,
+    pub virtual_quote_lots_delta: String,
     #[serde(default)]
     pub signature: Option<String>,
 }
