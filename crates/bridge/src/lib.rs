@@ -1,4 +1,5 @@
 pub mod client;
+pub mod sponsor;
 
 pub const RELAY_API_URL: &str = "https://api.relay.link";
 

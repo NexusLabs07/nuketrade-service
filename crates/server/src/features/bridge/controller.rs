@@ -6,6 +6,7 @@ use crate::validation::bridge::{validate_destination_usdc_address, validate_sola
 use axum::extract::State;
 use axum::{Extension, Json};
 use bridge::client::{BridgeClient, PermitRequest, QuoteRequest, QuoteResponse};
+use bridge::sponsor::sponsor_solana_steps;
 use perp_core::Chain;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -81,7 +82,25 @@ pub async fn get_quote(
     let relay_api_key = app_state.config.relay_api_key;
     let bridge_client = BridgeClient::new(relay_api_key);
 
-    let quote = bridge_client.quote(quote_request).await?;
+    let mut quote = bridge_client.quote(quote_request).await?;
+
+    // Solana-origin bridges always come back from Relay as a `transaction` step that
+    // expects the user's wallet to pay SOL gas. Users with 0 SOL can't sign — sponsor
+    // the tx by rebuilding it with our fee-payer hot wallet as payer and partial-signing.
+    // TODO(billing): recoup the SOL cost by skimming a fixed USDC amount from the user's
+    // ATA inside the rebuilt tx (mirror Pacifica's GAS_REIMBURSEMENT_AMOUNT pattern).
+    match sponsor_solana_steps(
+        &mut quote.steps,
+        &app_state.config.solana_rpc_url,
+        &app_state.config.solana_fee_payer_private_key,
+    )
+    .await
+    {
+        Ok(n) => log::info!("Sponsored {n} Solana transaction step(s) for bridge quote"),
+        Err(e) => log::error!(
+            "Failed to sponsor Solana bridge tx; returning unsponsored quote: {e:#}"
+        ),
+    }
 
     Ok(Json(quote))
 }

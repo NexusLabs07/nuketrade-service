@@ -44,6 +44,8 @@ solana-instruction = "2.2.1"
 solana-pubkey = "2.2.1"
 solana-message = "2.2.1"
 solana-signer = "2.2.1"
+solana-signature = "2.2.1"
+solana-address-lookup-table-interface = { version = "2.2.1", features = ["bincode", "bytemuck"] }
 async-trait = "0.1"
 
 validator = { version = "0.19", features = ["derive"] }

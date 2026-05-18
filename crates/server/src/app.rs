@@ -131,7 +131,7 @@ pub fn create_app(app_state: AppState) -> Router {
         .nest("/hyperliquid", hyperliquid::routes::routes())
         .nest("/pacifica", pacifica::routes::routes())
         .nest("/lighter", lighter::routes::routes())
-        .nest("/aggregated", aggregated::routes::routes())
+        .nest("/aggregated", aggregated::routes::routes(auth_state.clone()))
         .nest("/bridge", bridge::routes::routes())
         .nest("/hedge-intents", hedge::routes::routes())
         .nest(
