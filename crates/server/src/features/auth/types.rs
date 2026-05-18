@@ -26,15 +26,15 @@ pub struct AuthClaims {
     pub exp: u64,
 }
 
-/// Unified login request — send either `idToken` (Google) or the three Turnkey fields.
+/// Unified login request — send `idToken` for Google, or omit it for wallet-only sign-in.
+/// Turnkey fields (`suborgId`, `message`, `signature`) are always required.
 #[derive(Debug, Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    // Google path
-    #[validate(length(min = 1, message = "idToken must not be empty"))]
-    pub id_token: String,
+    /// Google OAuth ID token; omit or leave empty for wallet sign-in.
+    #[serde(default)]
+    pub id_token: Option<String>,
 
-    // Turnkey path
     #[validate(length(min = 1, message = "suborgId must not be empty"))]
     pub suborg_id: String,
     #[validate(length(min = 1, message = "message must not be empty"))]
@@ -42,7 +42,6 @@ pub struct LoginRequest {
     #[validate(length(min = 1, message = "signature must not be empty"))]
     pub signature: String,
 
-    // Access gate
     pub access_code: Option<String>,
 }
 

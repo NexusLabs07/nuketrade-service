@@ -12,7 +12,7 @@ use perp_core::config::Config;
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use db::user::upsert_google_user;
+use db::user::{upsert_google_user, upsert_wallet_user};
 use uuid::Uuid;
 
 use crate::{
@@ -182,6 +182,19 @@ impl AuthService {
         )
         .await
         .map_err(|e| AppError::internal(format!("failed to upsert Google user: {e}")))?;
+
+        Ok((wallet_id, user.id))
+    }
+
+    pub async fn wallet_login(
+        &self,
+        db: std::sync::Arc<sqlx::PgPool>,
+        evm_address: String,
+        solana_address: String,
+    ) -> Result<(Uuid, Uuid), AppError> {
+        let (wallet_id, user) = upsert_wallet_user(db, evm_address, solana_address)
+            .await
+            .map_err(|e| AppError::internal(format!("failed to upsert wallet user: {e}")))?;
 
         Ok((wallet_id, user.id))
     }
