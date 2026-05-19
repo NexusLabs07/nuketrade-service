@@ -25,6 +25,10 @@ sol! {
 /// USDC has 6 decimals.
 const USDC_DECIMALS: f64 = 1_000_000.0;
 
+fn parse_decimal(value: &str) -> f64 {
+    value.parse::<f64>().unwrap_or(0.0)
+}
+
 // ============================= Public Types =============================
 
 /// Pre-existing balances for a single hedge leg.
@@ -171,6 +175,36 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
         .unwrap_or(0.0))
 }
 
+// ============================= Phoenix Balance Checks =============================
+
+/// Query Phoenix free margin/collateral via trader state.
+///
+/// For hedge funding we care about collateral that can actually be used as
+/// free margin for a new position. Prefer `effective_collateral_for_withdrawals`,
+/// then fall back to `effective_collateral`, then `collateral_balance`.
+async fn query_phoenix_margin_balance(solana_address: &str) -> Result<f64, anyhow::Error> {
+    let client = phoenix::apis::user::UserInfo::new(solana_address.to_string());
+    let state = client.get_trader_state().await?;
+
+    let mut total = 0.0_f64;
+
+    for trader in &state.traders {
+        let available = parse_decimal(&trader.effective_collateral_for_withdrawals);
+        let effective = parse_decimal(&trader.effective_collateral);
+        let collateral = parse_decimal(&trader.collateral_balance);
+
+        if available > 0.0 {
+            total += available;
+        } else if effective > 0.0 {
+            total += effective;
+        } else {
+            total += collateral;
+        }
+    }
+
+    Ok(total)
+}
+
 /// Query on-chain USDC balance on Solana via RPC `getTokenAccountsByOwner`.
 ///
 /// Uses a raw JSON-RPC call so we don't need the full Solana SDK in the server crate.
@@ -255,7 +289,9 @@ pub async fn check_backpack_balances(config: &Config, solana_address: &str) -> L
     let onchain = query_sol_onchain_usdc(config, solana_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!("Failed to query Solana on-chain USDC balance for Backpack: {e}, defaulting to 0");
+            log::warn!(
+                "Failed to query Solana on-chain USDC balance for Backpack: {e}, defaulting to 0"
+            );
             0.0
         });
 
@@ -281,9 +317,7 @@ pub async fn check_lighter_balances(config: &Config, evm_address: &str) -> LegBa
     let onchain = query_eth_onchain_usdc(config, evm_address)
         .await
         .unwrap_or_else(|e| {
-            log::warn!(
-                "Failed to query Ethereum on-chain USDC balance: {e}, defaulting to 0"
-            );
+            log::warn!("Failed to query Ethereum on-chain USDC balance: {e}, defaulting to 0");
             0.0
         });
 
@@ -323,6 +357,34 @@ pub async fn check_pacifica_balances(config: &Config, solana_address: &str) -> L
     }
 }
 
+/// Query all relevant balances for a Phoenix leg.
+pub async fn check_phoenix_balances(config: &Config, solana_address: &str) -> LegBalances {
+    let margin = query_phoenix_margin_balance(solana_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("Failed to query Phoenix margin balance: {e}, defaulting to 0");
+            0.0
+        });
+
+    let onchain = query_sol_onchain_usdc(config, solana_address)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!(
+                "Failed to query Solana on-chain USDC balance for Phoenix: {e}, defaulting to 0"
+            );
+            0.0
+        });
+
+    log::info!(
+        "Phoenix balance check for {solana_address}: margin={margin:.2}, on-chain={onchain:.2}"
+    );
+
+    LegBalances {
+        exchange_margin_used: margin,
+        onchain_usd: onchain,
+    }
+}
+
 //TODO: make this dynamic
 /// Query balances for a leg based on its protocol.
 pub async fn check_leg_balances(
@@ -334,6 +396,7 @@ pub async fn check_leg_balances(
     match exchange {
         "hyperliquid" => check_hl_balances(config, evm_address).await,
         "pacifica" => check_pacifica_balances(config, solana_address).await,
+        "phoenix" => check_phoenix_balances(config, solana_address).await,
         "backpack" => check_backpack_balances(config, solana_address).await,
         "lighter" => check_lighter_balances(config, evm_address).await,
         _ => {
