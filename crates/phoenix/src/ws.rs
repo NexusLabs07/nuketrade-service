@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::PhoenixExchange;
 use perp_core::{
     token_list::TOKEN_LIST,
@@ -5,7 +7,6 @@ use perp_core::{
     ws::{WsConfig, run_funding_feed},
 };
 use sqlx::PgPool;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub async fn start_phoenix_funding_feed(

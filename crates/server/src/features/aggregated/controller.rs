@@ -222,7 +222,13 @@ pub async fn get_token_chart(
         return Ok(Json(HashMap::new()));
     }
 
-    let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
+    let mut rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
+
+    for row in &mut rows {
+        if row.platform == phoenix::helpers::funding::PLATFORM {
+            row.rate = phoenix::helpers::funding::normalize_stored_hourly_rate(row.rate);
+        }
+    }
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
     for row in rows {

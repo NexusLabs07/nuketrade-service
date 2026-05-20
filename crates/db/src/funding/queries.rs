@@ -65,7 +65,6 @@ pub async fn get_token_chart_info(
     symbol: String,
     timeframe: String,
 ) -> Result<Vec<FundingRate>, anyhow::Error> {
-    log::info!("i am here");
     let query = match timeframe.as_str() {
         "30m" => {
             r#"SELECT id, platform, symbol, rate, mark_px, timestamp FROM funding_rate WHERE symbol = $1 AND timestamp >= NOW() - INTERVAL '7 days' ORDER BY timestamp ASC"#

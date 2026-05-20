@@ -19,10 +19,15 @@ async fn compute_seven_day_apr(db: Arc<PgPool>) -> Option<SevenDayApr> {
     // Build avg_apr: symbol -> platform -> avg_rate
     let mut seven_day_avg_apr: HashMap<String, HashMap<String, f64>> = HashMap::new();
     for funding in funding_stats {
+        let avg_rate = if funding.platform == phoenix::helpers::funding::PLATFORM {
+            phoenix::helpers::funding::normalize_stored_hourly_rate(funding.avg_rate)
+        } else {
+            funding.avg_rate
+        };
         seven_day_avg_apr
             .entry(funding.symbol)
             .or_default()
-            .insert(funding.platform, funding.avg_rate * 100.0);
+            .insert(funding.platform, avg_rate * 100.0);
     }
 
     let hourly_rates = match get_7d_hourly_rates(db).await {
@@ -38,10 +43,15 @@ async fn compute_seven_day_apr(db: Arc<PgPool>) -> Option<SevenDayApr> {
     let mut hourly_grouped: HashMap<(String, chrono::NaiveDateTime), HashMap<String, f64>> =
         HashMap::new();
     for rate in hourly_rates {
+        let hourly = if rate.platform == phoenix::helpers::funding::PLATFORM {
+            phoenix::helpers::funding::normalize_stored_hourly_rate(rate.rate)
+        } else {
+            rate.rate
+        };
         hourly_grouped
             .entry((rate.symbol, rate.ts_hour))
             .or_default()
-            .insert(rate.platform, rate.rate);
+            .insert(rate.platform, hourly);
     }
 
     // For each (symbol, hour), compute pairwise spreads and accumulate.

@@ -58,6 +58,12 @@ impl PhoenixExchange {
         }
     }
 
+    /// Phoenix WS `funding` is the interval rate as a **percent** of notional
+    /// (e.g. `-0.0075` means −0.0075%/hour), not a decimal fraction like Hyperliquid.
+    fn normalize_funding_to_hourly_decimal(funding_percent: f64) -> f64 {
+        funding_percent / 100.0
+    }
+
     pub async fn fetch_markets(&self) -> anyhow::Result<Vec<PhoenixMarket>> {
         let response = self
             .client
@@ -72,29 +78,31 @@ impl PhoenixExchange {
         Ok(response.json::<Vec<PhoenixMarket>>().await?)
     }
 
+    fn market_info_from_raw(market: &PhoenixMarket) -> MarketInfo {
+        let max_leverage = market
+            .leverage_tiers
+            .iter()
+            .map(|tier| tier.max_leverage.floor() as u32)
+            .max()
+            .unwrap_or(1);
+
+        MarketInfo {
+            symbol: normalize_phoenix_symbol(&market.symbol),
+            max_leverage,
+            tick_size: market.tick_size as f64,
+            min_order_size: 0.0,
+            size_decimals: market.base_lots_decimals.max(0) as u32,
+            is_active: market.market_status == "active",
+            exchange_id: Some(market.asset_id.max(0) as u32),
+        }
+    }
+
     pub async fn fetch_market_info(&self) -> anyhow::Result<Vec<MarketInfo>> {
         Ok(self
             .fetch_markets()
             .await?
-            .into_iter()
-            .map(|market| {
-                let max_leverage = market
-                    .leverage_tiers
-                    .iter()
-                    .map(|tier| tier.max_leverage.floor() as u32)
-                    .max()
-                    .unwrap_or(1);
-
-                MarketInfo {
-                    symbol: normalize_phoenix_symbol(&market.symbol),
-                    max_leverage,
-                    tick_size: market.tick_size as f64,
-                    min_order_size: 0.0,
-                    size_decimals: market.base_lots_decimals.max(0) as u32,
-                    is_active: market.market_status == "active",
-                    exchange_id: Some(market.asset_id.max(0) as u32),
-                }
-            })
+            .iter()
+            .map(Self::market_info_from_raw)
             .collect())
     }
 
@@ -268,10 +276,13 @@ impl Exchange for PhoenixExchange {
             return vec![];
         };
 
+        let symbol = normalize_phoenix_symbol(&parsed.symbol);
+        let funding_rate = Self::normalize_funding_to_hourly_decimal(funding);
+
         vec![WsMessage::FundingUpdate {
-            symbol: normalize_phoenix_symbol(&parsed.symbol),
+            symbol,
             mark_price: mark_px,
-            funding_rate: funding,
+            funding_rate,
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         }]
     }
@@ -318,4 +329,20 @@ pub struct PhoenixMarketStatsMessage {
     pub prev_day_px: Option<f64>,
     pub day_ntl_vlm: Option<f64>,
     pub funding: Option<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_funding_percent_to_hourly_decimal() {
+        // Live MON WS: funding ≈ -0.00748 → UI "1h funding" −0.0075%
+        let hourly = PhoenixExchange::normalize_funding_to_hourly_decimal(-0.007481669908723627);
+        assert!((hourly - (-0.00007481669908723627)).abs() < 1e-12);
+
+        // Nuke annualization: hourly * 24 * 365 * 100 ≈ −65.7%
+        let annualized_pct = hourly * 24.0 * 365.0 * 100.0;
+        assert!(annualized_pct > -70.0 && annualized_pct < -60.0);
+    }
 }
