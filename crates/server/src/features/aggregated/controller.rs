@@ -7,13 +7,15 @@ use axum::{
 };
 use db::funding::{FundingRate, get_token_chart_info};
 use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
-use pacifica::{
-    apis::user::{
-        AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
-        UserPositionsResponse,
-    },
+use pacifica::apis::user::{
+    AccountSettingsResponse, UserInfo as PacificaUserInfo, UserPositionsHistoryResponse,
+    UserPositionsResponse,
 };
 use perp_core::{SevenDayApr, token_list::TOKEN_LIST};
+use phoenix::apis::user::{
+    TradeHistoryResponse as PhoenixTradeHistoryResponse, TraderStateResponse as PhoenixTraderState,
+    UserInfo as PhoenixUserInfo,
+};
 use serde::Deserialize;
 use validator::Validate;
 
@@ -52,16 +54,19 @@ pub async fn get_merged_open_positions(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
-    let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
+    let pacifica_client = PacificaUserInfo::new(params.user_solana_address.clone());
+    let phoenix_client = PhoenixUserInfo::new(params.user_solana_address);
 
-    let (hl_result, pacifica_result, pacifica_account_result): (
+    let (hl_result, pacifica_result, pacifica_account_result, phoenix_result): (
         Result<ClearinghouseState>,
         Result<UserPositionsResponse>,
         Result<AccountSettingsResponse>,
+        Result<PhoenixTraderState>,
     ) = tokio::join!(
         hl_client.get_open_positions(),
         pacifica_client.get_open_positions(),
-        pacifica_client.get_account_settings()
+        pacifica_client.get_account_settings(),
+        phoenix_client.get_trader_state(),
     );
 
     let mut hl_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
@@ -129,8 +134,20 @@ pub async fn get_merged_open_positions(
         }
     }
 
-    let merged_positions =
-        PositionService::merge_positions(hl_positions_vec, pacifica_positions_vec);
+    let phoenix_positions_vec = phoenix_result
+        .ok()
+        .into_iter()
+        .flat_map(|state| state.traders)
+        .flat_map(|trader| trader.positions)
+        .filter_map(|pos| PositionService::from_phoenix_position(&pos))
+        .collect::<Vec<_>>();
+
+    let merged_positions = PositionService::merge_positions(
+        hl_positions_vec,
+        pacifica_positions_vec,
+        phoenix_positions_vec,
+    );
+
     Ok(Json(merged_positions))
 }
 
@@ -138,18 +155,21 @@ pub async fn get_merged_closed_positions(
     ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
 ) -> Result<Json<Vec<MergedClosedPositionResponse>>, AppError> {
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
-    let pacifica_client = PacificaUserInfo::new(params.user_solana_address);
+    let pacifica_client = PacificaUserInfo::new(params.user_solana_address.clone());
+    let phoenix_client = PhoenixUserInfo::new(params.user_solana_address);
 
-    let (hl_result, pacifica_result): (
+    let (hl_result, pacifica_result, phoenix_result): (
         Result<Vec<UserFill>>,
         Result<UserPositionsHistoryResponse>,
+        Result<PhoenixTradeHistoryResponse>,
     ) = tokio::join!(
         hl_client.get_closed_positions(),
-        pacifica_client.get_closed_positions()
+        pacifica_client.get_closed_positions(),
+        phoenix_client.get_trade_history(),
     );
 
-    let hl_fills = hl_result.unwrap_or_default();
-    let hl_closed_positions = hl_fills
+    let hl_closed_positions = hl_result
+        .unwrap_or_default()
         .iter()
         .filter_map(PositionService::from_hyperliquid_closed_fill)
         .collect::<Vec<_>>();
@@ -162,8 +182,19 @@ pub async fn get_merged_closed_positions(
         .filter_map(PositionService::from_pacifica_closed_position)
         .collect::<Vec<_>>();
 
-    let merged_positions =
-        PositionService::merge_closed_positions(hl_closed_positions, pacifica_closed_positions);
+    let phoenix_closed_positions = phoenix_result
+        .ok()
+        .map(|history| history.data)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(PositionService::from_phoenix_closed_trade)
+        .collect::<Vec<_>>();
+
+    let merged_positions = PositionService::merge_closed_positions(
+        hl_closed_positions,
+        pacifica_closed_positions,
+        phoenix_closed_positions,
+    );
 
     Ok(Json(merged_positions))
 }
@@ -191,7 +222,13 @@ pub async fn get_token_chart(
         return Ok(Json(HashMap::new()));
     }
 
-    let rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
+    let mut rows = get_token_chart_info(state.db, symbol, params.timeframe).await?;
+
+    for row in &mut rows {
+        if row.platform == phoenix::helpers::funding::PLATFORM {
+            row.rate = phoenix::helpers::funding::normalize_stored_hourly_rate(row.rate);
+        }
+    }
 
     let mut grouped: HashMap<String, Vec<FundingRate>> = HashMap::new();
     for row in rows {

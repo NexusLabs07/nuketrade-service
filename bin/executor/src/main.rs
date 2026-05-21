@@ -11,6 +11,7 @@ use hyperliquid::helpers::markets::HL_MARKETS;
 use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
 use perp_core::{MarketFeedUpdate, config::Config};
+use phoenix::PhoenixExchange;
 use server::{run_server, types::FeedSnapshot};
 
 #[tokio::main]
@@ -86,6 +87,17 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
+    let phoenix_leverage: HashMap<String, u32> =
+        match PhoenixExchange::new().fetch_max_leverage_map().await {
+            Ok(map) => map,
+            Err(err) => {
+                log::warn!(
+                    "Phoenix: failed to fetch leverage metadata, continuing with empty map: {err}"
+                );
+                HashMap::new()
+            }
+        };
+
     let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
 
     let initial_snapshot = Arc::new(FeedSnapshot {
@@ -99,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
         watch_tx,
         hl_leverage,
         pacifica_leverage,
+        phoenix_leverage,
         backpack_leverage,
         lighter_leverage,
     ));
@@ -115,6 +128,13 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_2 = feed_tx.clone();
     tokio::spawn(async move {
         pacifica::start_pacifica_funding_feed(db_clone_2, feed_tx_clone_2).await;
+    });
+
+    log::info!("Starting Phoenix live feed....");
+    let db_clone_phoenix = db.clone();
+    let feed_tx_clone_phoenix = feed_tx.clone();
+    tokio::spawn(async move {
+        phoenix::start_phoenix_funding_feed(db_clone_phoenix, feed_tx_clone_phoenix).await;
     });
 
     log::info!("Starting Backpack live feed....");

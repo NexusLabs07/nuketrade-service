@@ -25,6 +25,7 @@ pub struct MergedPositionResponse {
     pub symbol: String,
     pub hyperliquid: Option<OpenPositionsResponse>,
     pub pacifica: Option<OpenPositionsResponse>,
+    pub phoenix: Option<OpenPositionsResponse>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -39,6 +40,7 @@ pub struct LiveMarketFeedResponse {
     pub symbol: String,
     pub hyperliquid: Option<MarketFeedValueStruct>,
     pub pacifica: Option<MarketFeedValueStruct>,
+    pub phoenix: Option<MarketFeedValueStruct>,
     pub backpack: Option<MarketFeedValueStruct>,
     pub lighter: Option<MarketFeedValueStruct>,
 }
@@ -70,4 +72,5 @@ pub struct MergedClosedPositionResponse {
     pub closed_at: i64,
     pub hyperliquid: Option<ClosedPositionResponse>,
     pub pacifica: Option<ClosedPositionResponse>,
+    pub phoenix: Option<ClosedPositionResponse>,
 }

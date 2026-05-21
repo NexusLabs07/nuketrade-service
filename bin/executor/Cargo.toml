@@ -28,3 +28,4 @@ server = { path = "../../crates/server" }
 pacifica = { path = "../../crates/pacifica" }
 backpack ={ path = "../../crates/backpack" }
 lighter = { path = "../../crates/lighter" }
+phoenix = { path = "../../crates/phoenix" }

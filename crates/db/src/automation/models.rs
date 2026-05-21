@@ -71,7 +71,7 @@ impl AutomationConfig {
             max_leverage: 1.0,
             max_actions_per_day: 20,
             excluded_assets: serde_json::json!([]),
-            allowed_exchanges: serde_json::json!(["hyperliquid", "pacifica"]),
+            allowed_exchanges: serde_json::json!(["hyperliquid", "pacifica", "phoenix"]),
             max_slippage_bps: 50,
             reduce_only_on_close: true,
             created_at: now,

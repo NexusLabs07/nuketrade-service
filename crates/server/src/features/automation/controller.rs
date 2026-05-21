@@ -5,7 +5,8 @@ use axum::{
     extract::{Path, Query, State},
 };
 use db::automation::{
-    AutomationAction, AutomationConfig, AutomationRun, UpsertAutomationConfig, list_automation_actions,
+    AutomationAction, AutomationConfig, AutomationRun, UpsertAutomationConfig,
+    list_automation_actions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -174,9 +175,7 @@ impl From<AutomationRun> for AutomationRunResponse {
             leverage: r.leverage,
             last_decision_id: r.last_decision_id,
             actions_today: r.actions_today,
-            last_recommendation_at: r
-                .last_recommendation_at
-                .map(|t| t.and_utc().to_rfc3339()),
+            last_recommendation_at: r.last_recommendation_at.map(|t| t.and_utc().to_rfc3339()),
             last_action_at: r.last_action_at.map(|t| t.and_utc().to_rfc3339()),
             last_error_at: r.last_error_at.map(|t| t.and_utc().to_rfc3339()),
             last_error: r.last_error,
@@ -241,7 +240,11 @@ pub async fn upsert_config(
         )
         .map_err(AppError::from)?,
         allowed_exchanges: serde_json::to_value(payload.allowed_exchanges.unwrap_or_else(|| {
-            vec!["hyperliquid".to_string(), "pacifica".to_string()]
+            vec![
+                "hyperliquid".to_string(),
+                "pacifica".to_string(),
+                "phoenix".to_string(),
+            ]
         }))
         .map_err(AppError::from)?,
         max_slippage_bps: payload.max_slippage_bps.unwrap_or(50),

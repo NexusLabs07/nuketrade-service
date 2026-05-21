@@ -107,7 +107,12 @@ pub struct Recommendation {
 
 impl Recommendation {
     /// A "no opportunity" output (e.g. no eligible candidates).
-    pub fn empty(metric_mode: &str, as_of_ts: i64, as_of_bucket: i64, reasons: Vec<String>) -> Self {
+    pub fn empty(
+        metric_mode: &str,
+        as_of_ts: i64,
+        as_of_bucket: i64,
+        reasons: Vec<String>,
+    ) -> Self {
         Self {
             decision_id: Uuid::new_v4(),
             decision_hash: compute_decision_hash(
@@ -243,8 +248,13 @@ pub fn compute_best_pair(
         },
     ];
     let decision_hash = compute_decision_hash(Some(&best.asset), &legs, metric_mode, as_of_bucket);
-    let reference_price =
-        resolve_reference_price(feed, &best.asset, &best.long_exchange, &best.short_exchange, now);
+    let reference_price = resolve_reference_price(
+        feed,
+        &best.asset,
+        &best.long_exchange,
+        &best.short_exchange,
+        now,
+    );
 
     Recommendation {
         decision_id: Uuid::new_v4(),
@@ -297,7 +307,8 @@ pub fn compute_emergency_close(
         .find(|l| l.side == side::SHORT)
         .map(|l| l.exchange.clone())
         .unwrap_or_default();
-    let reference_price = resolve_reference_price(feed, asset, &long_exchange, &short_exchange, now);
+    let reference_price =
+        resolve_reference_price(feed, asset, &long_exchange, &short_exchange, now);
 
     Recommendation {
         decision_id: Uuid::new_v4(),
@@ -331,6 +342,7 @@ fn resolve_reference_price(
         match ex.to_lowercase().as_str() {
             "hyperliquid" => row.hyperliquid.as_ref().and_then(|v| v.mark_px),
             "pacifica" => row.pacifica.as_ref().and_then(|v| v.mark_px),
+            "phoenix" => row.phoenix.as_ref().and_then(|v| v.mark_px),
             "backpack" => row.backpack.as_ref().and_then(|v| v.mark_px),
             "lighter" => row.lighter.as_ref().and_then(|v| v.mark_px),
             _ => None,
@@ -399,6 +411,13 @@ fn candidates_from_live(
                 }
             }
         }
+        if allowed.iter().any(|e| e == "phoenix") {
+            if let Some(v) = row.phoenix.as_ref() {
+                if let Some(funding) = v.funding {
+                    legs.push(("phoenix".to_string(), funding, v.max_leverage));
+                }
+            }
+        }
         if allowed.iter().any(|e| e == "backpack") {
             if let Some(v) = row.backpack.as_ref() {
                 if let Some(funding) = v.funding {
@@ -455,11 +474,7 @@ fn candidates_from_live(
                         max_leverage: short_lev,
                     },
                 ];
-                if best
-                    .as_ref()
-                    .map(|b| apr_pct > b.3)
-                    .unwrap_or(true)
-                {
+                if best.as_ref().map(|b| apr_pct > b.3).unwrap_or(true) {
                     best = Some((
                         long_name.clone(),
                         short_name.clone(),
@@ -587,7 +602,11 @@ fn decide_action(
         .as_deref()
         .map(|a| a == best.asset)
         .unwrap_or(false)
-        && pair_matches(&state.current_legs, &best.long_exchange, &best.short_exchange);
+        && pair_matches(
+            &state.current_legs,
+            &best.long_exchange,
+            &best.short_exchange,
+        );
 
     let cooldown_elapsed = state
         .last_action_at
@@ -707,16 +726,27 @@ pub fn compute_decision_hash(
 /// Stable hash of an effective config, used to populate `automation_runs.config_hash`.
 pub fn compute_config_hash(cfg: &EffectiveConfig) -> String {
     // BTreeMap to ensure stable ordering of vec fields' hash inputs.
-    let mut excluded: Vec<String> = cfg.excluded_assets.iter().map(|s| s.to_uppercase()).collect();
+    let mut excluded: Vec<String> = cfg
+        .excluded_assets
+        .iter()
+        .map(|s| s.to_uppercase())
+        .collect();
     excluded.sort();
-    let mut allowed: Vec<String> = cfg.allowed_exchanges.iter().map(|s| s.to_lowercase()).collect();
+    let mut allowed: Vec<String> = cfg
+        .allowed_exchanges
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
     allowed.sort();
 
     let mut buf = String::new();
     let kv: BTreeMap<&str, String> = BTreeMap::from([
         ("apr_mode", cfg.apr_mode.clone()),
         ("min_apr_to_enter", format!("{:.10}", cfg.min_apr_to_enter)),
-        ("exit_if_apr_below", format!("{:.10}", cfg.exit_if_apr_below)),
+        (
+            "exit_if_apr_below",
+            format!("{:.10}", cfg.exit_if_apr_below),
+        ),
         (
             "rebalance_to_better_pair",
             cfg.rebalance_to_better_pair.to_string(),
@@ -734,10 +764,7 @@ pub fn compute_config_hash(cfg: &EffectiveConfig) -> String {
             cfg.cooldown_after_error_sec.to_string(),
         ),
         ("max_leverage", format!("{:.10}", cfg.max_leverage)),
-        (
-            "max_actions_per_day",
-            cfg.max_actions_per_day.to_string(),
-        ),
+        ("max_actions_per_day", cfg.max_actions_per_day.to_string()),
         ("excluded_assets", excluded.join(",")),
         ("allowed_exchanges", allowed.join(",")),
     ]);
@@ -777,6 +804,7 @@ mod tests {
                 }),
                 backpack: None,
                 lighter: None,
+                phoenix: None,
             },
         );
         FeedSnapshot {
@@ -1027,7 +1055,10 @@ mod tests {
         // Round-trip serialization preserves px as a JSON string.
         let json = serde_json::to_value(&r).expect("serialize");
         let px_field = &json["reference_price"]["px"];
-        assert!(px_field.is_string(), "px must be a JSON string, got {px_field:?}");
+        assert!(
+            px_field.is_string(),
+            "px must be a JSON string, got {px_field:?}"
+        );
         assert_eq!(px_field.as_str(), Some("50000"));
     }
 }

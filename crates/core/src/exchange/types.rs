@@ -11,6 +11,7 @@ pub enum PerpetualExchange {
     Hyperliquid,
     Lighter,
     Pacifica,
+    Phoenix,
 }
 
 impl PerpetualExchange {
@@ -18,6 +19,7 @@ impl PerpetualExchange {
     pub const HEDGEABLE: &'static [PerpetualExchange] = &[
         PerpetualExchange::Hyperliquid,
         PerpetualExchange::Pacifica,
+        PerpetualExchange::Phoenix,
         PerpetualExchange::Backpack,
         PerpetualExchange::Lighter,
     ];
@@ -28,6 +30,7 @@ impl PerpetualExchange {
             PerpetualExchange::Hyperliquid => "hyperliquid",
             PerpetualExchange::Lighter => "lighter",
             PerpetualExchange::Pacifica => "pacifica",
+            PerpetualExchange::Phoenix => "phoenix",
         }
     }
 
@@ -38,6 +41,7 @@ impl PerpetualExchange {
             PerpetualExchange::Hyperliquid => Some(Chain::ARBITRUM),
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
             PerpetualExchange::Lighter => Some(Chain::ETHEREUM),
+            PerpetualExchange::Phoenix => Some(Chain::SOLANA),
         }
     }
 
@@ -53,6 +57,7 @@ impl PerpetualExchange {
             PerpetualExchange::Backpack => None,
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
+            PerpetualExchange::Phoenix => None,
             PerpetualExchange::Lighter => Some("BRIDGE_SOL_TO_ETH"),
         }
     }
@@ -63,6 +68,7 @@ impl PerpetualExchange {
             PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
+            PerpetualExchange::Phoenix => Some("DEPOSIT_TO_PHOENIX"),
             PerpetualExchange::Lighter => Some("DEPOSIT_TO_LIGHTER"),
         }
     }
@@ -71,7 +77,9 @@ impl PerpetualExchange {
     pub fn address_type(&self) -> AddressType {
         match self {
             PerpetualExchange::Hyperliquid | PerpetualExchange::Lighter => AddressType::Evm,
-            PerpetualExchange::Pacifica | PerpetualExchange::Backpack => AddressType::Solana,
+            PerpetualExchange::Pacifica
+            | PerpetualExchange::Backpack
+            | PerpetualExchange::Phoenix => AddressType::Solana,
         }
     }
 
@@ -124,6 +132,7 @@ impl std::str::FromStr for PerpetualExchange {
             "hyperliquid" => Ok(PerpetualExchange::Hyperliquid),
             "lighter" => Ok(PerpetualExchange::Lighter),
             "pacifica" => Ok(PerpetualExchange::Pacifica),
+            "phoenix" => Ok(PerpetualExchange::Phoenix),
             "backpack" => Ok(PerpetualExchange::Backpack),
             _ => Err(format!("Unknown exchange: {s}")),
         }

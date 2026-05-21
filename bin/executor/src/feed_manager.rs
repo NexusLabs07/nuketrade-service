@@ -16,6 +16,7 @@ pub async fn run_feed_manager(
     watch_tx: watch::Sender<Arc<FeedSnapshot>>,
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
+    phoenix_leverage: HashMap<String, u32>,
     backpack_leverage: HashMap<String, u32>,
     lighter_leverage: HashMap<String, u32>,
 ) {
@@ -40,6 +41,7 @@ pub async fn run_feed_manager(
                                     backpack: None,
                                     hyperliquid: None,
                                     pacifica: None,
+                                    phoenix: None,
                                     lighter: None,
                                 });
 
@@ -51,6 +53,7 @@ pub async fn run_feed_manager(
                                     PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
+                                    PerpetualExchange::Phoenix => phoenix_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
                                 },
                             };
@@ -59,6 +62,7 @@ pub async fn run_feed_manager(
                                 PerpetualExchange::Backpack => entry.backpack = Some(value),
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
+                                PerpetualExchange::Phoenix => entry.phoenix = Some(value),
                                 PerpetualExchange::Lighter => entry.lighter = Some(value),
                             }
 

@@ -2029,6 +2029,7 @@ dependencies = [
  "log",
  "pacifica",
  "perp_core",
+ "phoenix",
  "serde_json",
  "server",
  "sqlx",
@@ -3580,6 +3581,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "phoenix"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "log",
+ "perp_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "validator",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4711,6 +4730,7 @@ dependencies = [
  "p256",
  "pacifica",
  "perp_core",
+ "phoenix",
  "reqwest",
  "serde",
  "serde_json",

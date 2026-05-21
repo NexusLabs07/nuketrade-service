@@ -6,6 +6,9 @@ use lighter::apis::user::{AccountByL1Response, UserInfo as LighterUserInfo};
 use pacifica::apis::user::{
     AccountInfoResponse, TradeHistoryResponse, UserInfo as PacificaUserInfo,
 };
+use phoenix::apis::user::{
+    TradeHistoryResponse as PhoenixTradeHistoryResponse, UserInfo as PhoenixUserInfo,
+};
 use serde::Deserialize;
 use sqlx::Row;
 use validator::Validate;
@@ -65,8 +68,23 @@ struct NormalizedFill {
     pnl_usd: f64,
 }
 
-// ============================ Performance ============================
+fn parse_decimal(value: &str) -> f64 {
+    value.parse::<f64>().unwrap_or(0.0)
+}
 
+fn parse_phoenix_timestamp(value: &str) -> DateTime<Utc> {
+    if let Ok(ts) = DateTime::parse_from_rfc3339(value) {
+        return ts.with_timezone(&Utc);
+    }
+
+    if let Ok(ms) = value.parse::<i64>() {
+        return DateTime::<Utc>::from_timestamp_millis(ms).unwrap_or_else(Utc::now);
+    }
+
+    Utc::now()
+}
+
+// ============================ Performance ============================
 pub async fn get_performance(
     ValidatedPath(params): ValidatedPath<PortfolioPathParams>,
     State(state): State<AppState>,
@@ -76,14 +94,16 @@ pub async fn get_performance(
     let week_start = now - Duration::days(7);
     let month_start = now - Duration::days(30);
 
-    let (hl_fills, pacifica_fills) = tokio::join!(
+    let (hl_fills, pacifica_fills, phoenix_fills) = tokio::join!(
         fetch_hl_fills(&params.user_evm_address),
         fetch_pacifica_fills(&params.user_solana_address),
+        fetch_phoenix_fills(&params.user_solana_address),
     );
 
     let mut all_fills: Vec<NormalizedFill> = Vec::new();
     all_fills.extend(hl_fills);
     all_fills.extend(pacifica_fills);
+    all_fills.extend(phoenix_fills);
 
     let (day_count, week_count, month_count, all_count) = tokio::join!(
         count_strategies_opened(&state, &params, Some(day_start)),
@@ -142,21 +162,20 @@ pub async fn get_pnl_chart(
         Timeframe::All => (now - Duration::days(365), 7 * 24 * 60),
     };
 
-    let (hl_fills, pacifica_fills) = tokio::join!(
+    let (hl_fills, pacifica_fills, phoenix_fills) = tokio::join!(
         fetch_hl_fills(&params.user_evm_address),
         fetch_pacifica_fills(&params.user_solana_address),
+        fetch_phoenix_fills(&params.user_solana_address),
     );
+
     let mut all_fills: Vec<NormalizedFill> = Vec::new();
     all_fills.extend(hl_fills);
     all_fills.extend(pacifica_fills);
+    all_fills.extend(phoenix_fills);
 
     // Effective range start: for "all", clamp to first fill if any.
     let effective_start = if matches!(timeframe, Timeframe::All) {
-        all_fills
-            .iter()
-            .map(|f| f.ts)
-            .min()
-            .unwrap_or(range_start)
+        all_fills.iter().map(|f| f.ts).min().unwrap_or(range_start)
     } else {
         range_start
     };
@@ -195,12 +214,12 @@ pub async fn get_exchanges(
     ValidatedPath(params): ValidatedPath<PortfolioPathParams>,
     State(_state): State<AppState>,
 ) -> Result<Json<ExchangesResponse>, AppError> {
-    let (hl, pacifica, lighter, backpack) = tokio::join!(
+    let (hl, pacifica, phoenix, lighter, backpack) = tokio::join!(
         fetch_hl_balance(&params.user_evm_address),
         fetch_pacifica_balance(&params.user_solana_address),
+        fetch_phoenix_balance(&params.user_solana_address),
         fetch_lighter_balance(&params.user_evm_address),
         async {
-            // Backpack requires per-user API keys (ED25519). Not wired up yet.
             ExchangeRow {
                 venue: "backpack",
                 display_name: "Backpack",
@@ -212,7 +231,7 @@ pub async fn get_exchanges(
         },
     );
 
-    let exchanges = vec![hl, pacifica, lighter, backpack];
+    let exchanges = vec![hl, pacifica, phoenix, lighter, backpack];
 
     let mut totals = ExchangeTotals::default();
     for row in &exchanges {
@@ -281,6 +300,41 @@ async fn fetch_pacifica_fills(solana_address: &str) -> Vec<NormalizedFill> {
             pnl_usd: pnl,
         });
     }
+    out
+}
+
+async fn fetch_phoenix_fills(solana_address: &str) -> Vec<NormalizedFill> {
+    let client = PhoenixUserInfo::new(solana_address.to_string());
+
+    let resp: PhoenixTradeHistoryResponse = match client.get_trade_history().await {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("phoenix trade history fetch failed: {e}");
+            return vec![];
+        }
+    };
+
+    let mut out = Vec::with_capacity(resp.data.len());
+
+    for t in &resp.data {
+        let pnl = parse_decimal(&t.realized_pnl);
+        let price = parse_decimal(&t.price);
+        let base_lots = parse_decimal(&t.base_lots_delta).abs();
+        let quote_lots = parse_decimal(&t.virtual_quote_lots_delta).abs();
+
+        let notional_usd = if quote_lots > 0.0 {
+            quote_lots
+        } else {
+            price * base_lots
+        };
+
+        out.push(NormalizedFill {
+            ts: parse_phoenix_timestamp(&t.timestamp),
+            notional_usd,
+            pnl_usd: pnl,
+        });
+    }
+
     out
 }
 
@@ -358,6 +412,55 @@ async fn fetch_pacifica_balance(solana_address: &str) -> ExchangeRow {
         connected: true,
         available_balance_usd: available,
         total_equity_usd: equity,
+        error: None,
+    }
+}
+
+async fn fetch_phoenix_balance(solana_address: &str) -> ExchangeRow {
+    let client = PhoenixUserInfo::new(solana_address.to_string());
+
+    let state = match client.get_trader_state().await {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("phoenix trader state failed: {e}");
+            return ExchangeRow {
+                venue: "phoenix",
+                display_name: "Phoenix",
+                connected: false,
+                available_balance_usd: None,
+                total_equity_usd: None,
+                error: Some("upstream_unavailable".into()),
+            };
+        }
+    };
+
+    let mut available = 0.0_f64;
+    let mut equity = 0.0_f64;
+    let mut has_position = false;
+
+    for trader in &state.traders {
+        available += parse_decimal(&trader.effective_collateral_for_withdrawals);
+
+        let trader_equity = parse_decimal(&trader.portfolio_value);
+        if trader_equity > 0.0 {
+            equity += trader_equity;
+        } else {
+            equity += parse_decimal(&trader.effective_collateral);
+        }
+
+        if !trader.positions.is_empty() {
+            has_position = true;
+        }
+    }
+
+    let connected = available > 0.0 || equity > 0.0 || has_position;
+
+    ExchangeRow {
+        venue: "phoenix",
+        display_name: "Phoenix",
+        connected,
+        available_balance_usd: if connected { Some(available) } else { None },
+        total_equity_usd: if connected { Some(equity) } else { None },
         error: None,
     }
 }
