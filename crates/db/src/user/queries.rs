@@ -177,6 +177,53 @@ pub async fn upsert_google_user(
     Ok((wallet_id, user))
 }
 
+pub async fn upsert_wallet_user(
+    db_conn: Arc<PgPool>,
+    evm_address: String,
+    solana_address: String,
+) -> Result<(uuid::Uuid, User), anyhow::Error> {
+    let mut tx = db_conn.begin().await?;
+
+    let wallet = Wallet {
+        id: uuid::Uuid::new_v4(),
+        turnkey_evm_address: evm_address,
+        turnkey_solana_address: solana_address,
+        created_at: chrono::NaiveDateTime::default(),
+        updated_at: chrono::NaiveDateTime::default(),
+    };
+    let wallet_id = upsert_wallet_with_executor(&mut *tx, &wallet).await?;
+
+    let existing = sqlx::query_as::<_, User>("SELECT * FROM users WHERE wallet_id = $1")
+        .bind(wallet_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    if let Some(user) = existing {
+        tx.commit().await?;
+        return Ok((wallet_id, user));
+    }
+
+    let id = uuid::Uuid::new_v4();
+    let referral_code = uuid::Uuid::new_v4().to_string().replace('-', "")[..10].to_string();
+
+    let user = sqlx::query_as::<_, User>(
+        r#"
+        INSERT INTO users (id, email, name, referral_code, wallet_id)
+        VALUES ($1, NULL, '', $2, $3)
+        RETURNING *
+        "#,
+    )
+    .bind(id)
+    .bind(&referral_code)
+    .bind(wallet_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    Ok((wallet_id, user))
+}
+
 pub async fn get_user_position(
     db_conn: Arc<PgPool>,
     user_id: uuid::Uuid,
