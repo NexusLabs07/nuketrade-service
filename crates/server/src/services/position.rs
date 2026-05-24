@@ -141,7 +141,7 @@ impl PositionService {
     pub fn from_phoenix_position(
         pos: &phoenix::apis::user::PhoenixPosition,
     ) -> Option<OpenPositionsResponse> {
-        let size_value = perp_core::parse_f64_or_zero(&pos.position_size);
+        let size_value = pos.signed_position_size();
 
         if size_value.abs() < f64::EPSILON {
             return None;
@@ -157,19 +157,11 @@ impl PositionService {
             symbol: phoenix::helpers::markets::normalize_phoenix_symbol(&pos.symbol),
             size: size_value.abs().to_string(),
             side,
-            margin: if pos.position_initial_margin.is_empty() {
-                pos.initial_margin.clone()
-            } else {
-                pos.position_initial_margin.clone()
-            },
-            pnl: pos.unrealized_pnl.clone(),
-            funding: if pos.accumulated_funding.is_empty() {
-                pos.unsettled_funding.clone()
-            } else {
-                pos.accumulated_funding.clone()
-            },
-            leverage: 0,
-            liquidation_price: pos.liquidation_price.clone(),
+            margin: pos.margin_usd().to_string(),
+            pnl: pos.unrealized_pnl.to_f64().to_string(),
+            funding: pos.funding_usd().to_string(),
+            leverage: pos.leverage_from_margin(),
+            liquidation_price: pos.liquidation_price.to_f64().to_string(),
         })
     }
 

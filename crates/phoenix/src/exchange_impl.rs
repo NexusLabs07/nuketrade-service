@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use perp_core::{
     Exchange, PositionSide, UnifiedPosition, WsMessage,
     exchange::{AccountSettings, ExchangeError, MarketInfo, PerpetualExchange},
-    parse_f64,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -125,7 +124,7 @@ impl PhoenixExchange {
     }
 
     fn convert_position(pos: PhoenixPosition) -> Option<UnifiedPosition> {
-        let size = parse_f64(&pos.position_size)?;
+        let size = pos.signed_position_size();
 
         if size.abs() < f64::EPSILON {
             return None;
@@ -141,17 +140,16 @@ impl PhoenixExchange {
             symbol: normalize_phoenix_symbol(&pos.symbol),
             size: size.abs(),
             side,
-            entry_price: parse_f64(&pos.entry_price).unwrap_or(0.0),
+            entry_price: pos.entry_price.to_f64(),
             mark_price: 0.0,
-            unrealized_pnl: parse_f64(&pos.unrealized_pnl).unwrap_or(0.0),
-            cumulative_funding: parse_f64(&pos.accumulated_funding)
-                .or_else(|| parse_f64(&pos.unsettled_funding))
-                .unwrap_or(0.0),
-            leverage: 0,
-            margin_used: parse_f64(&pos.position_initial_margin)
-                .or_else(|| parse_f64(&pos.initial_margin))
-                .unwrap_or(0.0),
-            liquidation_price: parse_f64(&pos.liquidation_price),
+            unrealized_pnl: pos.unrealized_pnl.to_f64(),
+            cumulative_funding: pos.funding_usd(),
+            leverage: pos.leverage_from_margin(),
+            margin_used: pos.margin_usd(),
+            liquidation_price: {
+                let liq = pos.liquidation_price.to_f64();
+                if liq > 0.0 { Some(liq) } else { None }
+            },
         })
     }
 }
@@ -177,6 +175,7 @@ impl Exchange for PhoenixExchange {
         let response = self
             .client
             .get(format!("{}/trader/{}/state", self.http_url, user_address))
+            .query(&[("pdaIndex", crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX)])
             .send()
             .await
             .map_err(|e| ExchangeError::Network(e.to_string()))?;
@@ -208,6 +207,7 @@ impl Exchange for PhoenixExchange {
         let response = self
             .client
             .get(format!("{}/trader/{}/state", self.http_url, user_address))
+            .query(&[("pdaIndex", crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX)])
             .send()
             .await
             .map_err(|e| ExchangeError::Network(e.to_string()))?;
@@ -228,7 +228,7 @@ impl Exchange for PhoenixExchange {
         let collateral = state
             .traders
             .first()
-            .and_then(|trader| parse_f64(&trader.effective_collateral))
+            .map(|trader| trader.effective_collateral_usd())
             .unwrap_or(0.0);
 
         Ok(AccountSettings {

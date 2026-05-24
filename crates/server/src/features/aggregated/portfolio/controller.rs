@@ -417,7 +417,10 @@ async fn fetch_pacifica_balance(solana_address: &str) -> ExchangeRow {
 }
 
 async fn fetch_phoenix_balance(solana_address: &str) -> ExchangeRow {
-    let client = PhoenixUserInfo::new(solana_address.to_string());
+    let client = PhoenixUserInfo::with_pda_index(
+        solana_address.to_string(),
+        phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+    );
 
     let state = match client.get_trader_state().await {
         Ok(v) => v,
@@ -439,13 +442,13 @@ async fn fetch_phoenix_balance(solana_address: &str) -> ExchangeRow {
     let mut has_position = false;
 
     for trader in &state.traders {
-        available += parse_decimal(&trader.effective_collateral_for_withdrawals);
+        available += trader.withdrawable_collateral_usd();
 
-        let trader_equity = parse_decimal(&trader.portfolio_value);
+        let trader_equity = trader.portfolio_value.to_usd();
         if trader_equity > 0.0 {
             equity += trader_equity;
         } else {
-            equity += parse_decimal(&trader.effective_collateral);
+            equity += trader.effective_collateral_usd();
         }
 
         if !trader.positions.is_empty() {

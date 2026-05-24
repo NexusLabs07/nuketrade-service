@@ -17,7 +17,7 @@ use crate::{
             handle_deposit_result, handle_open_position_result,
         },
     },
-    services::hedge::{self, NextActionResponse, action, intent_status},
+    services::hedge::{self, NextActionResponse, action, intent_status, leg_status},
 };
 
 pub struct HedgeService;
@@ -97,13 +97,18 @@ impl HedgeService {
 
         let mut legs = hedge_db::get_hedge_legs(db.clone(), intent_id).await?;
 
-        // ── Balance check on CREATED → FUNDING boundary ─────────────────────
-        // When the intent is fresh (CREATED), query existing balances on both
-        // protocols/chains and skip bridge/deposit steps for legs that are
-        // already funded (partially or fully).
-        if intent.status == intent_status::CREATED {
+        // ── Balance check: skip bridge/deposit when margin already on-exchange ─
+        // Run on CREATED, and refresh Phoenix legs still awaiting deposit so
+        // margin added after intent creation is picked up (matches FE Rise check).
+        let should_balance_check = intent.status == intent_status::CREATED
+            || legs.iter().any(|leg| {
+                leg.exchange == "phoenix"
+                    && (leg.status == leg_status::PENDING
+                        || leg.status == leg_status::BRIDGE_CONFIRMED)
+            });
+
+        if should_balance_check {
             check_and_apply_existing_balances(db.clone(), config, &intent, &mut legs).await?;
-            // Re-fetch legs with updated statuses/balances.
             legs = hedge_db::get_hedge_legs(db.clone(), intent_id).await?;
         }
 

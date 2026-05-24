@@ -25,7 +25,10 @@ pub struct PhoenixUserPath {
 pub async fn get_user_open_positions(
     ValidatedPath(params): ValidatedPath<PhoenixUserPath>,
 ) -> Result<Json<Vec<OpenPositionsResponse>>, AppError> {
-    let client = UserInfo::new(params.user_address);
+    let client = UserInfo::with_pda_index(
+        params.user_address,
+        phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+    );
     let state = client.get_trader_state().await?;
 
     let mut out = Vec::new();

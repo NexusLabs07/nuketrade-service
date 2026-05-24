@@ -55,7 +55,10 @@ pub async fn get_merged_open_positions(
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
     let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address.clone());
-    let phoenix_client = PhoenixUserInfo::new(params.user_solana_address);
+    let phoenix_client = PhoenixUserInfo::with_pda_index(
+        params.user_solana_address.clone(),
+        phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+    );
 
     let (hl_result, pacifica_result, pacifica_account_result, phoenix_result): (
         Result<ClearinghouseState>,
@@ -134,13 +137,21 @@ pub async fn get_merged_open_positions(
         }
     }
 
-    let phoenix_positions_vec = phoenix_result
-        .ok()
-        .into_iter()
-        .flat_map(|state| state.traders)
-        .flat_map(|trader| trader.positions)
-        .filter_map(|pos| PositionService::from_phoenix_position(&pos))
-        .collect::<Vec<_>>();
+    let phoenix_positions_vec = match phoenix_result {
+        Ok(state) => state
+            .traders
+            .iter()
+            .flat_map(|trader| trader.positions.iter())
+            .filter_map(|pos| PositionService::from_phoenix_position(pos))
+            .collect::<Vec<_>>(),
+        Err(err) => {
+            log::warn!(
+                "phoenix trader state failed for open positions ({}): {err}",
+                params.user_solana_address
+            );
+            Vec::new()
+        }
+    };
 
     let merged_positions = PositionService::merge_positions(
         hl_positions_vec,

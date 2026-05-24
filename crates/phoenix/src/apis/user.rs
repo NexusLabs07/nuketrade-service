@@ -3,7 +3,10 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::PHOENIX_HTTP_URL;
+use crate::{
+    PHOENIX_HTTP_URL,
+    helpers::collateral::{DEFAULT_TRADER_PDA_INDEX, PhoenixAmount},
+};
 
 #[derive(Debug, Clone)]
 pub struct UserInfo {
@@ -49,11 +52,18 @@ impl UserInfo {
     }
 
     pub async fn get_trader_state(&self) -> Result<TraderStateResponse> {
+        self.get_trader_state_for_pda(self.pda_index.unwrap_or(DEFAULT_TRADER_PDA_INDEX))
+            .await
+    }
+
+    /// Trader state for a specific PDA index (FE default: `0`).
+    pub async fn get_trader_state_for_pda(&self, pda_index: u32) -> Result<TraderStateResponse> {
         let request = self
             .client
-            .get(format!("{}/trader/{}/state", self.http_url, self.authority));
+            .get(format!("{}/trader/{}/state", self.http_url, self.authority))
+            .query(&[("pdaIndex", pda_index)]);
 
-        let response = self.with_pda_query(request).send().await?;
+        let response = request.send().await?;
 
         if !response.status().is_success() {
             anyhow::bail!("Phoenix trader state returned HTTP {}", response.status());
@@ -123,23 +133,23 @@ pub struct PhoenixTrader {
     pub risk_tier: String,
 
     #[serde(default)]
-    pub collateral_balance: String,
+    pub collateral_balance: PhoenixAmount,
     #[serde(default)]
-    pub effective_collateral: String,
+    pub effective_collateral: PhoenixAmount,
     #[serde(default)]
-    pub effective_collateral_for_withdrawals: String,
+    pub effective_collateral_for_withdrawals: PhoenixAmount,
     #[serde(default)]
-    pub portfolio_value: String,
+    pub portfolio_value: PhoenixAmount,
     #[serde(default)]
-    pub initial_margin: String,
+    pub initial_margin: PhoenixAmount,
     #[serde(default)]
-    pub maintenance_margin: String,
+    pub maintenance_margin: PhoenixAmount,
     #[serde(default)]
-    pub unrealized_pnl: String,
+    pub unrealized_pnl: PhoenixAmount,
     #[serde(default)]
-    pub unsettled_funding_owed: String,
+    pub unsettled_funding_owed: PhoenixAmount,
     #[serde(default)]
-    pub accumulated_funding: String,
+    pub accumulated_funding: PhoenixAmount,
 
     #[serde(default)]
     pub positions: Vec<PhoenixPosition>,
@@ -154,25 +164,114 @@ pub struct PhoenixPosition {
     #[serde(default)]
     pub symbol: String,
     #[serde(default)]
-    pub position_size: String,
+    pub position_size: PhoenixAmount,
     #[serde(default)]
-    pub entry_price: String,
+    pub virtual_quote_position: PhoenixAmount,
     #[serde(default)]
-    pub liquidation_price: String,
+    pub entry_price: PhoenixAmount,
     #[serde(default)]
-    pub position_initial_margin: String,
+    pub liquidation_price: PhoenixAmount,
     #[serde(default)]
-    pub initial_margin: String,
+    pub position_initial_margin: PhoenixAmount,
     #[serde(default)]
-    pub maintenance_margin: String,
+    pub initial_margin: PhoenixAmount,
     #[serde(default)]
-    pub position_value: String,
+    pub maintenance_margin: PhoenixAmount,
     #[serde(default)]
-    pub unrealized_pnl: String,
+    pub position_value: PhoenixAmount,
     #[serde(default)]
-    pub unsettled_funding: String,
+    pub unrealized_pnl: PhoenixAmount,
     #[serde(default)]
-    pub accumulated_funding: String,
+    pub unsettled_funding: PhoenixAmount,
+    #[serde(default)]
+    pub accumulated_funding: PhoenixAmount,
+}
+
+impl PhoenixPosition {
+    /// Signed base position size (lots). Positive = long, negative = short.
+    ///
+    /// Phoenix docs: `unrealized_pnl = position_size * (mark_price - entry_price)`.
+    /// REST often exposes `positionSize` as a positive magnitude with
+    /// `virtualQuotePosition` negative even for longs, so when signs disagree we
+    /// infer side from entry, mark (via `positionValue`), and unrealized PnL.
+    pub fn signed_position_size(&self) -> f64 {
+        let raw_base = self.position_size.value;
+        if raw_base < 0 {
+            return raw_base as f64;
+        }
+
+        let magnitude = if raw_base > 0 {
+            raw_base as f64
+        } else {
+            self.position_size.to_f64().abs()
+        };
+
+        if magnitude < f64::EPSILON {
+            return 0.0;
+        }
+
+        let quote = self.virtual_quote_position.value;
+        if raw_base > 0 && quote > 0 {
+            return magnitude;
+        }
+        if raw_base < 0 && quote < 0 {
+            return -magnitude;
+        }
+
+        self.infer_signed_size_from_pnl(magnitude)
+    }
+
+    /// Infer `sign(position_size)` from Phoenix PnL identity when REST omits a sign.
+    fn infer_signed_size_from_pnl(&self, magnitude: f64) -> f64 {
+        let entry = self.entry_price.to_f64();
+        let pnl = self.unrealized_pnl.to_f64();
+        let notional = self.position_value.to_f64();
+
+        if entry <= 0.0 || notional <= 0.0 {
+            return magnitude;
+        }
+
+        let mark = notional / magnitude;
+        let delta = mark - entry;
+        if delta.abs() < 1e-12 {
+            return magnitude;
+        }
+        if pnl.abs() < 1e-12 {
+            return magnitude;
+        }
+
+        // unrealized_pnl = q * (mark - entry); solve sign(q)
+        if (pnl > 0.0) == (delta > 0.0) {
+            magnitude
+        } else {
+            -magnitude
+        }
+    }
+
+    pub fn margin_usd(&self) -> f64 {
+        let m = self.position_initial_margin.to_usd();
+        if m > 0.0 {
+            return m;
+        }
+        self.initial_margin.to_usd()
+    }
+
+    pub fn funding_usd(&self) -> f64 {
+        let acc = self.accumulated_funding.to_f64();
+        if acc.abs() >= f64::EPSILON {
+            return acc;
+        }
+        self.unsettled_funding.to_f64()
+    }
+
+    pub fn leverage_from_margin(&self) -> u32 {
+        let margin = self.margin_usd();
+        let notional = self.position_value.to_usd();
+        if margin > 0.0 && notional > 0.0 {
+            return (notional / margin).round().max(1.0) as u32;
+        }
+        0
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

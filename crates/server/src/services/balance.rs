@@ -177,32 +177,30 @@ async fn query_pacifica_margin_balance(solana_address: &str) -> Result<f64, anyh
 
 // ============================= Phoenix Balance Checks =============================
 
-/// Query Phoenix free margin/collateral via trader state.
+/// Query Phoenix collateral via REST trader state (PDA 0, subaccount 0).
 ///
-/// For hedge funding we care about collateral that can actually be used as
-/// free margin for a new position. Prefer `effective_collateral_for_withdrawals`,
-/// then fall back to `effective_collateral`, then `collateral_balance`.
+/// Aligns with FE Rise snapshot: `collateral` in micros → USD, plus withdrawable
+/// effective collateral when deposited balance is zero.
 async fn query_phoenix_margin_balance(solana_address: &str) -> Result<f64, anyhow::Error> {
-    let client = phoenix::apis::user::UserInfo::new(solana_address.to_string());
-    let state = client.get_trader_state().await?;
+    use phoenix::helpers::collateral::{
+        DEFAULT_TRADER_PDA_INDEX, DEFAULT_TRADER_SUBACCOUNT_INDEX,
+    };
 
-    let mut total = 0.0_f64;
+    let client = phoenix::apis::user::UserInfo::with_pda_index(
+        solana_address.to_string(),
+        DEFAULT_TRADER_PDA_INDEX,
+    );
+    let state = client
+        .get_trader_state_for_pda(DEFAULT_TRADER_PDA_INDEX)
+        .await?;
 
-    for trader in &state.traders {
-        let available = parse_decimal(&trader.effective_collateral_for_withdrawals);
-        let effective = parse_decimal(&trader.effective_collateral);
-        let collateral = parse_decimal(&trader.collateral_balance);
-
-        if available > 0.0 {
-            total += available;
-        } else if effective > 0.0 {
-            total += effective;
-        } else {
-            total += collateral;
-        }
+    let deposited = state
+        .deposited_collateral_usd_for_subaccount(DEFAULT_TRADER_SUBACCOUNT_INDEX);
+    if deposited > 0.0 {
+        return Ok(deposited);
     }
 
-    Ok(total)
+    Ok(state.free_collateral_usd_for_subaccount(DEFAULT_TRADER_SUBACCOUNT_INDEX))
 }
 
 /// Query on-chain USDC balance on Solana via RPC `getTokenAccountsByOwner`.
