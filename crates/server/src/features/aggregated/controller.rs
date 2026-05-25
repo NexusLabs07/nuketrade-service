@@ -141,8 +141,12 @@ pub async fn get_merged_open_positions(
         Ok(state) => state
             .traders
             .iter()
-            .flat_map(|trader| trader.positions.iter())
-            .filter_map(|pos| PositionService::from_phoenix_position(pos))
+            .flat_map(|trader| {
+                trader
+                    .positions
+                    .iter()
+                    .filter_map(|pos| PositionService::from_phoenix_position(pos, trader))
+            })
             .collect::<Vec<_>>(),
         Err(err) => {
             log::warn!(

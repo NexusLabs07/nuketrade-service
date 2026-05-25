@@ -140,6 +140,7 @@ impl PositionService {
 
     pub fn from_phoenix_position(
         pos: &phoenix::apis::user::PhoenixPosition,
+        trader: &phoenix::apis::user::PhoenixTrader,
     ) -> Option<OpenPositionsResponse> {
         let size_value = pos.signed_position_size();
 
@@ -153,14 +154,19 @@ impl PositionService {
             Side::Short
         };
 
+        let collateral = trader.collateral_usd();
+        let single_position = trader.positions.len() == 1;
+
         Some(OpenPositionsResponse {
             symbol: phoenix::helpers::markets::normalize_phoenix_symbol(&pos.symbol),
             size: size_value.abs().to_string(),
             side,
-            margin: pos.margin_usd().to_string(),
+            margin: pos
+                .display_margin_usd(collateral, single_position)
+                .to_string(),
             pnl: pos.unrealized_pnl.to_f64().to_string(),
             funding: pos.funding_usd().to_string(),
-            leverage: pos.leverage_from_margin(),
+            leverage: pos.display_leverage(collateral, single_position),
             liquidation_price: pos.liquidation_price.to_f64().to_string(),
         })
     }

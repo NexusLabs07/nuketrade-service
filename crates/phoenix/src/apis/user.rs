@@ -158,6 +158,18 @@ pub struct PhoenixTrader {
     pub limit_orders: Value,
 }
 
+impl PhoenixTrader {
+    /// Deposited collateral on this subaccount (matches Phoenix UI isolated margin).
+    pub fn collateral_usd(&self) -> f64 {
+        let balance = self.collateral_balance.to_usd();
+        if balance > 0.0 {
+            balance
+        } else {
+            self.effective_collateral.to_usd()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhoenixPosition {
@@ -266,6 +278,28 @@ impl PhoenixPosition {
 
     pub fn leverage_from_margin(&self) -> u32 {
         let margin = self.margin_usd();
+        let notional = self.position_value.to_usd();
+        if margin > 0.0 && notional > 0.0 {
+            return (notional / margin).round().max(1.0) as u32;
+        }
+        0
+    }
+
+    /// Margin shown in Phoenix UI for isolated positions: subaccount collateral, not
+    /// `positionInitialMargin` (exchange margin requirement at max tier).
+    pub fn display_margin_usd(&self, subaccount_collateral_usd: f64, single_position: bool) -> f64 {
+        if single_position && subaccount_collateral_usd > 0.0 {
+            return subaccount_collateral_usd;
+        }
+        self.margin_usd()
+    }
+
+    pub fn display_leverage(
+        &self,
+        subaccount_collateral_usd: f64,
+        single_position: bool,
+    ) -> u32 {
+        let margin = self.display_margin_usd(subaccount_collateral_usd, single_position);
         let notional = self.position_value.to_usd();
         if margin > 0.0 && notional > 0.0 {
             return (notional / margin).round().max(1.0) as u32;

@@ -226,6 +226,42 @@ mod tests {
     }
 
     #[test]
+    fn display_margin_matches_phoenix_ui_isolated_collateral() {
+        use crate::apis::user::{PhoenixPosition, PhoenixTrader};
+
+        let pos: PhoenixPosition = serde_json::from_str(
+            r#"{
+            "symbol": "JUP",
+            "positionSize": { "value": 137, "decimals": 0, "ui": "137" },
+            "virtualQuotePosition": { "value": -27672630, "decimals": 6, "ui": "-27.672630" },
+            "entryPrice": { "value": 202150, "decimals": 6, "ui": "0.202150" },
+            "positionValue": { "value": 27672630, "decimals": 6, "ui": "27.672630" },
+            "positionInitialMargin": { "value": 2767263, "decimals": 6, "ui": "2.767263" },
+            "unrealizedPnl": { "value": -36990, "decimals": 6, "ui": "-0.036990" }
+        }"#,
+        )
+        .unwrap();
+
+        let trader: PhoenixTrader = serde_json::from_str(
+            r#"{
+            "authority": "3v8sLhz4KfVeBroMVBUzHfYFE8g9E6pgrnUKXZnwgqEZ",
+            "traderKey": "x",
+            "traderPdaIndex": 0,
+            "traderSubaccountIndex": 1,
+            "collateralBalance": { "value": 6921276, "decimals": 6, "ui": "6.921276" },
+            "positions": []
+        }"#,
+        )
+        .unwrap();
+
+        let collateral = trader.collateral_usd();
+        assert!((collateral - 6.921276).abs() < 1e-4);
+        assert!((pos.margin_usd() - 2.767263).abs() < 1e-4);
+        assert!((pos.display_margin_usd(collateral, true) - 6.921276).abs() < 1e-4);
+        assert_eq!(pos.display_leverage(collateral, true), 4);
+    }
+
+    #[test]
     fn infers_short_when_pnl_positive_and_mark_below_entry() {
         use crate::apis::user::PhoenixPosition;
 

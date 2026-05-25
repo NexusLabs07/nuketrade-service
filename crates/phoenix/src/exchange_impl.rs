@@ -115,15 +115,26 @@ impl PhoenixExchange {
     }
 
     fn convert_positions(state: TraderStateResponse) -> Vec<UnifiedPosition> {
-        state
-            .traders
-            .into_iter()
-            .flat_map(|trader| trader.positions)
-            .filter_map(Self::convert_position)
-            .collect()
+        let mut out = Vec::new();
+        for trader in state.traders {
+            let collateral = trader.collateral_usd();
+            let single_position = trader.positions.len() == 1;
+            for pos in trader.positions {
+                if let Some(unified) =
+                    Self::convert_position(&pos, collateral, single_position)
+                {
+                    out.push(unified);
+                }
+            }
+        }
+        out
     }
 
-    fn convert_position(pos: PhoenixPosition) -> Option<UnifiedPosition> {
+    fn convert_position(
+        pos: &PhoenixPosition,
+        subaccount_collateral_usd: f64,
+        single_position: bool,
+    ) -> Option<UnifiedPosition> {
         let size = pos.signed_position_size();
 
         if size.abs() < f64::EPSILON {
@@ -144,8 +155,8 @@ impl PhoenixExchange {
             mark_price: 0.0,
             unrealized_pnl: pos.unrealized_pnl.to_f64(),
             cumulative_funding: pos.funding_usd(),
-            leverage: pos.leverage_from_margin(),
-            margin_used: pos.margin_usd(),
+            leverage: pos.display_leverage(subaccount_collateral_usd, single_position),
+            margin_used: pos.display_margin_usd(subaccount_collateral_usd, single_position),
             liquidation_price: {
                 let liq = pos.liquidation_price.to_f64();
                 if liq > 0.0 { Some(liq) } else { None }

@@ -33,8 +33,8 @@ pub async fn get_user_open_positions(
 
     let mut out = Vec::new();
     for trader in state.traders {
-        for pos in trader.positions {
-            if let Some(position) = PositionService::from_phoenix_position(&pos) {
+        for pos in &trader.positions {
+            if let Some(position) = PositionService::from_phoenix_position(pos, &trader) {
                 out.push(position);
             }
         }
