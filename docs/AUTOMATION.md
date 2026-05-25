@@ -246,6 +246,7 @@ on every poll.
 }
 ```
 
+minor 
 Notes:
 
 - `intentId` is the `automation_actions.id` UUID. Derived from the
