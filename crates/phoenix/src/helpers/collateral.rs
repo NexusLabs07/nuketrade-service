@@ -262,6 +262,25 @@ mod tests {
     }
 
     #[test]
+    fn signed_size_uses_position_decimals() {
+        use crate::apis::user::PhoenixPosition;
+
+        let pos: PhoenixPosition = serde_json::from_str(
+            r#"{
+            "symbol": "ZEC",
+            "positionSize": { "value": 2, "decimals": 2, "ui": "0.02" },
+            "virtualQuotePosition": { "value": -11019000, "decimals": 6, "ui": "-11.019000" },
+            "entryPrice": { "value": 550950000, "decimals": 6, "ui": "550.950000" },
+            "unrealizedPnl": { "value": 23600, "decimals": 6, "ui": "0.023600" },
+            "positionValue": { "value": 11042600, "decimals": 6, "ui": "11.042600" }
+        }"#,
+        )
+        .unwrap();
+
+        assert!((pos.signed_position_size() - 0.02).abs() < 1e-6);
+    }
+
+    #[test]
     fn infers_short_when_pnl_positive_and_mark_below_entry() {
         use crate::apis::user::PhoenixPosition;
 

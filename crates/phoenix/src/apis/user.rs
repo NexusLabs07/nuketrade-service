@@ -200,33 +200,30 @@ pub struct PhoenixPosition {
 }
 
 impl PhoenixPosition {
-    /// Signed base position size (lots). Positive = long, negative = short.
+    /// Signed base position size in UI units (e.g. 0.02 ZEC). Positive = long, negative = short.
     ///
     /// Phoenix docs: `unrealized_pnl = position_size * (mark_price - entry_price)`.
     /// REST often exposes `positionSize` as a positive magnitude with
     /// `virtualQuotePosition` negative even for longs, so when signs disagree we
     /// infer side from entry, mark (via `positionValue`), and unrealized PnL.
     pub fn signed_position_size(&self) -> f64 {
-        let raw_base = self.position_size.value;
-        if raw_base < 0 {
-            return raw_base as f64;
-        }
-
-        let magnitude = if raw_base > 0 {
-            raw_base as f64
-        } else {
-            self.position_size.to_f64().abs()
-        };
-
-        if magnitude < f64::EPSILON {
+        let base = self.position_size.to_f64();
+        if base.abs() < f64::EPSILON {
             return 0.0;
         }
 
-        let quote = self.virtual_quote_position.value;
-        if raw_base > 0 && quote > 0 {
+        if self.position_size.value < 0 {
+            return base;
+        }
+
+        let magnitude = base.abs();
+        let quote = self.virtual_quote_position.to_f64();
+        let raw_base = self.position_size.value;
+
+        if raw_base > 0 && quote > 0.0 {
             return magnitude;
         }
-        if raw_base < 0 && quote < 0 {
+        if raw_base < 0 && quote < 0.0 {
             return -magnitude;
         }
 
