@@ -1,15 +1,39 @@
+use alloy::signers::local::PrivateKeySigner;
 use axum::{Extension, Json, extract::State};
 use lighter::{
     LighterExchange,
     services::deposit::{DepositPayload, PermitSignature, deposit_to_lighter},
 };
 use perp_core::MarketInfo;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::{
     AppState, error::AppError, extractors::ValidatedJson, features::auth::types::AuthClaims,
 };
+
+#[derive(Debug, Serialize)]
+pub struct FeePayerResponse {
+    pub address: String,
+}
+
+/// Returns the EVM fee-payer address that the FE must use as the `spender` in
+/// the EIP-2612 USDC permit. The user signs `permit(owner=user, spender=feePayer, …)`
+/// so the fee payer can pull USDC out of the user's wallet and then call
+/// `Lighter.deposit(_to=user, …)` on the user's behalf.
+pub async fn get_fee_payer(
+    State(state): State<AppState>,
+) -> Result<Json<FeePayerResponse>, AppError> {
+    let signer: PrivateKeySigner = state
+        .config
+        .evm_fee_payer_private_key
+        .parse()
+        .map_err(|e| AppError::Internal(format!("invalid EVM_FEE_PAYER_PRIVATE_KEY: {e:?}")))?;
+
+    Ok(Json(FeePayerResponse {
+        address: format!("{:?}", signer.address()),
+    }))
+}
 
 pub async fn get_perp_metadata() -> Result<Json<Vec<MarketInfo>>, AppError> {
     let exchange = LighterExchange::new();
