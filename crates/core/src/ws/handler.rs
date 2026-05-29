@@ -114,6 +114,7 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
         // Subscribe to channels
         let subscribe_messages = exchange.build_subscribe_message(symbols);
+        let sub_delay = Duration::from_millis(config.subscription_delay_ms);
         for msg in subscribe_messages {
             match write.send(Message::Text(msg.clone().into())).await {
                 Ok(_) => log::info!("{exchange_name}: Sent subscription message"),
@@ -122,6 +123,9 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     tokio::time::sleep(config.reconnect_delay()).await;
                     continue;
                 }
+            }
+            if !sub_delay.is_zero() {
+                tokio::time::sleep(sub_delay).await;
             }
         }
 
@@ -199,12 +203,20 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                         std::future::pending::<tokio::time::Instant>().await
                     }
                 } => {
-                    let ping_msg = serde_json::json!({"method": "ping"}).to_string();
-                    if let Err(e) = write.send(Message::Text(ping_msg.into())).await {
+                    let ping_result = match config.heartbeat {
+                        super::config::WsHeartbeat::JsonMethodPing => {
+                            let ping_msg = serde_json::json!({"method": "ping"}).to_string();
+                            write.send(Message::Text(ping_msg.into())).await
+                        }
+                        super::config::WsHeartbeat::WebSocketPing => {
+                            write.send(Message::Ping(vec![].into())).await
+                        }
+                    };
+                    if let Err(e) = ping_result {
                         log::error!("{exchange_name}: Failed to send ping: {e}. Reconnecting...");
                         break true;
                     } else {
-                        log::info!("{exchange_name}: Sent heartbeat ping");
+                        log::debug!("{exchange_name}: Sent heartbeat ping");
                     }
                 }
 

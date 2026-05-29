@@ -7,7 +7,7 @@
 pub mod config;
 pub mod handler;
 
-pub use config::WsConfig;
+pub use config::{WsConfig, WsHeartbeat};
 pub use handler::run_funding_feed;
 
 /// WebSocket message types for funding feeds.

@@ -47,6 +47,8 @@ pub async fn start_pacifica_funding_feed(
         state_update_interval_secs: 5,
         stale_threshold_secs: 60,
         ping_interval_secs: Some(30), // Pacifica needs periodic pings
+        heartbeat: perp_core::ws::WsHeartbeat::JsonMethodPing,
+        subscription_delay_ms: 0,
         use_custom_ws_config: true,
     };
 

@@ -270,6 +270,24 @@ impl Exchange for PhoenixExchange {
     }
 
     fn parse_ws_message(&self, raw: &str) -> Vec<WsMessage> {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+            match v.get("channel").and_then(|c| c.as_str()) {
+                Some("error") => {
+                    let msg = v
+                        .get("error")
+                        .and_then(|e| e.as_str())
+                        .unwrap_or(raw);
+                    log::warn!("Phoenix WS server error: {msg}");
+                    return vec![];
+                }
+                Some("subscriptionStatus") => {
+                    log::debug!("Phoenix WS: {raw}");
+                    return vec![];
+                }
+                _ => {}
+            }
+        }
+
         let parsed: PhoenixMarketStatsMessage = match serde_json::from_str(raw) {
             Ok(v) => v,
             Err(_) => return vec![],
@@ -345,6 +363,30 @@ pub struct PhoenixMarketStatsMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_market_stats_message() {
+        let exchange = PhoenixExchange::new();
+        let raw = r#"{
+            "channel": "market",
+            "symbol": "BTC",
+            "markPx": 73817.0,
+            "funding": -0.000625597385727166
+        }"#;
+        let msgs = exchange.parse_ws_message(raw);
+        assert_eq!(msgs.len(), 1);
+        match &msgs[0] {
+            WsMessage::FundingUpdate { symbol, .. } => assert_eq!(symbol, "BTC"),
+            _ => panic!("expected FundingUpdate"),
+        }
+    }
+
+    #[test]
+    fn parse_server_error_does_not_panic() {
+        let exchange = PhoenixExchange::new();
+        let raw = r#"{"channel":"error","code":400,"error":"missing field type"}"#;
+        assert!(exchange.parse_ws_message(raw).is_empty());
+    }
 
     #[test]
     fn normalize_funding_percent_to_hourly_decimal() {
