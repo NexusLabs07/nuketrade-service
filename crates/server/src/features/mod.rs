@@ -7,5 +7,6 @@ pub mod hyperliquid;
 pub mod lighter;
 pub mod pacifica;
 pub mod phoenix;
+pub mod stats;
 pub mod user;
 pub mod withdraw;

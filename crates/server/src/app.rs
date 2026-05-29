@@ -1,6 +1,6 @@
 use crate::features::{
-    aggregated, auth, automation, bridge, hedge, hyperliquid, lighter, pacifica, phoenix, user,
-    withdraw,
+    aggregated, auth, automation, bridge, hedge, hyperliquid, lighter, pacifica, phoenix, stats,
+    user, withdraw,
 };
 
 use crate::middleware::auth::{require_auth, require_post_auth};
@@ -160,6 +160,7 @@ pub fn create_app(app_state: AppState) -> Router {
                 require_auth,
             )),
         )
+        .nest("/internal/stats", stats::routes::routes())
         .layer(cors)
         .layer(axum__middleware::from_fn(rate_limit_middleware))
         .layer(axum__middleware::from_fn_with_state(
