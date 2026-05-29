@@ -125,11 +125,17 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
             }
         }
 
+        // Watchdog: force reconnect if no data arrives for 3× the stale threshold.
+        // Catches silently-dropped TCP connections that keep read.next() hanging.
+        let watchdog_timeout = config.stale_threshold() * 3;
+        let mut last_any_msg = Instant::now();
+
         // Message processing loop
         let should_reconnect = loop {
             tokio::select! {
                 // Handle incoming messages
                 msg_opt = read.next() => {
+                    last_any_msg = Instant::now();
                     match msg_opt {
                         Some(Ok(msg)) => {
                             let (keep_alive, updates) = handle_message(
@@ -190,7 +196,6 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     if let Some(ref mut tick) = ping_tick {
                         tick.tick().await
                     } else {
-                        // If no ping configured, wait forever (effectively disabling this branch)
                         std::future::pending::<tokio::time::Instant>().await
                     }
                 } => {
@@ -201,6 +206,15 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     } else {
                         log::info!("{exchange_name}: Sent heartbeat ping");
                     }
+                }
+
+                // Watchdog: no messages (including pongs) for too long → connection is dead
+                _ = tokio::time::sleep_until(last_any_msg + watchdog_timeout) => {
+                    log::warn!(
+                        "{exchange_name}: No WS messages for {}s, assuming dead connection. Reconnecting...",
+                        watchdog_timeout.as_secs()
+                    );
+                    break true;
                 }
             }
         };

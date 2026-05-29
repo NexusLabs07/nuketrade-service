@@ -33,7 +33,7 @@ pub async fn start_phoenix_funding_feed(
         db_write_interval_secs: 30 * 60,
         state_update_interval_secs: 5,
         stale_threshold_secs: 60,
-        ping_interval_secs: None,
+        ping_interval_secs: Some(30),
         use_custom_ws_config: false,
     };
 
