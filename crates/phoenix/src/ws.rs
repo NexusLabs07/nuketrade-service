@@ -57,7 +57,10 @@ pub async fn start_phoenix_funding_feed(
         symbols.len()
     );
 
-    let exchange = Arc::new(PhoenixExchange::with_markets(phoenix_markets));
+    let exchange = Arc::new(PhoenixExchange::with_feed(
+        phoenix_markets,
+        &symbols,
+    ));
     let symbol_refs: Vec<&str> = symbols.iter().map(String::as_str).collect();
 
     // Phoenix WS: all client JSON must include `"type"` — do not send `{"method":"ping"}`.
@@ -70,7 +73,7 @@ pub async fn start_phoenix_funding_feed(
         stale_threshold_secs: 60,
         ping_interval_secs: Some(30),
         heartbeat: WsHeartbeat::WebSocketPing,
-        subscription_delay_ms: 25,
+        subscription_delay_ms: 100,
         use_custom_ws_config: false,
     };
 
