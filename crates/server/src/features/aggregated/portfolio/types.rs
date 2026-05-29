@@ -49,6 +49,8 @@ pub struct ExchangeRow {
     pub connected: bool,
     pub available_balance_usd: Option<f64>,
     pub total_equity_usd: Option<f64>,
+    /// Lifetime notional traded on this venue (|size × price|). `null` when not connected.
+    pub volume_usd: Option<f64>,
     pub error: Option<String>,
 }
 
@@ -57,6 +59,7 @@ pub struct ExchangeRow {
 pub struct ExchangeTotals {
     pub available_balance_usd: f64,
     pub total_equity_usd: f64,
+    pub volume_usd: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,6 +109,7 @@ mod tests {
                     connected: true,
                     available_balance_usd: Some(1.0),
                     total_equity_usd: Some(2.0),
+                    volume_usd: Some(100.0),
                     error: None,
                 },
                 ExchangeRow {
@@ -114,12 +118,14 @@ mod tests {
                     connected: false,
                     available_balance_usd: None,
                     total_equity_usd: None,
+                    volume_usd: None,
                     error: Some("not_implemented".into()),
                 },
             ],
             totals: ExchangeTotals {
                 available_balance_usd: 1.0,
                 total_equity_usd: 2.0,
+                volume_usd: 100.0,
             },
         };
         println!("EX {}", serde_json::to_string(&v).unwrap());

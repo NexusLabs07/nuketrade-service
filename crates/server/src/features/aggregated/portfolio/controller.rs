@@ -1,7 +1,9 @@
 use anyhow::Result;
 use axum::{Json, extract::State};
 use chrono::{DateTime, Duration, Utc};
-use hyperliquid::apis::user::{ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo};
+use hyperliquid::apis::user::{
+    portfolio_all_time_volume_usd, ClearinghouseState, UserFill, UserInfo as HyperliquidUserInfo,
+};
 use lighter::apis::user::{AccountByL1Response, UserInfo as LighterUserInfo};
 use pacifica::apis::user::{
     AccountInfoResponse, TradeHistoryResponse, UserInfo as PacificaUserInfo,
@@ -122,6 +124,17 @@ pub async fn get_performance(
     Ok(Json(resp))
 }
 
+fn sum_volume(fills: &[NormalizedFill]) -> f64 {
+    fills.iter().map(|f| f.notional_usd).sum()
+}
+
+/// Sets lifetime volume on a row when the user is connected on that venue.
+fn apply_volume(row: &mut ExchangeRow, volume_usd: Option<f64>) {
+    if row.connected && row.error.is_none() {
+        row.volume_usd = volume_usd;
+    }
+}
+
 fn aggregate_bucket(
     fills: &[NormalizedFill],
     start: Option<DateTime<Utc>>,
@@ -214,22 +227,32 @@ pub async fn get_exchanges(
     ValidatedPath(params): ValidatedPath<PortfolioPathParams>,
     State(_state): State<AppState>,
 ) -> Result<Json<ExchangesResponse>, AppError> {
-    let (hl, pacifica, phoenix, lighter, backpack) = tokio::join!(
-        fetch_hl_balance(&params.user_evm_address),
-        fetch_pacifica_balance(&params.user_solana_address),
-        fetch_phoenix_balance(&params.user_solana_address),
-        fetch_lighter_balance(&params.user_evm_address),
-        async {
-            ExchangeRow {
-                venue: "backpack",
-                display_name: "Backpack",
-                connected: false,
-                available_balance_usd: None,
-                total_equity_usd: None,
-                error: Some("not_implemented".into()),
-            }
-        },
-    );
+    let (mut hl, mut pacifica, mut phoenix, mut lighter, backpack, hl_volume, pacifica_volume, phoenix_fills) =
+        tokio::join!(
+            fetch_hl_balance(&params.user_evm_address),
+            fetch_pacifica_balance(&params.user_solana_address),
+            fetch_phoenix_balance(&params.user_solana_address),
+            fetch_lighter_balance(&params.user_evm_address),
+            async {
+                ExchangeRow {
+                    venue: "backpack",
+                    display_name: "Backpack",
+                    connected: false,
+                    available_balance_usd: None,
+                    total_equity_usd: None,
+                    volume_usd: None,
+                    error: Some("not_implemented".into()),
+                }
+            },
+            fetch_hl_volume(&params.user_evm_address),
+            fetch_pacifica_volume(&params.user_solana_address),
+            fetch_phoenix_fills(&params.user_solana_address),
+        );
+
+    apply_volume(&mut hl, hl_volume);
+    apply_volume(&mut pacifica, pacifica_volume);
+    apply_volume(&mut phoenix, Some(sum_volume(&phoenix_fills)));
+    apply_volume(&mut lighter, Some(0.0));
 
     let exchanges = vec![hl, pacifica, phoenix, lighter, backpack];
 
@@ -242,6 +265,9 @@ pub async fn get_exchanges(
             if let Some(v) = row.total_equity_usd {
                 totals.total_equity_usd += v;
             }
+            if let Some(v) = row.volume_usd {
+                totals.volume_usd += v;
+            }
         }
     }
 
@@ -249,6 +275,33 @@ pub async fn get_exchanges(
 }
 
 // ============================ Per-venue fetchers ============================
+
+async fn fetch_hl_volume(evm_address: &str) -> Option<f64> {
+    let client = HyperliquidUserInfo::new(Some(evm_address.to_string()), None);
+    let periods = match client.get_portfolio().await {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("hyperliquid portfolio volume fetch failed: {e}");
+            return None;
+        }
+    };
+    portfolio_all_time_volume_usd(&periods)
+}
+
+async fn fetch_pacifica_volume(solana_address: &str) -> Option<f64> {
+    let client = PacificaUserInfo::new(solana_address.to_string());
+    let resp = match client.get_portfolio_volume().await {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("pacifica portfolio volume fetch failed: {e}");
+            return None;
+        }
+    };
+    if !resp.success {
+        return None;
+    }
+    resp.data.and_then(|d| d.volume_all_time_usd())
+}
 
 async fn fetch_hl_fills(evm_address: &str) -> Vec<NormalizedFill> {
     let client = HyperliquidUserInfo::new(Some(evm_address.to_string()), None);
@@ -346,6 +399,7 @@ async fn fetch_hl_balance(evm_address: &str) -> ExchangeRow {
         connected: false,
         available_balance_usd: None,
         total_equity_usd: None,
+        volume_usd: None,
         error: None,
     };
 
@@ -370,6 +424,7 @@ async fn fetch_hl_balance(evm_address: &str) -> ExchangeRow {
         connected,
         available_balance_usd: withdrawable,
         total_equity_usd: account_value,
+        volume_usd: None,
         error: None,
     }
 }
@@ -386,6 +441,7 @@ async fn fetch_pacifica_balance(solana_address: &str) -> ExchangeRow {
                 connected: false,
                 available_balance_usd: None,
                 total_equity_usd: None,
+                volume_usd: None,
                 error: Some("upstream_unavailable".into()),
             };
         }
@@ -399,6 +455,7 @@ async fn fetch_pacifica_balance(solana_address: &str) -> ExchangeRow {
             connected: false,
             available_balance_usd: None,
             total_equity_usd: None,
+            volume_usd: None,
             error: None,
         };
     }
@@ -412,6 +469,7 @@ async fn fetch_pacifica_balance(solana_address: &str) -> ExchangeRow {
         connected: true,
         available_balance_usd: available,
         total_equity_usd: equity,
+        volume_usd: None,
         error: None,
     }
 }
@@ -432,6 +490,7 @@ async fn fetch_phoenix_balance(solana_address: &str) -> ExchangeRow {
                 connected: false,
                 available_balance_usd: None,
                 total_equity_usd: None,
+                volume_usd: None,
                 error: Some("upstream_unavailable".into()),
             };
         }
@@ -464,6 +523,7 @@ async fn fetch_phoenix_balance(solana_address: &str) -> ExchangeRow {
         connected,
         available_balance_usd: if connected { Some(available) } else { None },
         total_equity_usd: if connected { Some(equity) } else { None },
+        volume_usd: None,
         error: None,
     }
 }
@@ -480,6 +540,7 @@ async fn fetch_lighter_balance(evm_address: &str) -> ExchangeRow {
                 connected: false,
                 available_balance_usd: None,
                 total_equity_usd: None,
+                volume_usd: None,
                 error: Some("upstream_unavailable".into()),
             };
         }
@@ -492,6 +553,7 @@ async fn fetch_lighter_balance(evm_address: &str) -> ExchangeRow {
             connected: false,
             available_balance_usd: None,
             total_equity_usd: None,
+            volume_usd: None,
             error: None,
         };
     };
@@ -515,6 +577,7 @@ async fn fetch_lighter_balance(evm_address: &str) -> ExchangeRow {
         connected,
         available_balance_usd: available,
         total_equity_usd: equity,
+        volume_usd: None,
         error: None,
     }
 }
