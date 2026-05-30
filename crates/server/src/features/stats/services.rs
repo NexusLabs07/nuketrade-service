@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use hyperliquid::apis::user::UserFill;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, RequestBuilder, Response, StatusCode, header::RETRY_AFTER};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tokio::time::sleep;
 
 const HYPERLIQUID_MAX_FILLS_PER_PAGE: usize = 2000;
 const HYPERLIQUID_MAX_SPLIT_DEPTH: u8 = 48;
@@ -12,6 +13,12 @@ const HISTORY_MAX_PAGES: usize = 10_000;
 
 const PACIFICA_TRADES_LIMIT: u32 = 1000;
 const PHOENIX_TRADES_LIMIT: u32 = 1000;
+
+const EXTERNAL_REQUEST_PACING: Duration = Duration::from_millis(250);
+const WALLET_PACING: Duration = Duration::from_millis(500);
+const HTTP_MAX_RETRIES: usize = 5;
+const HTTP_RETRY_BACKOFF_BASE: Duration = Duration::from_secs(1);
+const HTTP_RETRY_BACKOFF_MAX: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct TurnkeyWalletRow {
@@ -31,7 +38,11 @@ pub async fn calculate_total_volume(db: Arc<PgPool>) -> Result<TotalVolumeRespon
 
     let mut total = 0.0_f64;
 
-    for wallet in wallets {
+    for (index, wallet) in wallets.into_iter().enumerate() {
+        if index > 0 {
+            sleep(WALLET_PACING).await;
+        }
+
         total += calculate_wallet_volume(&http, &wallet).await?;
     }
 
@@ -64,11 +75,13 @@ async fn calculate_wallet_volume(
     http: &Client,
     wallet: &TurnkeyWalletRow,
 ) -> Result<f64, anyhow::Error> {
-    let (hyperliquid, pacifica, phoenix) = tokio::try_join!(
-        hyperliquid_volume(http, &wallet.turnkey_evm_address),
-        pacifica_volume(http, &wallet.turnkey_solana_address),
-        phoenix_volume(http, &wallet.turnkey_solana_address),
-    )?;
+    let hyperliquid = hyperliquid_volume(http, &wallet.turnkey_evm_address).await?;
+
+    sleep(EXTERNAL_REQUEST_PACING).await;
+    let pacifica = pacifica_volume(http, &wallet.turnkey_solana_address).await?;
+
+    sleep(EXTERNAL_REQUEST_PACING).await;
+    let phoenix = phoenix_volume(http, &wallet.turnkey_solana_address).await?;
 
     Ok(hyperliquid + pacifica + phoenix)
 }
@@ -131,11 +144,11 @@ async fn fetch_hyperliquid_fills(
         aggregate_by_time: false,
     };
 
-    let response = http
-        .post(format!("{}/info", hyperliquid::HYPERLIQUID_HTTP_URL))
-        .json(&request)
-        .send()
-        .await?;
+    let response = send_external_request("Hyperliquid fills", || {
+        http.post(format!("{}/info", hyperliquid::HYPERLIQUID_HTTP_URL))
+            .json(&request)
+    })
+    .await?;
 
     if response.status() == StatusCode::NOT_FOUND {
         return Ok(vec![]);
@@ -148,6 +161,89 @@ async fn fetch_hyperliquid_fills(
     Ok(response.json::<Vec<UserFill>>().await?)
 }
 
+async fn send_external_request<F>(venue: &str, build_request: F) -> Result<Response, anyhow::Error>
+where
+    F: Fn() -> RequestBuilder,
+{
+    for attempt in 0..=HTTP_MAX_RETRIES {
+        sleep(EXTERNAL_REQUEST_PACING).await;
+
+        let response = match build_request().send().await {
+            Ok(response) => response,
+            Err(err) if attempt < HTTP_MAX_RETRIES => {
+                let delay = retry_backoff_delay(attempt);
+                log::warn!(
+                    "{venue} request failed: {err}; retrying in {}ms ({}/{})",
+                    delay.as_millis(),
+                    attempt + 1,
+                    HTTP_MAX_RETRIES
+                );
+                sleep(delay).await;
+                continue;
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+        let status = response.status();
+
+        if !should_retry_status(status) || attempt == HTTP_MAX_RETRIES {
+            return Ok(response);
+        }
+
+        let delay = retry_delay(&response, attempt);
+
+        log::warn!(
+            "{venue} returned HTTP {status}; retrying in {}ms ({}/{})",
+            delay.as_millis(),
+            attempt + 1,
+            HTTP_MAX_RETRIES
+        );
+
+        sleep(delay).await;
+    }
+
+    unreachable!("retry loop should always return a response")
+}
+
+fn should_retry_status(status: StatusCode) -> bool {
+    status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
+fn retry_delay(response: &Response, attempt: usize) -> Duration {
+    response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(parse_retry_after)
+        .unwrap_or_else(|| retry_backoff_delay(attempt))
+}
+
+fn parse_retry_after(value: &str) -> Option<Duration> {
+    let value = value.trim();
+
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+
+    DateTime::parse_from_rfc2822(value).ok().map(|retry_at| {
+        retry_at
+            .with_timezone(&Utc)
+            .signed_duration_since(Utc::now())
+            .to_std()
+            .unwrap_or_else(|_| Duration::from_secs(0))
+    })
+}
+
+fn retry_backoff_delay(attempt: usize) -> Duration {
+    let multiplier = 1_u128 << attempt.min(8);
+    let delay_millis = HTTP_RETRY_BACKOFF_BASE
+        .as_millis()
+        .saturating_mul(multiplier)
+        .min(HTTP_RETRY_BACKOFF_MAX.as_millis());
+
+    Duration::from_millis(delay_millis as u64)
+}
+
 fn hyperliquid_fill_notional(fill: &UserFill) -> f64 {
     parse_decimal(&fill.px) * parse_decimal(&fill.sz).abs()
 }
@@ -157,18 +253,21 @@ async fn pacifica_volume(http: &Client, solana_address: &str) -> Result<f64, any
     let mut cursor: Option<String> = None;
 
     for _ in 0..HISTORY_MAX_PAGES {
-        let mut request = http
-            .get(format!("{}/trades/history", pacifica::PACIFICA_HTTP_URL))
-            .query(&[
-                ("account", solana_address.to_string()),
-                ("limit", PACIFICA_TRADES_LIMIT.to_string()),
-            ]);
+        let response = send_external_request("Pacifica trades", || {
+            let mut request = http
+                .get(format!("{}/trades/history", pacifica::PACIFICA_HTTP_URL))
+                .query(&[
+                    ("account", solana_address.to_string()),
+                    ("limit", PACIFICA_TRADES_LIMIT.to_string()),
+                ]);
 
-        if let Some(ref cursor_value) = cursor {
-            request = request.query(&[("cursor", cursor_value)]);
-        }
+            if let Some(ref cursor_value) = cursor {
+                request = request.query(&[("cursor", cursor_value)]);
+            }
 
-        let response = request.send().await?;
+            request
+        })
+        .await?;
 
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(total);
@@ -224,25 +323,28 @@ async fn phoenix_volume(http: &Client, solana_address: &str) -> Result<f64, anyh
     let mut cursor: Option<String> = None;
 
     for _ in 0..HISTORY_MAX_PAGES {
-        let mut request = http
-            .get(format!(
-                "{}/trader/{}/trades-history",
-                phoenix::PHOENIX_HTTP_URL,
-                solana_address
-            ))
-            .query(&[
-                (
-                    "pdaIndex",
-                    phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX.to_string(),
-                ),
-                ("limit", PHOENIX_TRADES_LIMIT.to_string()),
-            ]);
+        let response = send_external_request("Phoenix trades", || {
+            let mut request = http
+                .get(format!(
+                    "{}/trader/{}/trades-history",
+                    phoenix::PHOENIX_HTTP_URL,
+                    solana_address
+                ))
+                .query(&[
+                    (
+                        "pdaIndex",
+                        phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX.to_string(),
+                    ),
+                    ("limit", PHOENIX_TRADES_LIMIT.to_string()),
+                ]);
 
-        if let Some(ref cursor_value) = cursor {
-            request = request.query(&[("cursor", cursor_value)]);
-        }
+            if let Some(ref cursor_value) = cursor {
+                request = request.query(&[("cursor", cursor_value)]);
+            }
 
-        let response = request.send().await?;
+            request
+        })
+        .await?;
 
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(total);
