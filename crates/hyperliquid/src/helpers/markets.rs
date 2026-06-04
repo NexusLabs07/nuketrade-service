@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
@@ -55,4 +57,36 @@ pub fn get_max_leverage(symbol: &str) -> Option<u32> {
         .iter()
         .find(|asset| asset.name == symbol)
         .map(|asset| asset.max_leverage)
+}
+
+/// Map of perp symbol → HL asset index. Built from the UNFILTERED universe
+/// because HL's order action uses positions in the original array; the
+/// `HL_MARKETS` Vec drops delisted assets and would shift downstream indices.
+pub static HL_ASSET_INDEX: Lazy<HashMap<String, u32>> = Lazy::new(|| {
+    let parsed: Vec<Value> = serde_json::from_str(PERP_META)
+        .expect("Failed to parse PERP_META as array");
+    let first = parsed
+        .into_iter()
+        .next()
+        .expect("PERP_META must contain at least one element");
+    let meta: PerpMetaInner =
+        serde_json::from_value(first).expect("Failed to parse universe from PERP_META");
+    meta.universe
+        .into_iter()
+        .enumerate()
+        .map(|(idx, asset)| (asset.name, idx as u32))
+        .collect()
+});
+
+pub fn get_asset_index(symbol: &str) -> Option<u32> {
+    HL_ASSET_INDEX.get(symbol).copied()
+}
+
+/// `szDecimals` (size precision) for an asset. Needed to format the order
+/// size string to HL's exact precision; an extra digit will be rejected.
+pub fn get_sz_decimals(symbol: &str) -> Option<u32> {
+    HL_MARKETS
+        .iter()
+        .find(|asset| asset.name == symbol)
+        .map(|asset| asset.sz_decimals)
 }

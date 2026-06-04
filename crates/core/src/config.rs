@@ -58,6 +58,16 @@ pub struct Config {
     /// Lease TTL (in seconds) issued to a Node worker when it picks up an
     /// intent. Defaults to 60s.
     pub automation_lease_ttl_sec: i64,
+
+    // In-process automation worker (Rust-side executor for Hyperliquid).
+    //
+    // Note: there is no shared "agent wallet" env var. HL's agent model is
+    // 1 agent ↔ 1 master, so each user has their own Turnkey-managed agent
+    // wallet stored in `hl_agent_wallets`. The worker looks it up per
+    // intent.
+    pub automation_worker_enabled: bool,
+    pub automation_worker_poll_interval_sec: u64,
+    pub automation_worker_id: String,
 }
 
 impl Config {
@@ -138,6 +148,18 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(60);
 
+        let automation_worker_enabled = std::env::var("AUTOMATION_WORKER_ENABLED")
+            .ok()
+            .map(|s| matches!(s.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false);
+        let automation_worker_poll_interval_sec =
+            std::env::var("AUTOMATION_WORKER_POLL_INTERVAL_SEC")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10);
+        let automation_worker_id = std::env::var("AUTOMATION_WORKER_ID")
+            .unwrap_or_else(|_| "rust-executor".to_string());
+
         Ok(Self {
             db_url,
             evm_fee_payer_private_key,
@@ -160,6 +182,9 @@ impl Config {
             access_code,
             automation_internal_token,
             automation_lease_ttl_sec,
+            automation_worker_enabled,
+            automation_worker_poll_interval_sec,
+            automation_worker_id,
         })
     }
 

@@ -6,7 +6,12 @@ use tokio::sync::{mpsc, watch};
 use tokio_cron_scheduler::JobScheduler;
 
 use db::connect_db;
-use executor::{SevenDayApr, cron::calculate_best_pair, feed_manager::run_feed_manager};
+use executor::{
+    SevenDayApr,
+    automation_worker::{AutomationWorkerConfig, run_automation_worker},
+    cron::calculate_best_pair,
+    feed_manager::run_feed_manager,
+};
 use hyperliquid::helpers::markets::HL_MARKETS;
 use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
@@ -153,10 +158,31 @@ async fn main() -> anyhow::Result<()> {
 
     drop(feed_tx);
 
-    // Automation execution is delegated to the external Node executor via
-    // the `/internal/automation/intents/{due,result}` endpoints. The
-    // previous in-process polling loop that created hedge_intents has been
-    // removed — see docs/AUTOMATION.md.
+    // Automation worker: replaces the planned (never-built) Node executor
+    // referenced in V13. Per intent, looks up the user's HL agent wallet
+    // from `hl_agent_wallets`, signs via Turnkey, POSTs to HL. Off by
+    // default; enable with AUTOMATION_WORKER_ENABLED=true.
+    if config.automation_worker_enabled {
+        let worker_cfg = AutomationWorkerConfig::from_config(&config);
+        let config_arc = Arc::new(config.clone());
+        let db_worker = db.clone();
+        let feed_rx_worker = watch_rx.clone();
+        let seven_day_rx_worker = seven_day_apr_rx.clone();
+        tokio::spawn(async move {
+            run_automation_worker(
+                worker_cfg,
+                config_arc,
+                db_worker,
+                feed_rx_worker,
+                seven_day_rx_worker,
+            )
+            .await;
+        });
+    } else {
+        log::info!(
+            "automation worker disabled (set AUTOMATION_WORKER_ENABLED=true to enable)"
+        );
+    }
 
     run_server(config, db, watch_rx, seven_day_apr_rx).await?;
 

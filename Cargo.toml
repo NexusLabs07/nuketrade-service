@@ -47,6 +47,7 @@ solana-signer = "2.2.1"
 solana-signature = "2.2.1"
 solana-address-lookup-table-interface = { version = "2.2.1", features = ["bincode", "bytemuck"] }
 async-trait = "0.1"
+rmp-serde = "1.3"
 
 validator = { version = "0.19", features = ["derive"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
