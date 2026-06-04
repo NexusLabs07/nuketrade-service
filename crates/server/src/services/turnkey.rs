@@ -56,12 +56,49 @@ impl TurnkeyClient {
         sign_with: &str,
         digest: &[u8; 32],
     ) -> Result<EvmSignature> {
+        let result = self
+            .sign_raw_bytes(suborg_id, sign_with, digest.as_slice())
+            .await?;
+        EvmSignature::from_rsv_hex(&result.r, &result.s, &result.v)
+    }
+
+    /// Sign arbitrary bytes with a Solana (Ed25519) wallet. Pacifica's
+    /// signing scheme signs a UTF-8-encoded canonical JSON string, which
+    /// can be longer than 32 bytes — this method doesn't constrain the
+    /// length the way `sign_raw_payload` does.
+    ///
+    /// The 64-byte Ed25519 signature is reconstructed from Turnkey's
+    /// `r` + `s` hex (each 32 bytes). `v` is always empty for Ed25519
+    /// and is ignored.
+    pub async fn sign_solana_payload(
+        &self,
+        suborg_id: &str,
+        sign_with: &str,
+        message: &[u8],
+    ) -> Result<[u8; 64]> {
+        let result = self.sign_raw_bytes(suborg_id, sign_with, message).await?;
+        let r = decode_32_hex(&result.r, "r")?;
+        let s = decode_32_hex(&result.s, "s")?;
+        let mut sig = [0u8; 64];
+        sig[..32].copy_from_slice(&r);
+        sig[32..].copy_from_slice(&s);
+        Ok(sig)
+    }
+
+    /// Shared Turnkey activity submission for both EVM and Solana paths.
+    /// Returns the `r/s/v` result without imposing an interpretation.
+    async fn sign_raw_bytes(
+        &self,
+        suborg_id: &str,
+        sign_with: &str,
+        bytes: &[u8],
+    ) -> Result<SignRawPayloadResult> {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .context("system time before UNIX epoch")?
             .as_millis()
             .to_string();
-        let payload_hex = format!("0x{}", hex::encode(digest));
+        let payload_hex = format!("0x{}", hex::encode(bytes));
 
         let body = serde_json::json!({
             "type": "ACTIVITY_TYPE_SIGN_RAW_PAYLOAD_V2",
@@ -85,13 +122,10 @@ impl TurnkeyClient {
             ));
         }
 
-        let result = resp
-            .activity
+        resp.activity
             .result
             .and_then(|r| r.sign_raw_payload_result)
-            .ok_or_else(|| anyhow!("Turnkey response missing signRawPayloadResult"))?;
-
-        EvmSignature::from_rsv_hex(&result.r, &result.s, &result.v)
+            .ok_or_else(|| anyhow!("Turnkey response missing signRawPayloadResult"))
     }
 
     async fn stamped_post<TReq, TRes>(&self, path: &str, payload: &TReq) -> Result<TRes>

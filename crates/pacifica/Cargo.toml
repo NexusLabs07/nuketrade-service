@@ -33,6 +33,7 @@ solana-message = { workspace = true }
 solana-signer = { workspace = true }
 spl-associated-token-account-client = { workspace = true }
 async-trait = { workspace = true }
+bs58 = { workspace = true }
 
 perp_core = { path = "../core" }
 db = { path = "../db" }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use sqlx::{Executor, PgPool, Postgres};
 
-use crate::wallet::models::{HlAgentWallet, Wallet};
+use crate::wallet::models::{HlAgentWallet, PacificaAgentWallet, Wallet};
 
 pub async fn insert_wallet(
     db_conn: Arc<PgPool>,
@@ -74,6 +74,28 @@ pub async fn get_hl_agent_for_user(
     "#;
 
     let row: Option<HlAgentWallet> = sqlx::query_as(query)
+        .bind(user_id)
+        .fetch_optional(&*db_conn)
+        .await?;
+
+    Ok(row)
+}
+
+/// Look up a user's Pacifica agent wallet. Same semantics as
+/// `get_hl_agent_for_user` — worker treats `None` or
+/// `approved_on_pacifica=false` as a hard failure for the intent.
+pub async fn get_pacifica_agent_for_user(
+    db_conn: Arc<PgPool>,
+    user_id: uuid::Uuid,
+) -> Result<Option<PacificaAgentWallet>, anyhow::Error> {
+    let query = r#"
+        SELECT user_id, turnkey_suborg_id, turnkey_wallet_id, solana_pubkey,
+               approved_on_pacifica, created_at, updated_at
+        FROM pacifica_agent_wallets
+        WHERE user_id = $1
+    "#;
+
+    let row: Option<PacificaAgentWallet> = sqlx::query_as(query)
         .bind(user_id)
         .fetch_optional(&*db_conn)
         .await?;
