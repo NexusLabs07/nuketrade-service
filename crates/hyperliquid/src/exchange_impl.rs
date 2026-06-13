@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::{
     HYPERLIQUID_HTTP_URL, HYPERLIQUID_WS_URL,
     apis::user::{ClearinghouseState, OpenPositionRequest},
-    helpers::markets::HL_MARKETS,
+    helpers::markets::{HL_MARKETS, normalize_hl_symbol, subscription_coin},
     types::ActiveAssetCtxMsg,
 };
 
@@ -68,12 +68,14 @@ impl HyperliquidExchange {
                     PositionSide::Short
                 };
 
+                let symbol = normalize_hl_symbol(&pos.coin);
+
                 Some(UnifiedPosition {
-                    symbol: pos.coin,
+                    symbol,
                     size: size.abs(),
                     side,
                     entry_price: parse_f64(&pos.entry_px).unwrap_or(0.0),
-                    mark_price: 0.0, // Not available in this response
+                    mark_price: 0.0,
                     unrealized_pnl: parse_f64(&pos.unrealized_pnl).unwrap_or(0.0),
                     cumulative_funding: parse_f64(&pos.cum_funding.all_time).unwrap_or(0.0),
                     leverage: pos.leverage.value,
@@ -174,11 +176,13 @@ impl Exchange for HyperliquidExchange {
         symbols
             .iter()
             .map(|symbol| {
+                let coin = subscription_coin(symbol);
+
                 json!({
                     "method": "subscribe",
                     "subscription": {
                         "type": "activeAssetCtx",
-                        "coin": symbol
+                        "coin": coin
                     }
                 })
                 .to_string()
@@ -193,7 +197,7 @@ impl Exchange for HyperliquidExchange {
             Err(_) => return vec![],
         };
 
-        let symbol = parsed.data.coin;
+        let symbol = normalize_hl_symbol(&parsed.data.coin);
 
         let funding_rate = match parse_f64(&parsed.data.ctx.funding) {
             Some(v) => v,
@@ -217,7 +221,7 @@ impl Exchange for HyperliquidExchange {
         HL_MARKETS
             .iter()
             .map(|asset| MarketInfo {
-                symbol: asset.name.clone(),
+                symbol: asset.display_symbol().to_string(),
                 max_leverage: asset.max_leverage,
                 tick_size: 10_f64.powi(-(asset.sz_decimals as i32)),
                 min_order_size: 10_f64.powi(-(asset.sz_decimals as i32)),

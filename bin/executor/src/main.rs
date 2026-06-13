@@ -52,10 +52,11 @@ async fn main() -> anyhow::Result<()> {
     let scheduler = JobScheduler::new().await?;
     calculate_best_pair(db.clone(), scheduler, seven_day_apr_tx).await?;
 
-    let hl_leverage: HashMap<String, u32> = HL_MARKETS
-        .iter()
-        .map(|m| (m.name.clone(), m.max_leverage))
-        .collect();
+    let mut hl_leverage: HashMap<String, u32> = HashMap::new();
+    for market in HL_MARKETS.iter() {
+        hl_leverage.insert(market.name.clone(), market.max_leverage);
+        hl_leverage.insert(market.display_symbol().to_string(), market.max_leverage);
+    }
 
     let pacifica_leverage: HashMap<String, u32> = PACIFICA_MARKETS
         .iter()
