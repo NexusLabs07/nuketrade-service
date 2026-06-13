@@ -1418,14 +1418,6 @@
                 "name": "DASH",
                 "maxLeverage": 5,
                 "marginTableId": 5
-            },
-            {
-                "szDecimals": 2,
-                "name": "xyz:SPCX",
-                "maxLeverage": 10,
-                "marginTableId": 10,
-                "onlyIsolated": true,
-                "marginMode": "noCross"
             }
         ],
         "marginTables": [
@@ -4831,18 +4823,6 @@
                 "71.9483"
             ],
             "dayBaseVlm": "161630.4"
-        },
-        {
-            "funding": "0.0000125",
-            "openInterest": "0.0",
-            "prevDayPx": "162.0",
-            "dayNtlVlm": "0.0",
-            "premium": null,
-            "oraclePx": "162.0",
-            "markPx": "162.0",
-            "midPx": null,
-            "impactPxs": null,
-            "dayBaseVlm": "0.0"
         }
     ]
 ]
