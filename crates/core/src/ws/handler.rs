@@ -112,24 +112,90 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
 
         let (mut write, mut read) = ws_stream.split();
 
-        // Subscribe to channels
+        // Subscribe to channels. Must drain inbound messages after each subscribe:
+        // if we only write, Phoenix (and others) can fill the TCP recv buffer and block
+        // the next write.send() indefinitely.
         let subscribe_messages = exchange.build_subscribe_message(symbols);
+        let sub_delay = Duration::from_millis(config.subscription_delay_ms);
+        let sub_count = subscribe_messages.len();
+        log::info!("{exchange_name}: Subscribing to {sub_count} channel(s)...");
+
+        let mut subscriptions_ok = true;
         for msg in subscribe_messages {
-            match write.send(Message::Text(msg.clone().into())).await {
-                Ok(_) => log::info!("{exchange_name}: Sent subscription message"),
-                Err(e) => {
-                    log::error!("{exchange_name}: Error sending subscription: {e}");
-                    tokio::time::sleep(config.reconnect_delay()).await;
-                    continue;
-                }
+            if let Err(e) = write.send(Message::Text(msg.into())).await {
+                log::error!("{exchange_name}: Error sending subscription: {e}");
+                subscriptions_ok = false;
+                break;
+            }
+
+            if !drain_inbound(
+                &mut read,
+                &mut write,
+                &*exchange,
+                symbols,
+                exchange_name,
+                &mut last_snapshot,
+                &mut last_update,
+                &feed_tx,
+                &perpetual_exchange,
+            )
+            .await
+            {
+                subscriptions_ok = false;
+                break;
+            }
+
+            if !sub_delay.is_zero() {
+                tokio::time::sleep(sub_delay).await;
             }
         }
+
+        if !subscriptions_ok {
+            log::warn!("{exchange_name}: Subscription phase failed, reconnecting...");
+            tokio::time::sleep(config.reconnect_delay()).await;
+            continue;
+        }
+
+        // Drain any remaining acks / initial snapshots before the main loop.
+        let drain_deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < drain_deadline {
+            if !drain_inbound(
+                &mut read,
+                &mut write,
+                &*exchange,
+                symbols,
+                exchange_name,
+                &mut last_snapshot,
+                &mut last_update,
+                &feed_tx,
+                &perpetual_exchange,
+            )
+            .await
+            {
+                subscriptions_ok = false;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        if !subscriptions_ok {
+            tokio::time::sleep(config.reconnect_delay()).await;
+            continue;
+        }
+
+        log::info!("{exchange_name}: Subscriptions complete, entering main loop");
+
+        // Watchdog: force reconnect if no data arrives for 3× the stale threshold.
+        // Catches silently-dropped TCP connections that keep read.next() hanging.
+        let watchdog_timeout = config.stale_threshold() * 3;
+        let mut last_any_msg = Instant::now();
 
         // Message processing loop
         let should_reconnect = loop {
             tokio::select! {
                 // Handle incoming messages
                 msg_opt = read.next() => {
+                    last_any_msg = Instant::now();
                     match msg_opt {
                         Some(Ok(msg)) => {
                             let (keep_alive, updates) = handle_message(
@@ -139,18 +205,14 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                                 symbols,
                             ).await;
 
-                            if !updates.is_empty() {
-                                last_update = Instant::now();
-
-                                let mut delta: HashMap<String, (f64, f64)> = HashMap::with_capacity(updates.len());
-
-                                for (symbol, mark_px, funding, ts) in updates {
-                                    last_snapshot.insert(symbol.clone(), (mark_px, funding, ts));
-                                    delta.insert(symbol, (mark_px, funding));
-                                }
-
-                                send_live_update(&feed_tx, &perpetual_exchange, delta).await;
-                            }
+                            apply_funding_updates(
+                                updates,
+                                &mut last_snapshot,
+                                &mut last_update,
+                                &feed_tx,
+                                &perpetual_exchange,
+                            )
+                            .await;
 
                             if !keep_alive {
                                 log::warn!("{exchange_name} WS connection closed. Reconnecting...");
@@ -190,17 +252,33 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
                     if let Some(ref mut tick) = ping_tick {
                         tick.tick().await
                     } else {
-                        // If no ping configured, wait forever (effectively disabling this branch)
                         std::future::pending::<tokio::time::Instant>().await
                     }
                 } => {
-                    let ping_msg = serde_json::json!({"method": "ping"}).to_string();
-                    if let Err(e) = write.send(Message::Text(ping_msg.into())).await {
+                    let ping_result = match config.heartbeat {
+                        super::config::WsHeartbeat::JsonMethodPing => {
+                            let ping_msg = serde_json::json!({"method": "ping"}).to_string();
+                            write.send(Message::Text(ping_msg.into())).await
+                        }
+                        super::config::WsHeartbeat::WebSocketPing => {
+                            write.send(Message::Ping(vec![].into())).await
+                        }
+                    };
+                    if let Err(e) = ping_result {
                         log::error!("{exchange_name}: Failed to send ping: {e}. Reconnecting...");
                         break true;
                     } else {
-                        log::info!("{exchange_name}: Sent heartbeat ping");
+                        log::debug!("{exchange_name}: Sent heartbeat ping");
                     }
+                }
+
+                // Watchdog: no messages (including pongs) for too long → connection is dead
+                _ = tokio::time::sleep_until(last_any_msg + watchdog_timeout) => {
+                    log::warn!(
+                        "{exchange_name}: No WS messages for {}s, assuming dead connection. Reconnecting...",
+                        watchdog_timeout.as_secs()
+                    );
+                    break true;
                 }
             }
         };
@@ -214,6 +292,82 @@ pub async fn run_funding_feed<E: Exchange + 'static>(
             tokio::time::sleep(config.reconnect_delay()).await;
         }
     }
+}
+
+type WsRead = futures_util::stream::SplitStream<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+>;
+type WsWrite = futures_util::stream::SplitSink<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    Message,
+>;
+
+/// Read and process any messages already queued during the subscribe phase.
+///
+/// Returns `false` if the connection should be torn down and reconnected.
+async fn drain_inbound<E: Exchange>(
+    read: &mut WsRead,
+    write: &mut WsWrite,
+    exchange: &E,
+    symbols: &[&str],
+    exchange_name: &str,
+    last_snapshot: &mut HashMap<String, (f64, f64, i64)>,
+    last_update: &mut Instant,
+    feed_tx: &mpsc::Sender<MarketFeedUpdate>,
+    perp_exchange: &PerpetualExchange,
+) -> bool {
+    const DRAIN_WAIT: Duration = Duration::from_millis(75);
+
+    loop {
+        match tokio::time::timeout(DRAIN_WAIT, read.next()).await {
+            Ok(Some(Ok(msg))) => {
+                let (keep_alive, updates) = handle_message(msg, write, exchange, symbols).await;
+                apply_funding_updates(
+                    updates,
+                    last_snapshot,
+                    last_update,
+                    feed_tx,
+                    perp_exchange,
+                )
+                .await;
+                if !keep_alive {
+                    log::warn!("{exchange_name}: Connection closed while draining inbound");
+                    return false;
+                }
+            }
+            Ok(Some(Err(e))) => {
+                log::error!("{exchange_name}: Read error while draining inbound: {e}");
+                return false;
+            }
+            Ok(None) => {
+                log::warn!("{exchange_name}: Stream ended while draining inbound");
+                return false;
+            }
+            Err(_) => return true,
+        }
+    }
+}
+
+async fn apply_funding_updates(
+    updates: Vec<(String, f64, f64, i64)>,
+    last_snapshot: &mut HashMap<String, (f64, f64, i64)>,
+    last_update: &mut Instant,
+    feed_tx: &mpsc::Sender<MarketFeedUpdate>,
+    perp_exchange: &PerpetualExchange,
+) {
+    if updates.is_empty() {
+        return;
+    }
+
+    *last_update = Instant::now();
+    let mut delta: HashMap<String, (f64, f64)> = HashMap::with_capacity(updates.len());
+
+    for (symbol, mark_px, funding, ts) in updates {
+        last_snapshot.insert(symbol.clone(), (mark_px, funding, ts));
+        delta.insert(symbol, (mark_px, funding));
+    }
+
+    send_live_update(feed_tx, perp_exchange, delta).await;
 }
 
 /// Handle a single WebSocket message.

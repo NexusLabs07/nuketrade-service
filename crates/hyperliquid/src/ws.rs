@@ -21,6 +21,8 @@ pub async fn start_hl_funding_feed(db_conn: Arc<PgPool>, feed_tx: mpsc::Sender<M
         state_update_interval_secs: 5,
         stale_threshold_secs: 60,
         ping_interval_secs: None, // Hyperliquid handles ping/pong at protocol level
+        heartbeat: perp_core::ws::WsHeartbeat::JsonMethodPing,
+        subscription_delay_ms: 0,
         use_custom_ws_config: false,
     };
 

@@ -26,6 +26,8 @@ pub async fn start_lighter_funding_feed(
         state_update_interval_secs: 5,
         stale_threshold_secs: 60,
         ping_interval_secs: Some(60),
+        heartbeat: perp_core::ws::WsHeartbeat::JsonMethodPing,
+        subscription_delay_ms: 0,
         use_custom_ws_config: true,
     };
 

@@ -4,6 +4,15 @@ use chrono::{Timelike, Utc};
 use std::time::Duration;
 use tokio::time::Instant;
 
+/// How the funding feed sends keepalive traffic when `ping_interval_secs` is set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WsHeartbeat {
+    /// Pacifica-style JSON: `{"method":"ping"}`.
+    JsonMethodPing,
+    /// RFC 6455 WebSocket Ping frame (required for Phoenix — JSON pings are rejected).
+    WebSocketPing,
+}
+
 /// Configuration for WebSocket connections and feed behavior.
 #[derive(Debug, Clone)]
 pub struct WsConfig {
@@ -17,6 +26,10 @@ pub struct WsConfig {
     pub state_update_interval_secs: u64,
     /// Optional ping interval in seconds for keepalive.
     pub ping_interval_secs: Option<u64>,
+    /// Keepalive format when `ping_interval_secs` is set.
+    pub heartbeat: WsHeartbeat,
+    /// Delay between consecutive subscribe messages (avoids Phoenix rate limits).
+    pub subscription_delay_ms: u64,
     /// Maximum time without updates before data is considered stale.
     pub stale_threshold_secs: u64,
     /// Whether to use custom WebSocket config (for certain exchanges).
@@ -31,6 +44,8 @@ impl Default for WsConfig {
             db_write_interval_secs: 30 * 60, // 30 minutes
             state_update_interval_secs: 5,
             ping_interval_secs: None,
+            heartbeat: WsHeartbeat::JsonMethodPing,
+            subscription_delay_ms: 0,
             stale_threshold_secs: 60,
             use_custom_ws_config: false,
         }

@@ -115,6 +115,19 @@ pub struct ClosedPositionRequest {
     pub aggregate_by_time: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PortfolioRequest {
+    #[serde(rename = "type")]
+    pub request_type: String,
+    pub user: String,
+}
+
+/// One window in the Hyperliquid `portfolio` info response (`day`, `perpAllTime`, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioPeriod {
+    pub vlm: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserFill {
     pub coin: String,
@@ -240,5 +253,70 @@ impl UserInfo {
         };
 
         Ok(data)
+    }
+
+    /// `POST /info` with `type: "portfolio"` — includes per-window `vlm` (notional volume).
+    pub async fn get_portfolio(self) -> Result<Vec<(String, PortfolioPeriod)>> {
+        let evm_address = self
+            .evm_address
+            .ok_or_else(|| anyhow::Error::msg("EVM address is required for portfolio query"))?;
+
+        let request = PortfolioRequest {
+            request_type: "portfolio".to_string(),
+            user: evm_address,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}{}", self.base_url, "/info"))
+            .json(&request)
+            .send()
+            .await?;
+
+        let data: Vec<(String, PortfolioPeriod)> = response.json().await.map_err(|err| {
+            log::error!("Failed to fetch hyperliquid portfolio: {err:?}");
+            anyhow::Error::msg("Failed to fetch hyperliquid portfolio")
+        })?;
+
+        Ok(data)
+    }
+}
+
+/// Prefer perp all-time volume; fall back to spot+perp all-time.
+pub fn portfolio_all_time_volume_usd(periods: &[(String, PortfolioPeriod)]) -> Option<f64> {
+    for key in ["perpAllTime", "allTime"] {
+        if let Some((_, period)) = periods.iter().find(|(k, _)| k == key) {
+            if let Ok(v) = period.vlm.parse::<f64>() {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod portfolio_tests {
+    use super::*;
+
+    #[test]
+    fn parses_perp_all_time_vlm() {
+        let periods = vec![
+            (
+                "day".to_string(),
+                PortfolioPeriod {
+                    vlm: "10.0".to_string(),
+                },
+            ),
+            (
+                "perpAllTime".to_string(),
+                PortfolioPeriod {
+                    vlm: "19965.109584".to_string(),
+                },
+            ),
+        ];
+        assert_eq!(
+            portfolio_all_time_volume_usd(&periods),
+            Some(19965.109584)
+        );
     }
 }

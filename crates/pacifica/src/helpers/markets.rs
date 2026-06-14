@@ -799,4 +799,18 @@ pub const PACIFICA_MARKETS: &[Market] = &[
         next_funding_rate: "0.000015",
         created_at: 1770794446066,
     },
+    Market {
+        symbol: "SPCX",
+        tick_size: "0.01",
+        min_tick: "0",
+        max_tick: "10000000",
+        lot_size: "0.01",
+        max_leverage: 3,
+        isolated_only: false,
+        min_order_size: "10",
+        max_order_size: "1000000",
+        funding_rate: "0.0000125",
+        next_funding_rate: "0.0000125",
+        created_at: 1768099200000,
+    },
 ];

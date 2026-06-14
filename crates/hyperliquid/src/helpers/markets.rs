@@ -19,13 +19,28 @@ pub struct PerpAsset {
     pub is_delisted: bool,
 }
 
+impl PerpAsset {
+    /// App/display symbol. HIP-3 assets are named like `xyz:SPCX` on Hyperliquid,
+    /// but the rest of the service uses base symbols like `SPCX`.
+    pub fn display_symbol(&self) -> &str {
+        self.name
+            .rsplit_once(':')
+            .map(|(_, symbol)| symbol)
+            .unwrap_or(&self.name)
+    }
+
+    /// Exact Hyperliquid coin name to use in API/WebSocket subscriptions.
+    pub fn exchange_coin(&self) -> &str {
+        &self.name
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct PerpMetaInner {
     universe: Vec<PerpAsset>,
 }
 
 pub static HL_MARKETS: Lazy<Vec<PerpAsset>> = Lazy::new(|| {
-    // Parse as generic JSON array first since it contains heterogeneous elements
     let parsed: Vec<Value> = match serde_json::from_str(PERP_META) {
         Ok(p) => p,
         Err(e) => {
@@ -33,7 +48,6 @@ pub static HL_MARKETS: Lazy<Vec<PerpAsset>> = Lazy::new(|| {
         }
     };
 
-    // Only the first element contains the universe data
     let first_element = parsed
         .into_iter()
         .next()
@@ -52,11 +66,32 @@ pub static HL_MARKETS: Lazy<Vec<PerpAsset>> = Lazy::new(|| {
         .collect()
 });
 
+pub fn normalize_hl_symbol(symbol: &str) -> String {
+    symbol
+        .rsplit_once(':')
+        .map(|(_, base)| base)
+        .unwrap_or(symbol)
+        .to_string()
+}
+
+pub fn find_asset(symbol: &str) -> Option<&'static PerpAsset> {
+    let normalized = normalize_hl_symbol(symbol);
+
+    HL_MARKETS.iter().find(|asset| {
+        asset.name == symbol
+            || asset.exchange_coin() == symbol
+            || asset.display_symbol() == normalized
+    })
+}
+
+pub fn subscription_coin(symbol: &str) -> String {
+    find_asset(symbol)
+        .map(|asset| asset.exchange_coin().to_string())
+        .unwrap_or_else(|| symbol.to_string())
+}
+
 pub fn get_max_leverage(symbol: &str) -> Option<u32> {
-    HL_MARKETS
-        .iter()
-        .find(|asset| asset.name == symbol)
-        .map(|asset| asset.max_leverage)
+    find_asset(symbol).map(|asset| asset.max_leverage)
 }
 
 /// Map of perp symbol → HL asset index. Built from the UNFILTERED universe

@@ -282,4 +282,46 @@ impl UserInfo {
 
         Ok(data)
     }
+
+    /// `GET /portfolio/volume` — per-account notional volume by window.
+    pub async fn get_portfolio_volume(&self) -> Result<PortfolioVolumeResponse> {
+        let response = self
+            .client
+            .get(format!(
+                "{}/portfolio/volume?account={}",
+                self.base_url, self.solana_address
+            ))
+            .send()
+            .await?;
+
+        let data: PortfolioVolumeResponse = response
+            .json()
+            .await
+            .map_err(|_| anyhow::Error::msg("Failed to get pacifica portfolio volume"))?;
+
+        Ok(data)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioVolumeData {
+    pub volume_1d: String,
+    pub volume_7d: String,
+    pub volume_14d: String,
+    pub volume_30d: String,
+    pub volume_all_time: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioVolumeResponse {
+    pub success: bool,
+    pub data: Option<PortfolioVolumeData>,
+    pub error: Option<String>,
+    pub code: Option<String>,
+}
+
+impl PortfolioVolumeData {
+    pub fn volume_all_time_usd(&self) -> Option<f64> {
+        self.volume_all_time.parse().ok()
+    }
 }

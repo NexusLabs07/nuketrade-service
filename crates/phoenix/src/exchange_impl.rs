@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use perp_core::{
@@ -21,6 +22,10 @@ pub struct PhoenixExchange {
     http_url: String,
     ws_url: String,
     markets: Vec<MarketInfo>,
+    /// Symbols we care about (TOKEN_LIST ∩ Phoenix active markets).
+    subscribed_symbols: Arc<HashSet<String>>,
+    /// Latest mid prices from the `allMids` channel, keyed by normalized symbol.
+    latest_mids: Arc<Mutex<HashMap<String, f64>>>,
 }
 
 impl Default for PhoenixExchange {
@@ -31,12 +36,7 @@ impl Default for PhoenixExchange {
 
 impl PhoenixExchange {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-            http_url: PHOENIX_HTTP_URL.to_string(),
-            ws_url: PHOENIX_WS_URL.to_string(),
-            markets: Vec::new(),
-        }
+        Self::with_markets(Vec::new())
     }
 
     pub fn with_urls(http_url: String, ws_url: String) -> Self {
@@ -45,15 +45,29 @@ impl PhoenixExchange {
             http_url,
             ws_url,
             markets: Vec::new(),
+            subscribed_symbols: Arc::new(HashSet::new()),
+            latest_mids: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub fn with_markets(markets: Vec<MarketInfo>) -> Self {
+        Self::with_feed(markets, &[])
+    }
+
+    /// Funding feed: `allMids` (one sub) + `fundingRate` per symbol (see Phoenix WS docs).
+    pub fn with_feed(markets: Vec<MarketInfo>, symbols: &[String]) -> Self {
+        let subscribed_symbols: HashSet<String> = symbols
+            .iter()
+            .map(|s| normalize_phoenix_symbol(s))
+            .collect();
+
         Self {
             client: Client::new(),
             http_url: PHOENIX_HTTP_URL.to_string(),
             ws_url: PHOENIX_WS_URL.to_string(),
             markets,
+            subscribed_symbols: Arc::new(subscribed_symbols),
+            latest_mids: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -254,22 +268,99 @@ impl Exchange for PhoenixExchange {
     }
 
     fn build_subscribe_message(&self, symbols: &[&str]) -> Vec<String> {
-        symbols
-            .iter()
-            .map(|symbol| {
+        let mut messages = vec![json!({
+            "type": "subscribe",
+            "subscription": { "channel": "allMids" }
+        })
+        .to_string()];
+
+        for symbol in symbols {
+            messages.push(
                 json!({
                     "type": "subscribe",
                     "subscription": {
-                        "channel": "market",
+                        "channel": "fundingRate",
                         "symbol": normalize_phoenix_symbol(symbol)
                     }
                 })
-                .to_string()
-            })
-            .collect()
+                .to_string(),
+            );
+        }
+
+        messages
     }
 
     fn parse_ws_message(&self, raw: &str) -> Vec<WsMessage> {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+            if v.get("type").and_then(|t| t.as_str()) == Some("subscriptionConfirmed") {
+                log::debug!("Phoenix WS: {raw}");
+                return vec![];
+            }
+
+            match v.get("channel").and_then(|c| c.as_str()) {
+                Some("error") => {
+                    let msg = v
+                        .get("error")
+                        .and_then(|e| e.as_str())
+                        .unwrap_or(raw);
+                    log::warn!("Phoenix WS server error: {msg}");
+                    return vec![];
+                }
+                Some("subscriptionStatus") => {
+                    log::debug!("Phoenix WS: {raw}");
+                    return vec![];
+                }
+                Some("allMids") => {
+                    if let Some(mids) = v.get("mids").and_then(|m| m.as_object()) {
+                        let mut cache = self
+                            .latest_mids
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        for (sym, px_val) in mids {
+                            let symbol = normalize_phoenix_symbol(sym);
+                            if !self.subscribed_symbols.contains(&symbol) {
+                                continue;
+                            }
+                            if let Some(px) = px_val.as_f64() {
+                                cache.insert(symbol, px);
+                            }
+                        }
+                    }
+                    return vec![];
+                }
+                Some("fundingRate") => {
+                    let symbol = v
+                        .get("symbol")
+                        .and_then(|s| s.as_str())
+                        .map(normalize_phoenix_symbol)
+                        .unwrap_or_default();
+                    if symbol.is_empty() || !self.subscribed_symbols.contains(&symbol) {
+                        return vec![];
+                    }
+                    let funding = match v.get("funding").and_then(|f| f.as_f64()) {
+                        Some(f) => f,
+                        None => return vec![],
+                    };
+                    let mark_px = self
+                        .latest_mids
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&symbol)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let funding_rate = Self::normalize_funding_to_hourly_decimal(funding);
+                    return vec![WsMessage::FundingUpdate {
+                        symbol,
+                        mark_price: mark_px,
+                        funding_rate,
+                        timestamp_ms: chrono::Utc::now().timestamp_millis(),
+                    }];
+                }
+                _ => {}
+            }
+        }
+
+        // Fallback: legacy `market` channel payloads (mark + funding in one message).
         let parsed: PhoenixMarketStatsMessage = match serde_json::from_str(raw) {
             Ok(v) => v,
             Err(_) => return vec![],
@@ -288,6 +379,10 @@ impl Exchange for PhoenixExchange {
         };
 
         let symbol = normalize_phoenix_symbol(&parsed.symbol);
+        if !self.subscribed_symbols.is_empty() && !self.subscribed_symbols.contains(&symbol) {
+            return vec![];
+        }
+
         let funding_rate = Self::normalize_funding_to_hourly_decimal(funding);
 
         vec![WsMessage::FundingUpdate {
@@ -345,6 +440,59 @@ pub struct PhoenixMarketStatsMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_funding_rate_with_cached_mid() {
+        let exchange = PhoenixExchange::with_feed(
+            Vec::new(),
+            &["BTC".to_string()],
+        );
+        {
+            let mut cache = exchange.latest_mids.lock().unwrap();
+            cache.insert("BTC".to_string(), 73_000.0);
+        }
+
+        let raw = r#"{"channel":"fundingRate","symbol":"BTC","funding":-0.0075}"#;
+        let msgs = exchange.parse_ws_message(raw);
+        assert_eq!(msgs.len(), 1);
+        match &msgs[0] {
+            WsMessage::FundingUpdate {
+                symbol,
+                mark_price,
+                funding_rate,
+                ..
+            } => {
+                assert_eq!(symbol, "BTC");
+                assert!((*mark_price - 73_000.0).abs() < f64::EPSILON);
+                assert!(funding_rate.abs() > 0.0);
+            }
+            _ => panic!("expected FundingUpdate"),
+        }
+    }
+
+    #[test]
+    fn parse_market_stats_message() {
+        let exchange = PhoenixExchange::new();
+        let raw = r#"{
+            "channel": "market",
+            "symbol": "BTC",
+            "markPx": 73817.0,
+            "funding": -0.000625597385727166
+        }"#;
+        let msgs = exchange.parse_ws_message(raw);
+        assert_eq!(msgs.len(), 1);
+        match &msgs[0] {
+            WsMessage::FundingUpdate { symbol, .. } => assert_eq!(symbol, "BTC"),
+            _ => panic!("expected FundingUpdate"),
+        }
+    }
+
+    #[test]
+    fn parse_server_error_does_not_panic() {
+        let exchange = PhoenixExchange::new();
+        let raw = r#"{"channel":"error","code":400,"error":"missing field type"}"#;
+        assert!(exchange.parse_ws_message(raw).is_empty());
+    }
 
     #[test]
     fn normalize_funding_percent_to_hourly_decimal() {
