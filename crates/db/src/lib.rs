@@ -1,12 +1,6 @@
 pub mod automation;
 pub mod funding;
-pub mod hedge;
-pub mod points;
-pub mod user;
 pub mod wallet;
-pub mod withdraw;
-
-// use {funding, points, user, wallet};
 
 use std::{env, path::Path, sync::Arc};
 

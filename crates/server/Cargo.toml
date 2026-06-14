@@ -14,29 +14,18 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 sqlx = { workspace = true }
-nanoid = { workspace = true }
 validator = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
-governor = { workspace = true }
-once_cell = { workspace = true }
-tower-http = { workspace = true }
 reqwest = { workspace = true }
-alloy = { workspace = true }
-jsonwebtoken = { workspace = true }
 p256 = { workspace = true }
 hex = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 
 db = { path = "../db" }
-bridge = { path = "../bridge" }
 perp_core = { path = "../core" }
-pacifica = { path = "../pacifica" }
-hyperliquid = { path = "../hyperliquid" }
-lighter ={ path = "../lighter"}
-phoenix = { path = "../phoenix" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

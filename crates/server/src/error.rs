@@ -3,8 +3,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use hyperliquid::services::DepositError;
-use lighter::services::deposit::DepositError as LighterDepositError;
 use perp_core::ExchangeError;
 use serde_json::json;
 use validator::ValidationErrors;
@@ -236,58 +234,6 @@ impl From<serde_json::Error> for AppError {
         AppError::Parse {
             field: "json".to_string(),
             message: error.to_string(),
-        }
-    }
-}
-
-impl From<DepositError> for AppError {
-    fn from(error: DepositError) -> Self {
-        match error {
-            DepositError::InsufficientBalance { .. } | DepositError::BelowMinimumDeposit { .. } => {
-                AppError::Parse {
-                    field: "deposit".to_string(),
-                    message: error.to_string(),
-                }
-            }
-            DepositError::InvalidAddress(msg) => AppError::Parse {
-                field: "address".to_string(),
-                message: msg,
-            },
-            DepositError::ProviderError(msg) | DepositError::SimulationFailed(msg) => {
-                AppError::Network(msg)
-            }
-            DepositError::ContractError(msg) | DepositError::SignerError(msg) => {
-                AppError::Internal(msg)
-            }
-            DepositError::InvalidAmount(msg) => AppError::Parse {
-                field: "amount".to_string(),
-                message: msg,
-            },
-        }
-    }
-}
-
-impl From<LighterDepositError> for AppError {
-    fn from(error: LighterDepositError) -> Self {
-        match error {
-            LighterDepositError::InsufficientBalance { .. }
-            | LighterDepositError::BelowMinimumDeposit { .. } => AppError::Parse {
-                field: "deposit".to_string(),
-                message: error.to_string(),
-            },
-            LighterDepositError::InvalidAddress(msg) => AppError::Parse {
-                field: "address".to_string(),
-                message: msg,
-            },
-            LighterDepositError::ProviderError(msg)
-            | LighterDepositError::SimulationFailed(msg) => AppError::Network(msg),
-            LighterDepositError::ContractError(msg)
-            | LighterDepositError::SignerError(msg)
-            | LighterDepositError::PermitFailed(msg) => AppError::Internal(msg),
-            LighterDepositError::InvalidAmount(msg) => AppError::Parse {
-                field: "amount".to_string(),
-                message: msg,
-            },
         }
     }
 }
