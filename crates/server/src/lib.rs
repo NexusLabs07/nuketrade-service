@@ -6,7 +6,7 @@ use tokio::sync::watch;
 
 use std::net::SocketAddr;
 
-use crate::{app::create_app, services::auth::AuthService, state::AppState, types::FeedSnapshot};
+use crate::{app::create_app, state::AppState, types::FeedSnapshot};
 
 pub mod app;
 pub mod error;
@@ -16,7 +16,6 @@ pub mod middleware;
 pub mod services;
 pub mod state;
 pub mod types;
-pub mod validation;
 
 pub async fn run_server(
     config: Config,
@@ -24,8 +23,7 @@ pub async fn run_server(
     feed_rx: watch::Receiver<Arc<FeedSnapshot>>,
     seven_day_apr: watch::Receiver<SevenDayApr>,
 ) -> anyhow::Result<()> {
-    let auth = AuthService::from_config(&config)?;
-    let app_state = AppState::new(config, db, feed_rx, seven_day_apr, auth);
+    let app_state = AppState::new(config, db, feed_rx, seven_day_apr);
 
     let app = create_app(app_state);
 

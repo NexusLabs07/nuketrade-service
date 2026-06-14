@@ -1,7 +1,6 @@
 pub mod apis;
 pub mod exchange_impl;
 pub mod helpers;
-pub mod services;
 pub mod ws;
 
 pub use exchange_impl::PhoenixExchange;

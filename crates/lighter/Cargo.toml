@@ -11,20 +11,12 @@ publish.workspace = true
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio-tungstenite = { workspace = true }
-futures-util = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 log = { workspace = true }
-tracing-subscriber = { workspace = true }
 sqlx = { workspace = true }
-uuid = { workspace = true }
 reqwest = { workspace = true }
-base64 = { workspace = true }
-serde_with = { workspace = true, features = ["base64"] }
 async-trait = { workspace = true }
-alloy = { workspace = true }
-
 
 db = { path = "../db" }
 perp_core = { path = "../core" }
