@@ -9,6 +9,8 @@ The 3 portfolio endpoints from the PRD are live. This folder explains what shipp
 3. **[03-caveats.md](03-caveats.md)** — known limits the FE should handle (Backpack stub, Lighter has no historical buckets, etc.).
 4. **[04-fe-checklist.md](04-fe-checklist.md)** — what the FE engineer needs to wire up.
 
+--
+
 ## TL;DR
 
 | Endpoint | Auth | What it does |
