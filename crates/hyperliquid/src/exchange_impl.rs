@@ -77,7 +77,8 @@ impl HyperliquidExchange {
                     entry_price: parse_f64(&pos.entry_px).unwrap_or(0.0),
                     mark_price: 0.0,
                     unrealized_pnl: parse_f64(&pos.unrealized_pnl).unwrap_or(0.0),
-                    cumulative_funding: parse_f64(&pos.cum_funding.all_time).unwrap_or(0.0),
+                    // HL cumFunding is inverted vs trader cashflow (+ = received, − = paid).
+                    cumulative_funding: -parse_f64(&pos.cum_funding.all_time).unwrap_or(0.0),
                     leverage: pos.leverage.value,
                     margin_used: parse_f64(&pos.margin_used).unwrap_or(0.0),
                     liquidation_price: pos.liquidation_px.as_ref().and_then(|px| parse_f64(px)),

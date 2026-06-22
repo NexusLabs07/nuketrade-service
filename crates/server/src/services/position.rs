@@ -110,7 +110,8 @@ impl PositionService {
             side,
             margin: pos.margin_used.clone(),
             pnl: pos.unrealized_pnl.clone(),
-            funding: pos.cum_funding.all_time.clone(),
+            // HL cumFunding is inverted vs trader cashflow (+ = received, − = paid).
+            funding: (-parse_f64_or_zero(&pos.cum_funding.all_time)).to_string(),
             leverage: pos.leverage.value,
             liquidation_price: pos.liquidation_px.clone().unwrap_or_default(),
         }
