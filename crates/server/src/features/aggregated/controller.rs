@@ -53,31 +53,55 @@ pub async fn get_merged_open_positions(
     ValidatedPath(params): ValidatedPath<MergedPositionsParams>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MergedPositionResponse>>, AppError> {
-    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let hl_client = HyperliquidUserInfo::new(Some(params.user_evm_address.clone()), None);
     let pacifica_client = PacificaUserInfo::new(params.user_solana_address.clone());
     let phoenix_client = PhoenixUserInfo::with_pda_index(
         params.user_solana_address.clone(),
         phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
     );
 
-    let (hl_result, pacifica_result, pacifica_account_result, phoenix_result): (
+    let hl_fills_client = HyperliquidUserInfo::new(Some(params.user_evm_address), None);
+    let phoenix_trades_client = PhoenixUserInfo::with_pda_index(
+        params.user_solana_address.clone(),
+        phoenix::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+    );
+
+    let (
+        hl_result,
+        pacifica_result,
+        pacifica_account_result,
+        phoenix_result,
+        hl_fills_result,
+        phoenix_trades_result,
+    ): (
         Result<ClearinghouseState>,
         Result<UserPositionsResponse>,
         Result<AccountSettingsResponse>,
         Result<PhoenixTraderState>,
+        Result<Vec<UserFill>>,
+        Result<PhoenixTradeHistoryResponse>,
     ) = tokio::join!(
         hl_client.get_open_positions(),
         pacifica_client.get_open_positions(),
         pacifica_client.get_account_settings(),
         phoenix_client.get_trader_state(),
+        hl_fills_client.get_closed_positions(),
+        phoenix_trades_client.get_trade_history(),
     );
+
+    let hl_fills = hl_fills_result.unwrap_or_default();
+    let phoenix_trades = phoenix_trades_result
+        .ok()
+        .map(|history| history.data)
+        .unwrap_or_default();
 
     let mut hl_positions_vec: Vec<OpenPositionsResponse> = Vec::new();
     if let Ok(hl_positions) = hl_result {
         for asset_position in &hl_positions.asset_positions {
-            hl_positions_vec.push(PositionService::from_hyperliquid_position(
-                &asset_position.position,
-            ));
+            let mut position = PositionService::from_hyperliquid_position(&asset_position.position);
+            position.opened_at =
+                PositionService::hyperliquid_opened_at_ms(&hl_fills, &position.symbol);
+            hl_positions_vec.push(position);
         }
     }
 
@@ -142,10 +166,12 @@ pub async fn get_merged_open_positions(
             .traders
             .iter()
             .flat_map(|trader| {
-                trader
-                    .positions
-                    .iter()
-                    .filter_map(|pos| PositionService::from_phoenix_position(pos, trader))
+                trader.positions.iter().filter_map(|pos| {
+                    let mut position = PositionService::from_phoenix_position(pos, trader)?;
+                    position.opened_at =
+                        PositionService::phoenix_opened_at_ms(&phoenix_trades, &position.symbol);
+                    Some(position)
+                })
             })
             .collect::<Vec<_>>(),
         Err(err) => {

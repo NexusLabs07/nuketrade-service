@@ -1,7 +1,10 @@
 //! Position-related business logic.
 
+use chrono::{DateTime, Utc};
+use hyperliquid::apis::user::UserFill;
 use pacifica::apis::user::AccountSetting;
 use perp_core::{PositionSide, UnifiedPosition, parse_f64_or_zero};
+use phoenix::apis::user::PhoenixTrade;
 use std::collections::HashMap;
 
 fn pacifica_symbol_norm_base(symbol: &str) -> String {
@@ -35,6 +38,10 @@ use crate::types::{
     ClosedPositionResponse, MergedClosedPositionResponse, MergedPositionResponse,
     OpenPositionsResponse, Side,
 };
+
+/// Minimum hours held when annualizing realized funding (avoids blow-ups on sub-hour positions).
+const REALIZED_FUNDING_MIN_HOURS: f64 = 1.0;
+const HOURS_PER_YEAR: f64 = 24.0 * 365.0;
 
 /// Service for position conversion and merging operations.
 pub struct PositionService;
@@ -86,10 +93,9 @@ impl PositionService {
                 .liquidation_price
                 .map(|p| p.to_string())
                 .unwrap_or_default(),
+            opened_at: None,
         }
     }
-
-    /// Convert Hyperliquid ClearinghouseState position to OpenPositionsResponse.
     pub fn from_hyperliquid_position(
         pos: &hyperliquid::apis::user::Position,
     ) -> OpenPositionsResponse {
@@ -114,6 +120,7 @@ impl PositionService {
             funding: (-parse_f64_or_zero(&pos.cum_funding.all_time)).to_string(),
             leverage: pos.leverage.value,
             liquidation_price: pos.liquidation_px.clone().unwrap_or_default(),
+            opened_at: None,
         }
     }
 
@@ -136,6 +143,7 @@ impl PositionService {
             funding: pos.funding.clone().unwrap_or_default(),
             leverage,
             liquidation_price: pos.liquidation_price.clone().unwrap_or_default(),
+            opened_at: Some(pos.created_at as i64),
         }
     }
 
@@ -169,7 +177,68 @@ impl PositionService {
             funding: pos.funding_usd().to_string(),
             leverage: pos.display_leverage(collateral, single_position),
             liquidation_price: pos.liquidation_price.to_f64().to_string(),
+            opened_at: None,
         })
+    }
+
+    /// Most recent Hyperliquid fill that opened the current position cycle (flat → open).
+    pub fn hyperliquid_opened_at_ms(fills: &[UserFill], coin: &str) -> Option<i64> {
+        let coin = coin.trim().to_ascii_uppercase();
+        let mut candidates: Vec<i64> = fills
+            .iter()
+            .filter(|fill| fill.coin.trim().eq_ignore_ascii_case(&coin))
+            .filter(|fill| fill.dir.to_ascii_lowercase().contains("open"))
+            .filter(|fill| parse_f64_or_zero(&fill.start_position).abs() < f64::EPSILON)
+            .map(|fill| fill.time)
+            .collect();
+        candidates.sort_unstable_by(|a, b| b.cmp(a));
+        candidates.first().copied()
+    }
+
+    /// Most recent Phoenix trade that opened the current position cycle (flat → open).
+    pub fn phoenix_opened_at_ms(trades: &[PhoenixTrade], symbol: &str) -> Option<i64> {
+        let symbol = phoenix::helpers::markets::normalize_phoenix_symbol(symbol);
+        let mut candidates: Vec<i64> = trades
+            .iter()
+            .filter(|trade| {
+                phoenix::helpers::markets::normalize_phoenix_symbol(&trade.market_symbol) == symbol
+            })
+            .filter(|trade| parse_f64_or_zero(&trade.base_lots_before).abs() < f64::EPSILON)
+            .filter(|trade| parse_f64_or_zero(&trade.base_lots_after).abs() >= f64::EPSILON)
+            .filter_map(|trade| parse_rfc3339_ms(&trade.timestamp))
+            .collect();
+        candidates.sort_unstable_by(|a, b| b.cmp(a));
+        candidates.first().copied()
+    }
+
+    /// Annualized realized funding APR on combined margin for a merged hedge row.
+    pub fn realized_funding_apr_pct(merged: &MergedPositionResponse, now_ms: i64) -> Option<f64> {
+        let opened_at = merged.opened_at?;
+        if now_ms <= opened_at {
+            return None;
+        }
+
+        let mut total_funding = 0.0;
+        let mut total_margin = 0.0;
+        for leg in [
+            merged.hyperliquid.as_ref(),
+            merged.pacifica.as_ref(),
+            merged.phoenix.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            total_funding += parse_f64_or_zero(&leg.funding);
+            total_margin += parse_f64_or_zero(&leg.margin);
+        }
+
+        if total_margin <= f64::EPSILON {
+            return None;
+        }
+
+        let hours = ((now_ms - opened_at) as f64 / 3_600_000.0).max(REALIZED_FUNDING_MIN_HOURS);
+        let return_on_margin = total_funding / total_margin;
+        Some(return_on_margin / hours * HOURS_PER_YEAR * 100.0)
     }
 
     /// Merge positions from multiple exchanges into a unified view.
@@ -181,6 +250,16 @@ impl PositionService {
         pacifica_positions: Vec<OpenPositionsResponse>,
         phoenix_positions: Vec<OpenPositionsResponse>,
     ) -> Vec<MergedPositionResponse> {
+        Self::merge_positions_at(hl_positions, pacifica_positions, phoenix_positions, Utc::now())
+    }
+
+    pub fn merge_positions_at(
+        hl_positions: Vec<OpenPositionsResponse>,
+        pacifica_positions: Vec<OpenPositionsResponse>,
+        phoenix_positions: Vec<OpenPositionsResponse>,
+        now: DateTime<Utc>,
+    ) -> Vec<MergedPositionResponse> {
+        let now_ms = now.timestamp_millis();
         let mut positions_map: HashMap<String, MergedPositionResponse> = HashMap::new();
 
         for pos in hl_positions {
@@ -192,6 +271,8 @@ impl PositionService {
                     hyperliquid: None,
                     pacifica: None,
                     phoenix: None,
+                    opened_at: None,
+                    realized_funding_apr: None,
                 })
                 .hyperliquid = Some(pos);
         }
@@ -205,6 +286,8 @@ impl PositionService {
                     hyperliquid: None,
                     pacifica: None,
                     phoenix: None,
+                    opened_at: None,
+                    realized_funding_apr: None,
                 })
                 .pacifica = Some(pos);
         }
@@ -218,11 +301,18 @@ impl PositionService {
                     hyperliquid: None,
                     pacifica: None,
                     phoenix: None,
+                    opened_at: None,
+                    realized_funding_apr: None,
                 })
                 .phoenix = Some(pos);
         }
 
-        positions_map.into_values().collect()
+        let mut merged: Vec<MergedPositionResponse> = positions_map.into_values().collect();
+        for row in &mut merged {
+            row.opened_at = latest_leg_opened_at(row);
+            row.realized_funding_apr = Self::realized_funding_apr_pct(row, now_ms);
+        }
+        merged
     }
 
     pub fn from_pacifica_position_with_metrics(
@@ -247,6 +337,7 @@ impl PositionService {
             funding: pos.funding.clone().unwrap_or_default(),
             leverage,
             liquidation_price: pos.liquidation_price.clone().unwrap_or_default(),
+            opened_at: Some(pos.created_at as i64),
         }
     }
 
@@ -409,5 +500,92 @@ impl PositionService {
             positions_map.into_values().collect();
         merged_positions.sort_by(|a, b| b.closed_at.cmp(&a.closed_at));
         merged_positions
+    }
+}
+
+fn latest_leg_opened_at(merged: &MergedPositionResponse) -> Option<i64> {
+    [
+        merged.hyperliquid.as_ref().and_then(|p| p.opened_at),
+        merged.pacifica.as_ref().and_then(|p| p.opened_at),
+        merged.phoenix.as_ref().and_then(|p| p.opened_at),
+    ]
+    .into_iter()
+    .flatten()
+    .max()
+}
+
+fn parse_rfc3339_ms(value: &str) -> Option<i64> {
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.timestamp_millis())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn hyperliquid_opened_at_uses_latest_flat_to_open_fill() {
+        let fills = vec![
+            UserFill {
+                coin: "MON".into(),
+                dir: "Open Short".into(),
+                side: String::new(),
+                px: String::new(),
+                sz: String::new(),
+                closed_pnl: String::new(),
+                start_position: "0.0".into(),
+                time: 1000,
+            },
+            UserFill {
+                coin: "MON".into(),
+                dir: "Open Short".into(),
+                side: String::new(),
+                px: String::new(),
+                sz: String::new(),
+                closed_pnl: String::new(),
+                start_position: "0.0".into(),
+                time: 2000,
+            },
+        ];
+        assert_eq!(PositionService::hyperliquid_opened_at_ms(&fills, "MON"), Some(2000));
+    }
+
+    #[test]
+    fn realized_funding_apr_annualizes_on_margin() {
+        let merged = MergedPositionResponse {
+            symbol: "MON".into(),
+            hyperliquid: Some(OpenPositionsResponse {
+                symbol: "MON".into(),
+                size: "1".into(),
+                side: Side::Short,
+                pnl: "0".into(),
+                funding: "0.10".into(),
+                margin: "500".into(),
+                leverage: 3,
+                liquidation_price: "0".into(),
+                opened_at: Some(0),
+            }),
+            pacifica: None,
+            phoenix: Some(OpenPositionsResponse {
+                symbol: "MON".into(),
+                size: "1".into(),
+                side: Side::Long,
+                pnl: "0".into(),
+                funding: "0.08".into(),
+                margin: "500".into(),
+                leverage: 3,
+                liquidation_price: "0".into(),
+                opened_at: Some(0),
+            }),
+            opened_at: Some(0),
+            realized_funding_apr: None,
+        };
+
+        let now = Utc.timestamp_millis_opt(3_600_000).unwrap();
+        let apr = PositionService::realized_funding_apr_pct(&merged, now.timestamp_millis()).unwrap();
+        // 0.18 / 1000 margin over 1h -> 0.00018/hr on margin -> *8760*100 ≈ 157.68%
+        assert!((apr - 157.68).abs() < 0.1);
     }
 }

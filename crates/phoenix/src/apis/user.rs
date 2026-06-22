@@ -291,11 +291,7 @@ impl PhoenixPosition {
         self.margin_usd()
     }
 
-    pub fn display_leverage(
-        &self,
-        subaccount_collateral_usd: f64,
-        single_position: bool,
-    ) -> u32 {
+    pub fn display_leverage(&self, subaccount_collateral_usd: f64, single_position: bool) -> u32 {
         let margin = self.display_margin_usd(subaccount_collateral_usd, single_position);
         let notional = self.position_value.to_usd();
         if margin > 0.0 && notional > 0.0 {
@@ -327,6 +323,10 @@ pub struct PhoenixTrade {
     pub price: String,
     #[serde(default)]
     pub realized_pnl: String,
+    #[serde(default)]
+    pub base_lots_before: String,
+    #[serde(default)]
+    pub base_lots_after: String,
     #[serde(default)]
     pub base_lots_delta: String,
     #[serde(default)]

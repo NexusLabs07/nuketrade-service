@@ -18,6 +18,9 @@ pub struct OpenPositionsResponse {
     pub leverage: u32,
     #[serde(rename = "liquidationPrice")]
     pub liquidation_price: String,
+    /// Milliseconds since epoch when the current position cycle opened (flat → open).
+    #[serde(rename = "openedAt", skip_serializing_if = "Option::is_none")]
+    pub opened_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +29,12 @@ pub struct MergedPositionResponse {
     pub hyperliquid: Option<OpenPositionsResponse>,
     pub pacifica: Option<OpenPositionsResponse>,
     pub phoenix: Option<OpenPositionsResponse>,
+    /// Latest leg `openedAt` among active venues (hedge considered open once all legs exist).
+    #[serde(rename = "openedAt", skip_serializing_if = "Option::is_none")]
+    pub opened_at: Option<i64>,
+    /// Annualized realized funding return on combined margin: `(funding/margin)/hours*8760*100`.
+    #[serde(rename = "realizedFundingApr", skip_serializing_if = "Option::is_none")]
+    pub realized_funding_apr: Option<f64>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
