@@ -87,6 +87,27 @@ pub struct Position {
     pub return_on_equity: String,
 }
 
+impl Position {
+    /// Deposited collateral (excludes unrealized price PnL in isolated `marginUsed`).
+    ///
+    /// - **Isolated:** `marginUsed - unrealizedPnl` (matches Phoenix/Pacifica deposit semantics).
+    /// - **Cross:** `positionValue / leverage` (per-position margin requirement at mark).
+    pub fn collateral_margin_usd(&self) -> f64 {
+        let margin_used = self.margin_used.parse::<f64>().unwrap_or(0.0);
+        let unrealized_pnl = self.unrealized_pnl.parse::<f64>().unwrap_or(0.0);
+        let position_value = self.position_value.parse::<f64>().unwrap_or(0.0);
+        let leverage = self.leverage.value;
+
+        if self.leverage.leverage_type.eq_ignore_ascii_case("isolated") {
+            (margin_used - unrealized_pnl).max(0.0)
+        } else if leverage > 0 {
+            position_value / leverage as f64
+        } else {
+            margin_used
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CumFunding {
     #[serde(rename = "allTime")]
@@ -318,5 +339,32 @@ mod portfolio_tests {
             portfolio_all_time_volume_usd(&periods),
             Some(19965.109584)
         );
+    }
+
+    #[test]
+    fn isolated_collateral_margin_excludes_unrealized_pnl() {
+        let pos = Position {
+            coin: "MON".into(),
+            szi: "-70362.0".into(),
+            unrealized_pnl: "62.863127".into(),
+            cum_funding: CumFunding {
+                all_time: "-0.356346".into(),
+                since_open: "0".into(),
+                since_change: "0".into(),
+            },
+            leverage: Leverage {
+                raw_usd: Some("1960.0".into()),
+                leverage_type: "isolated".into(),
+                value: 3,
+            },
+            liquidation_px: Some("0.025".into()),
+            entry_px: "0.020896".into(),
+            margin_used: "553.091836".into(),
+            max_leverage: 5,
+            position_value: "1469.0".into(),
+            return_on_equity: "0".into(),
+        };
+        let collateral = pos.collateral_margin_usd();
+        assert!((collateral - 490.228709).abs() < 0.01);
     }
 }

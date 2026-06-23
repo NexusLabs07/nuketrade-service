@@ -80,7 +80,7 @@ impl HyperliquidExchange {
                     // HL cumFunding is inverted vs trader cashflow (+ = received, − = paid).
                     cumulative_funding: -parse_f64(&pos.cum_funding.all_time).unwrap_or(0.0),
                     leverage: pos.leverage.value,
-                    margin_used: parse_f64(&pos.margin_used).unwrap_or(0.0),
+                    margin_used: pos.collateral_margin_usd(),
                     liquidation_price: pos.liquidation_px.as_ref().and_then(|px| parse_f64(px)),
                 })
             })
