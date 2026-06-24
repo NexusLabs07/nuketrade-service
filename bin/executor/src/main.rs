@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
-use backpack::BackpackExchange;
+// [backpack/lighter disabled]
+// use backpack::BackpackExchange;
 use tokio::sync::{mpsc, watch};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -13,7 +14,8 @@ use executor::{
     feed_manager::run_feed_manager,
 };
 use hyperliquid::helpers::markets::HL_MARKETS;
-use lighter::LighterExchange;
+// [backpack/lighter disabled]
+// use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
 use perp_core::{MarketFeedUpdate, config::Config};
 use phoenix::PhoenixExchange;
@@ -68,30 +70,31 @@ async fn main() -> anyhow::Result<()> {
         .map(|m| (m.symbol.to_string(), m.max_leverage))
         .collect();
 
-    let backpack_leverage: HashMap<String, u32> =
-        match BackpackExchange::new().fetch_max_leverage_map().await {
-            Ok(map) => map,
-            Err(err) => {
-                log::warn!(
-                    "Backpack: failed to fetch leverage metadata, continuing with empty map:{err}"
-                );
-                HashMap::new()
-            }
-        };
+    // [backpack/lighter disabled]
+    // let backpack_leverage: HashMap<String, u32> =
+    //     match BackpackExchange::new().fetch_max_leverage_map().await {
+    //         Ok(map) => map,
+    //         Err(err) => {
+    //             log::warn!(
+    //                 "Backpack: failed to fetch leverage metadata, continuing with empty map:{err}"
+    //             );
+    //             HashMap::new()
+    //         }
+    //     };
 
-    let lighter_leverage: HashMap<String, u32> =
-        match LighterExchange::new().fetch_active_perp_markets().await {
-            Ok(markets) => markets
-                .into_iter()
-                .map(|market| (market.symbol, market.max_leverage))
-                .collect(),
-            Err(err) => {
-                log::warn!(
-                    "Lighter: failed to fetch leverage metadata, continuing with empty map:{err}"
-                );
-                HashMap::new()
-            }
-        };
+    // let lighter_leverage: HashMap<String, u32> =
+    //     match LighterExchange::new().fetch_active_perp_markets().await {
+    //         Ok(markets) => markets
+    //             .into_iter()
+    //             .map(|market| (market.symbol, market.max_leverage))
+    //             .collect(),
+    //         Err(err) => {
+    //             log::warn!(
+    //                 "Lighter: failed to fetch leverage metadata, continuing with empty map:{err}"
+    //             );
+    //             HashMap::new()
+    //         }
+    //     };
 
     let phoenix_leverage: HashMap<String, u32> =
         match PhoenixExchange::new().fetch_max_leverage_map().await {
@@ -118,8 +121,9 @@ async fn main() -> anyhow::Result<()> {
         hl_leverage,
         pacifica_leverage,
         phoenix_leverage,
-        backpack_leverage,
-        lighter_leverage,
+        // [backpack/lighter disabled]
+        // backpack_leverage,
+        // lighter_leverage,
     ));
 
     log::info!("Starting Hyperliquid live feed....");
@@ -143,19 +147,20 @@ async fn main() -> anyhow::Result<()> {
         phoenix::start_phoenix_funding_feed(db_clone_phoenix, feed_tx_clone_phoenix).await;
     });
 
-    log::info!("Starting Backpack live feed....");
-    let db_clone_3 = db.clone();
-    let feed_tx_clone_3 = feed_tx.clone();
-    tokio::spawn(async move {
-        backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
-    });
+    // [backpack/lighter disabled]
+    // log::info!("Starting Backpack live feed....");
+    // let db_clone_3 = db.clone();
+    // let feed_tx_clone_3 = feed_tx.clone();
+    // tokio::spawn(async move {
+    //     backpack::start_backpack_funding_feed(db_clone_3, feed_tx_clone_3).await;
+    // });
 
-    log::info!("Starting Lighter live feed....");
-    let db_clone_4 = db.clone();
-    let feed_tx_clone_4 = feed_tx.clone();
-    tokio::spawn(async move {
-        lighter::start_lighter_funding_feed(db_clone_4, feed_tx_clone_4).await;
-    });
+    // log::info!("Starting Lighter live feed....");
+    // let db_clone_4 = db.clone();
+    // let feed_tx_clone_4 = feed_tx.clone();
+    // tokio::spawn(async move {
+    //     lighter::start_lighter_funding_feed(db_clone_4, feed_tx_clone_4).await;
+    // });
 
     drop(feed_tx);
 

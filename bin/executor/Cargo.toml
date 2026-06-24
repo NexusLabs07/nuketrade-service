@@ -27,6 +27,7 @@ hyperliquid = { path = "../../crates/hyperliquid" }
 perp_core = { path = "../../crates/core" }
 server = { path = "../../crates/server" }
 pacifica = { path = "../../crates/pacifica" }
-backpack ={ path = "../../crates/backpack" }
-lighter = { path = "../../crates/lighter" }
+# [backpack/lighter disabled]
+# backpack ={ path = "../../crates/backpack" }
+# lighter = { path = "../../crates/lighter" }
 phoenix = { path = "../../crates/phoenix" }

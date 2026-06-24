@@ -17,6 +17,9 @@ publish = false
 
 [workspace]
 members = ["crates/*", "bin/*"]
+# [backpack/lighter disabled] excluded so their now-stale references to the
+# commented-out PerpetualExchange::Backpack/Lighter variants don't break the build.
+exclude = ["crates/backpack", "crates/lighter"]
 resolver = "3"
 
 [workspace.dependencies]

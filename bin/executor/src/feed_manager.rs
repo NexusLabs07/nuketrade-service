@@ -17,8 +17,9 @@ pub async fn run_feed_manager(
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
     phoenix_leverage: HashMap<String, u32>,
-    backpack_leverage: HashMap<String, u32>,
-    lighter_leverage: HashMap<String, u32>,
+    // [backpack/lighter disabled]
+    // backpack_leverage: HashMap<String, u32>,
+    // lighter_leverage: HashMap<String, u32>,
 ) {
     let mut by_symbol: HashMap<String, LiveMarketFeedResponse> = HashMap::new();
     let mut dirty = false;
@@ -38,11 +39,12 @@ pub async fn run_feed_manager(
                                 .entry(symbol.clone())
                                 .or_insert_with(|| LiveMarketFeedResponse {
                                     symbol: symbol.clone(),
-                                    backpack: None,
+                                    // [backpack/lighter disabled]
+                                    // backpack: None,
                                     hyperliquid: None,
                                     pacifica: None,
                                     phoenix: None,
-                                    lighter: None,
+                                    // lighter: None,
                                 });
 
 
@@ -50,20 +52,22 @@ pub async fn run_feed_manager(
                                 mark_px: Some(mark_px),
                                 funding: Some(round_rate(funding_rate)),
                                 max_leverage: match &update.exchange {
-                                    PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
+                                    // [backpack/lighter disabled]
+                                    // PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Phoenix => phoenix_leverage.get(&symbol).copied(),
-                                    PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
+                                    // PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
                                 },
                             };
 
                             match &update.exchange {
-                                PerpetualExchange::Backpack => entry.backpack = Some(value),
+                                // [backpack/lighter disabled]
+                                // PerpetualExchange::Backpack => entry.backpack = Some(value),
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
                                 PerpetualExchange::Phoenix => entry.phoenix = Some(value),
-                                PerpetualExchange::Lighter => entry.lighter = Some(value),
+                                // PerpetualExchange::Lighter => entry.lighter = Some(value),
                             }
 
                             changed = true;

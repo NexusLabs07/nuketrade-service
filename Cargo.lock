@@ -989,26 +989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "backpack"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "db",
- "futures-util",
- "log",
- "perp_core",
- "reqwest",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tokio-tungstenite",
- "uuid",
-]
-
-[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1770,12 +1750,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "backpack",
  "chrono",
  "db",
  "dotenv",
  "hyperliquid",
- "lighter",
  "log",
  "pacifica",
  "perp_core",
@@ -2616,23 +2594,6 @@ dependencies = [
  "bitflags 2.10.0",
  "libc",
  "redox_syscall 0.7.0",
-]
-
-[[package]]
-name = "lighter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "db",
- "log",
- "perp_core",
- "reqwest",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
 ]
 
 [[package]]

@@ -343,8 +343,9 @@ fn resolve_reference_price(
             "hyperliquid" => row.hyperliquid.as_ref().and_then(|v| v.mark_px),
             "pacifica" => row.pacifica.as_ref().and_then(|v| v.mark_px),
             "phoenix" => row.phoenix.as_ref().and_then(|v| v.mark_px),
-            "backpack" => row.backpack.as_ref().and_then(|v| v.mark_px),
-            "lighter" => row.lighter.as_ref().and_then(|v| v.mark_px),
+            // [backpack/lighter disabled]
+            // "backpack" => row.backpack.as_ref().and_then(|v| v.mark_px),
+            // "lighter" => row.lighter.as_ref().and_then(|v| v.mark_px),
             _ => None,
         }
     };
@@ -418,20 +419,21 @@ fn candidates_from_live(
                 }
             }
         }
-        if allowed.iter().any(|e| e == "backpack") {
-            if let Some(v) = row.backpack.as_ref() {
-                if let Some(funding) = v.funding {
-                    legs.push(("backpack".to_string(), funding, v.max_leverage));
-                }
-            }
-        }
-        if allowed.iter().any(|e| e == "lighter") {
-            if let Some(v) = row.lighter.as_ref() {
-                if let Some(funding) = v.funding {
-                    legs.push(("lighter".to_string(), funding, v.max_leverage));
-                }
-            }
-        }
+        // [backpack/lighter disabled]
+        // if allowed.iter().any(|e| e == "backpack") {
+        //     if let Some(v) = row.backpack.as_ref() {
+        //         if let Some(funding) = v.funding {
+        //             legs.push(("backpack".to_string(), funding, v.max_leverage));
+        //         }
+        //     }
+        // }
+        // if allowed.iter().any(|e| e == "lighter") {
+        //     if let Some(v) = row.lighter.as_ref() {
+        //         if let Some(funding) = v.funding {
+        //             legs.push(("lighter".to_string(), funding, v.max_leverage));
+        //         }
+        //     }
+        // }
         if legs.len() < 2 {
             continue;
         }
@@ -802,8 +804,9 @@ mod tests {
                     funding: Some(pac),
                     max_leverage: Some(50),
                 }),
-                backpack: None,
-                lighter: None,
+                // [backpack/lighter disabled]
+                // backpack: None,
+                // lighter: None,
                 phoenix: None,
             },
         );

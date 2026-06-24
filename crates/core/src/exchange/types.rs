@@ -7,9 +7,10 @@ use crate::chains::{AddressType, Chain};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PerpetualExchange {
-    Backpack,
+    // [backpack/lighter disabled]
+    // Backpack,
     Hyperliquid,
-    Lighter,
+    // Lighter,
     Pacifica,
     Phoenix,
 }
@@ -20,15 +21,17 @@ impl PerpetualExchange {
         PerpetualExchange::Hyperliquid,
         PerpetualExchange::Pacifica,
         PerpetualExchange::Phoenix,
-        PerpetualExchange::Backpack,
-        PerpetualExchange::Lighter,
+        // [backpack/lighter disabled]
+        // PerpetualExchange::Backpack,
+        // PerpetualExchange::Lighter,
     ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            PerpetualExchange::Backpack => "backpack",
+            // [backpack/lighter disabled]
+            // PerpetualExchange::Backpack => "backpack",
             PerpetualExchange::Hyperliquid => "hyperliquid",
-            PerpetualExchange::Lighter => "lighter",
+            // PerpetualExchange::Lighter => "lighter",
             PerpetualExchange::Pacifica => "pacifica",
             PerpetualExchange::Phoenix => "phoenix",
         }
@@ -37,10 +40,11 @@ impl PerpetualExchange {
     /// The destination chain for this exchange (None for exchanges without a chain mapping).
     pub fn chain(&self) -> Option<Chain> {
         match self {
-            PerpetualExchange::Backpack => Some(Chain::SOLANA),
+            // [backpack/lighter disabled]
+            // PerpetualExchange::Backpack => Some(Chain::SOLANA),
             PerpetualExchange::Hyperliquid => Some(Chain::ARBITRUM),
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
-            PerpetualExchange::Lighter => Some(Chain::ETHEREUM),
+            // PerpetualExchange::Lighter => Some(Chain::ETHEREUM),
             PerpetualExchange::Phoenix => Some(Chain::SOLANA),
         }
     }
@@ -54,31 +58,35 @@ impl PerpetualExchange {
     /// Bridges originate from Solana. Pacifica needs no bridge (already on Solana).
     pub fn bridge_action(&self) -> Option<&'static str> {
         match self {
-            PerpetualExchange::Backpack => None,
+            // [backpack/lighter disabled]
+            // PerpetualExchange::Backpack => None,
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
             PerpetualExchange::Phoenix => None,
-            PerpetualExchange::Lighter => Some("BRIDGE_SOL_TO_ETH"),
+            // PerpetualExchange::Lighter => Some("BRIDGE_SOL_TO_ETH"),
         }
     }
 
     /// The deposit action name (e.g. "DEPOSIT_TO_HYPERLIQUID").
     pub fn deposit_action(&self) -> Option<&'static str> {
         match self {
-            PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
+            // [backpack/lighter disabled]
+            // PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
             PerpetualExchange::Phoenix => Some("DEPOSIT_TO_PHOENIX"),
-            PerpetualExchange::Lighter => Some("DEPOSIT_TO_LIGHTER"),
+            // PerpetualExchange::Lighter => Some("DEPOSIT_TO_LIGHTER"),
         }
     }
 
     /// Which address family this exchange uses.
     pub fn address_type(&self) -> AddressType {
         match self {
-            PerpetualExchange::Hyperliquid | PerpetualExchange::Lighter => AddressType::Evm,
+            // [backpack/lighter disabled]
+            // PerpetualExchange::Hyperliquid | PerpetualExchange::Lighter => AddressType::Evm,
+            PerpetualExchange::Hyperliquid => AddressType::Evm,
             PerpetualExchange::Pacifica
-            | PerpetualExchange::Backpack
+            // | PerpetualExchange::Backpack
             | PerpetualExchange::Phoenix => AddressType::Solana,
         }
     }
@@ -130,10 +138,11 @@ impl std::str::FromStr for PerpetualExchange {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "hyperliquid" => Ok(PerpetualExchange::Hyperliquid),
-            "lighter" => Ok(PerpetualExchange::Lighter),
+            // [backpack/lighter disabled]
+            // "lighter" => Ok(PerpetualExchange::Lighter),
             "pacifica" => Ok(PerpetualExchange::Pacifica),
             "phoenix" => Ok(PerpetualExchange::Phoenix),
-            "backpack" => Ok(PerpetualExchange::Backpack),
+            // "backpack" => Ok(PerpetualExchange::Backpack),
             _ => Err(format!("Unknown exchange: {s}")),
         }
     }
