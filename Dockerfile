@@ -2,13 +2,12 @@ FROM rust:1.88 AS builder
 
 WORKDIR /app
 
-# Copy the entire workspace
-COPY . .
+COPY Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml ./
+COPY crates ./crates
+COPY bin ./bin
 
-# Build the release binary
-RUN cargo build --release --bin executor
+RUN cargo build --locked --release --bin executor
 
-# Runtime stage
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -16,12 +15,16 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN groupadd --system app \
+    && useradd --system --gid app --create-home app
+
 WORKDIR /app
 
-# Copy the binary and migrations from builder
-COPY --from=builder /app/target/release/executor /app/executor
-COPY --from=builder /app/crates/db/migrations /app/migrations
+COPY --from=builder --chown=app:app /app/target/release/executor /app/executor
+COPY --from=builder --chown=app:app /app/crates/db/migrations /app/migrations
 
 ENV MIGRATIONS_PATH=/app/migrations
+
+USER app
 
 CMD ["./executor"]

@@ -19,7 +19,7 @@ pub fn run_db_migrations() -> Result<(), anyhow::Error> {
     let db_name = env::var("DB_NAME")?;
 
     log::info!(
-        "db_host: {db_host:?}, db_port: {db_port:?}, db_user: {db_user:?}, db_pass: {db_pass:?}, db_name: {db_name:?}"
+        "Running database migrations (host={db_host:?}, user={db_user:?}, port={db_port:?}, database={db_name:?})"
     );
 
     let mut conf = refinery::config::Config::new(ConfigDbType::Postgres)

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+target
+.vscode
+docs
+portfolio-backend-handoff
+portfolio-backend-prd
+Dockerfile
+docker-compose.yml
+*.log
