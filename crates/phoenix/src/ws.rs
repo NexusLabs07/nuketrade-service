@@ -1,8 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use crate::PhoenixExchange;
 use perp_core::{
-    token_list::TOKEN_LIST,
     types::MarketFeedUpdate,
     ws::{WsConfig, WsHeartbeat, run_funding_feed},
 };
@@ -25,46 +24,22 @@ pub async fn start_phoenix_funding_feed(
         }
     };
 
-    let allowed: HashSet<&str> = TOKEN_LIST.iter().copied().collect();
-    let phoenix_markets: Vec<_> = markets
-        .into_iter()
-        .filter(|m| m.is_active && allowed.contains(m.symbol.as_str()))
-        .collect();
+    let phoenix_markets: Vec<_> = markets.into_iter().filter(|m| m.is_active).collect();
 
     if phoenix_markets.is_empty() {
-        log::error!("Phoenix: no active TOKEN_LIST markets from metadata; funding feed not started");
+        log::error!("Phoenix: no active markets from metadata; funding feed not started");
         return;
     }
 
-    let missing: Vec<&str> = TOKEN_LIST
-        .iter()
-        .copied()
-        .filter(|symbol| !phoenix_markets.iter().any(|m| m.symbol == *symbol))
-        .collect();
-    if !missing.is_empty() {
-        log::info!(
-            "Phoenix: TOKEN_LIST symbols not listed on Phoenix: {}",
-            missing.join(", ")
-        );
-    }
-
-    let symbols: Vec<String> = phoenix_markets
-        .iter()
-        .map(|m| m.symbol.clone())
-        .collect();
+    let symbols: Vec<String> = phoenix_markets.iter().map(|m| m.symbol.clone()).collect();
     log::info!(
-        "Phoenix: starting funding feed for {} markets",
+        "Phoenix: starting funding feed for {} active markets",
         symbols.len()
     );
 
-    let exchange = Arc::new(PhoenixExchange::with_feed(
-        phoenix_markets,
-        &symbols,
-    ));
+    let exchange = Arc::new(PhoenixExchange::with_feed(phoenix_markets, &symbols));
     let symbol_refs: Vec<&str> = symbols.iter().map(String::as_str).collect();
 
-    // Phoenix WS: all client JSON must include `"type"` — do not send `{"method":"ping"}`.
-    // Use WebSocket Ping frames for keepalive (see https://docs.phoenix.trade/api/websocket).
     let config = WsConfig {
         max_retries: 3,
         reconnect_delay_secs: 5,

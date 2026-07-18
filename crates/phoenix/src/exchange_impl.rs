@@ -22,7 +22,7 @@ pub struct PhoenixExchange {
     http_url: String,
     ws_url: String,
     markets: Vec<MarketInfo>,
-    /// Symbols we care about (TOKEN_LIST ∩ Phoenix active markets).
+    /// Symbols subscribed by the funding feed.
     subscribed_symbols: Arc<HashSet<String>>,
     /// Latest mid prices from the `allMids` channel, keyed by normalized symbol.
     latest_mids: Arc<Mutex<HashMap<String, f64>>>,
@@ -134,9 +134,7 @@ impl PhoenixExchange {
             let collateral = trader.collateral_usd();
             let single_position = trader.positions.len() == 1;
             for pos in trader.positions {
-                if let Some(unified) =
-                    Self::convert_position(&pos, collateral, single_position)
-                {
+                if let Some(unified) = Self::convert_position(&pos, collateral, single_position) {
                     out.push(unified);
                 }
             }
@@ -200,7 +198,10 @@ impl Exchange for PhoenixExchange {
         let response = self
             .client
             .get(format!("{}/trader/{}/state", self.http_url, user_address))
-            .query(&[("pdaIndex", crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX)])
+            .query(&[(
+                "pdaIndex",
+                crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+            )])
             .send()
             .await
             .map_err(|e| ExchangeError::Network(e.to_string()))?;
@@ -232,7 +233,10 @@ impl Exchange for PhoenixExchange {
         let response = self
             .client
             .get(format!("{}/trader/{}/state", self.http_url, user_address))
-            .query(&[("pdaIndex", crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX)])
+            .query(&[(
+                "pdaIndex",
+                crate::helpers::collateral::DEFAULT_TRADER_PDA_INDEX,
+            )])
             .send()
             .await
             .map_err(|e| ExchangeError::Network(e.to_string()))?;
@@ -268,11 +272,13 @@ impl Exchange for PhoenixExchange {
     }
 
     fn build_subscribe_message(&self, symbols: &[&str]) -> Vec<String> {
-        let mut messages = vec![json!({
-            "type": "subscribe",
-            "subscription": { "channel": "allMids" }
-        })
-        .to_string()];
+        let mut messages = vec![
+            json!({
+                "type": "subscribe",
+                "subscription": { "channel": "allMids" }
+            })
+            .to_string(),
+        ];
 
         for symbol in symbols {
             messages.push(
@@ -299,10 +305,7 @@ impl Exchange for PhoenixExchange {
 
             match v.get("channel").and_then(|c| c.as_str()) {
                 Some("error") => {
-                    let msg = v
-                        .get("error")
-                        .and_then(|e| e.as_str())
-                        .unwrap_or(raw);
+                    let msg = v.get("error").and_then(|e| e.as_str()).unwrap_or(raw);
                     log::warn!("Phoenix WS server error: {msg}");
                     return vec![];
                 }
@@ -312,10 +315,7 @@ impl Exchange for PhoenixExchange {
                 }
                 Some("allMids") => {
                     if let Some(mids) = v.get("mids").and_then(|m| m.as_object()) {
-                        let mut cache = self
-                            .latest_mids
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner());
+                        let mut cache = self.latest_mids.lock().unwrap_or_else(|e| e.into_inner());
                         for (sym, px_val) in mids {
                             let symbol = normalize_phoenix_symbol(sym);
                             if !self.subscribed_symbols.contains(&symbol) {
@@ -443,10 +443,7 @@ mod tests {
 
     #[test]
     fn parse_funding_rate_with_cached_mid() {
-        let exchange = PhoenixExchange::with_feed(
-            Vec::new(),
-            &["BTC".to_string()],
-        );
+        let exchange = PhoenixExchange::with_feed(Vec::new(), &["BTC".to_string()]);
         {
             let mut cache = exchange.latest_mids.lock().unwrap();
             cache.insert("BTC".to_string(), 73_000.0);

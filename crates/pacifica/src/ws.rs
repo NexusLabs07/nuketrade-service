@@ -2,7 +2,6 @@
 
 use crate::PacificaExchange;
 use perp_core::{
-    token_list::TOKEN_LIST,
     types::MarketFeedUpdate,
     ws::{WsConfig, run_funding_feed},
 };
@@ -52,7 +51,8 @@ pub async fn start_pacifica_funding_feed(
         use_custom_ws_config: true,
     };
 
-    let symbols: Vec<&str> = TOKEN_LIST.iter().map(|s| &**s).collect();
+    // Pacifica's prices subscription ignores per-symbol inputs and streams all markets.
+    let symbols: [&str; 0] = [];
 
     run_funding_feed(exchange, db_conn, feed_tx, config, &symbols).await;
 }
