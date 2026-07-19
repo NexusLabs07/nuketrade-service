@@ -1,4 +1,5 @@
-pub mod automation;
+// [automation disabled] incomplete — automation models/queries out of the build
+// pub mod automation;
 pub mod funding;
 pub mod wallet;
 
