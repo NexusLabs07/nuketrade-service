@@ -122,7 +122,10 @@ impl PacificaClient {
         // signing-envelope fields merged together.
         let mut body = serde_json::Map::new();
         body.insert("account".into(), Value::String(account.to_string()));
-        body.insert("agent_wallet".into(), Value::String(agent_wallet.to_string()));
+        body.insert(
+            "agent_wallet".into(),
+            Value::String(agent_wallet.to_string()),
+        );
         body.insert("signature".into(), Value::String(signature_b58));
         body.insert("timestamp".into(), Value::Number(timestamp_ms.into()));
         body.insert(
@@ -130,7 +133,10 @@ impl PacificaClient {
             Value::Number(DEFAULT_EXPIRY_WINDOW_MS.into()),
         );
         body.insert("symbol".into(), Value::String(params.symbol.clone()));
-        body.insert("side".into(), Value::String(params.side.as_str().to_string()));
+        body.insert(
+            "side".into(),
+            Value::String(params.side.as_str().to_string()),
+        );
         body.insert("amount".into(), Value::String(params.amount.clone()));
         body.insert(
             "slippage_percent".into(),
@@ -166,8 +172,68 @@ impl PacificaClient {
             return Err(anyhow!("Pacifica HTTP {status}: {text}"));
         }
 
-        serde_json::from_str(&text).context("decoding Pacifica response as JSON")
+        let response_json: Value =
+            serde_json::from_str(&text).context("decoding Pacifica response as JSON")?;
+
+        validate_create_market_order_response(&response_json, params)?;
+
+        Ok(response_json)
     }
+}
+
+/// Validates Pacifica's application-level acknowledgement after HTTP success.
+///
+/// A 2xx status only confirms that the transport succeeded. Pacifica documents
+/// a successful market-order acknowledgement as code=200 with an exchange order
+/// id and the requested symbol. Rejecting incomplete or mismatched payloads
+/// prevents the automation layer from recording an order as accepted when the
+/// venue rejected it at the business-logic layer.
+fn validate_create_market_order_response(
+    response: &Value,
+    params: &MarketOrderParams,
+) -> Result<()> {
+    let code = response.get("code").and_then(Value::as_i64);
+    if code != Some(200) {
+        return Err(anyhow!(
+            "Pacifica rejected market order with application code {:?}",
+            code
+        ));
+    }
+
+    let response_type = response.get("type").and_then(Value::as_str);
+    if response_type != Some(SIGNATURE_TYPE_CREATE_MARKET) {
+        return Err(anyhow!(
+            "Pacifica returned unexpected response type {:?}",
+            response_type
+        ));
+    }
+
+    let data = response
+        .get("data")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("Pacifica success response is missing data"))?;
+
+    if data.get("i").and_then(Value::as_u64).is_none() {
+        return Err(anyhow!(
+            "Pacifica success response is missing the exchange order id"
+        ));
+    }
+
+    if data.get("s").and_then(Value::as_str) != Some(params.symbol.as_str()) {
+        return Err(anyhow!(
+            "Pacifica success response symbol does not match requested symbol"
+        ));
+    }
+
+    if let Some(expected_cloid) = &params.client_order_id {
+        if data.get("I").and_then(Value::as_str) != Some(expected_cloid.as_str()) {
+            return Err(anyhow!(
+                "Pacifica success response client order id does not match request"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
