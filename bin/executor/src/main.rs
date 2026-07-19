@@ -9,7 +9,8 @@ use tokio_cron_scheduler::JobScheduler;
 use db::connect_db;
 use executor::{
     SevenDayApr,
-    automation_worker::{AutomationWorkerConfig, run_automation_worker},
+    // [automation disabled] incomplete — not wired up for now
+    // automation_worker::{AutomationWorkerConfig, run_automation_worker},
     cron::calculate_best_pair,
     feed_manager::run_feed_manager,
 };
@@ -164,31 +165,31 @@ async fn main() -> anyhow::Result<()> {
 
     drop(feed_tx);
 
-    // Automation worker: replaces the planned (never-built) Node executor
-    // referenced in V13. Per intent, looks up the user's HL agent wallet
-    // from `hl_agent_wallets`, signs via Turnkey, POSTs to HL. Off by
-    // default; enable with AUTOMATION_WORKER_ENABLED=true.
-    if config.automation_worker_enabled {
-        let worker_cfg = AutomationWorkerConfig::from_config(&config);
-        let config_arc = Arc::new(config.clone());
-        let db_worker = db.clone();
-        let feed_rx_worker = watch_rx.clone();
-        let seven_day_rx_worker = seven_day_apr_rx.clone();
-        tokio::spawn(async move {
-            run_automation_worker(
-                worker_cfg,
-                config_arc,
-                db_worker,
-                feed_rx_worker,
-                seven_day_rx_worker,
-            )
-            .await;
-        });
-    } else {
-        log::info!(
-            "automation worker disabled (set AUTOMATION_WORKER_ENABLED=true to enable)"
-        );
-    }
+    // [automation disabled] The automation worker + per-user agent-wallet flow
+    // is incomplete and not working yet, so it is fully commented out for now.
+    // Re-enable together with the server-side automation feature (see
+    // `[automation disabled]` tags across the workspace).
+    // if config.automation_worker_enabled {
+    //     let worker_cfg = AutomationWorkerConfig::from_config(&config);
+    //     let config_arc = Arc::new(config.clone());
+    //     let db_worker = db.clone();
+    //     let feed_rx_worker = watch_rx.clone();
+    //     let seven_day_rx_worker = seven_day_apr_rx.clone();
+    //     tokio::spawn(async move {
+    //         run_automation_worker(
+    //             worker_cfg,
+    //             config_arc,
+    //             db_worker,
+    //             feed_rx_worker,
+    //             seven_day_rx_worker,
+    //         )
+    //         .await;
+    //     });
+    // } else {
+    //     log::info!(
+    //         "automation worker disabled (set AUTOMATION_WORKER_ENABLED=true to enable)"
+    //     );
+    // }
 
     run_server(config, db, watch_rx, seven_day_apr_rx).await?;
 

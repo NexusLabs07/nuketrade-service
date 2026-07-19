@@ -1,5 +1,6 @@
 pub use perp_core::types::{PairSpread, SevenDayApr};
 
-pub mod automation_worker;
+// [automation disabled] incomplete — module kept on disk but out of the build
+// pub mod automation_worker;
 pub mod cron;
 pub mod feed_manager;
