@@ -35,43 +35,6 @@ pub async fn require_internal_auth(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, AppError> {
-    // Temporary local-testing bypass: when set, internal automation endpoints
-    // require no auth at all. Must be present in the **Rust process** env (e.g.
-    // repo-root `.env` loaded by `bin/executor`, or exported before `cargo run`).
-    // Setting this only in Node's `.env` has no effect on Rust.
-    // This escape hatch exists solely for local development. A release build
-    // must never expose internal endpoints without authentication, even when a
-    // deployment environment accidentally sets DISABLE_AUTOMATION_AUTH.
-    let bypass_requested = std::env::var("DISABLE_AUTOMATION_AUTH")
-        .ok()
-        .is_some_and(|value| {
-            let value = value.trim();
-            value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes")
-        });
-
-    if bypass_requested {
-        let local_environment = std::env::var("APP_ENV").ok().is_some_and(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "development" | "dev" | "test"
-            )
-        });
-
-        if cfg!(debug_assertions) && local_environment {
-            log::warn!(
-                "DISABLE_AUTOMATION_AUTH is enabled for a local debug build; \
-                 internal automation endpoints are unauthenticated"
-            );
-            return Ok(next.run(request).await);
-        }
-
-        log::error!("Ignoring DISABLE_AUTOMATION_AUTH outside a local debug environment");
-
-        return Err(AppError::unauthorised(
-            "automation internal authentication cannot be disabled in this environment",
-        ));
-    }
-
     let configured = state
         .config
         .automation_internal_token

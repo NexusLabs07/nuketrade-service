@@ -10,23 +10,9 @@ This document defines the **public** automation API exposed by the Rust service 
 
 ## Auth
 
-### Normal mode (production)
-
 Send a user JWT:
 
 - Header: `Authorization: Bearer <USER_JWT>`
-
-### Local testing mode (auth disabled for automation only)
-
-If Rust is started with:
-
-- `DISABLE_AUTOMATION_AUTH=1` (or `true`)
-
-Then `/automation/*` does **not** require a JWT, but you must send:
-
-- Header: `X-User-Id: <uuid>`
-
-If you omit `X-User-Id`, Rust returns 401.
 
 ---
 
@@ -388,9 +374,7 @@ These are mounted at `/internal/automation/*` and are polled by the external Nod
 - GET `/internal/automation/intents/due?limit=N`
 - POST `/internal/automation/intents/{intentId}/result`
 
-In normal mode these require:
+These require:
 
 - `Authorization: Bearer <AUTOMATION_INTERNAL_TOKEN>`
-
-In local testing mode (`DISABLE_AUTOMATION_AUTH=1`) they require no auth.
 
