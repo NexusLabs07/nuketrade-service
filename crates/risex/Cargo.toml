@@ -1,0 +1,22 @@
+[package]
+name = "risex"
+description = "Read-only RiseX market and funding-rate integration"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+db = { path = "../db" }
+perp_core = { path = "../core" }

@@ -13,6 +13,7 @@ pub enum PerpetualExchange {
     // Lighter,
     Pacifica,
     Phoenix,
+    RiseX,
 }
 
 impl PerpetualExchange {
@@ -34,6 +35,7 @@ impl PerpetualExchange {
             // PerpetualExchange::Lighter => "lighter",
             PerpetualExchange::Pacifica => "pacifica",
             PerpetualExchange::Phoenix => "phoenix",
+            PerpetualExchange::RiseX => "risex",
         }
     }
 
@@ -46,6 +48,7 @@ impl PerpetualExchange {
             PerpetualExchange::Pacifica => Some(Chain::SOLANA),
             // PerpetualExchange::Lighter => Some(Chain::ETHEREUM),
             PerpetualExchange::Phoenix => Some(Chain::SOLANA),
+            PerpetualExchange::RiseX => Some(Chain::RISE),
         }
     }
 
@@ -63,6 +66,7 @@ impl PerpetualExchange {
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
             PerpetualExchange::Phoenix => None,
+            PerpetualExchange::RiseX => None,
             // PerpetualExchange::Lighter => Some("BRIDGE_SOL_TO_ETH"),
         }
     }
@@ -75,6 +79,7 @@ impl PerpetualExchange {
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
             PerpetualExchange::Phoenix => Some("DEPOSIT_TO_PHOENIX"),
+            PerpetualExchange::RiseX => None,
             // PerpetualExchange::Lighter => Some("DEPOSIT_TO_LIGHTER"),
         }
     }
@@ -84,7 +89,7 @@ impl PerpetualExchange {
         match self {
             // [backpack/lighter disabled]
             // PerpetualExchange::Hyperliquid | PerpetualExchange::Lighter => AddressType::Evm,
-            PerpetualExchange::Hyperliquid => AddressType::Evm,
+            PerpetualExchange::Hyperliquid | PerpetualExchange::RiseX => AddressType::Evm,
             PerpetualExchange::Pacifica
             // | PerpetualExchange::Backpack
             | PerpetualExchange::Phoenix => AddressType::Solana,

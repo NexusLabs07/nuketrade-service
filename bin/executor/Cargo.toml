@@ -31,3 +31,4 @@ pacifica = { path = "../../crates/pacifica" }
 # backpack ={ path = "../../crates/backpack" }
 # lighter = { path = "../../crates/lighter" }
 phoenix = { path = "../../crates/phoenix" }
+risex = { path = "../../crates/risex" }

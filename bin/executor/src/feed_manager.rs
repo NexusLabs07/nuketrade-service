@@ -17,6 +17,7 @@ pub async fn run_feed_manager(
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
     phoenix_leverage: HashMap<String, u32>,
+    risex_leverage: HashMap<String, u32>,
     // [backpack/lighter disabled]
     // backpack_leverage: HashMap<String, u32>,
     // lighter_leverage: HashMap<String, u32>,
@@ -44,6 +45,7 @@ pub async fn run_feed_manager(
                                     hyperliquid: None,
                                     pacifica: None,
                                     phoenix: None,
+                                    risex: None,
                                     // lighter: None,
                                 });
 
@@ -57,6 +59,7 @@ pub async fn run_feed_manager(
                                     PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
                                     PerpetualExchange::Phoenix => phoenix_leverage.get(&symbol).copied(),
+                                    PerpetualExchange::RiseX => risex_leverage.get(&symbol).copied()
                                     // PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
                                 },
                             };
@@ -67,6 +70,7 @@ pub async fn run_feed_manager(
                                 PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
                                 PerpetualExchange::Pacifica => entry.pacifica = Some(value),
                                 PerpetualExchange::Phoenix => entry.phoenix = Some(value),
+                                PerpetualExchange::RiseX => entry.risex = Some(value)
                                 // PerpetualExchange::Lighter => entry.lighter = Some(value),
                             }
 
