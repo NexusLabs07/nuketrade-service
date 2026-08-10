@@ -172,10 +172,7 @@ impl TraderStateResponse {
             return effective;
         }
 
-        traders
-            .iter()
-            .map(|t| t.deposited_collateral_usd())
-            .sum()
+        traders.iter().map(|t| t.deposited_collateral_usd()).sum()
     }
 }
 

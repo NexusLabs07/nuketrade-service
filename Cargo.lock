@@ -3662,12 +3662,15 @@ dependencies = [
  "anyhow",
  "chrono",
  "db",
+ "futures-util",
  "log",
  "perp_core",
  "reqwest",
  "serde",
+ "serde_json",
  "sqlx",
  "tokio",
+ "tokio-tungstenite",
  "uuid",
 ]
 

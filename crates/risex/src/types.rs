@@ -1,12 +1,15 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 
 use perp_core::token_list::TOKEN_LIST;
 
-/// minimal envelope returned by `GET /v1/markets`
+/// Minimal envelope returned by `GET /v1/markets`.
 ///
-/// RiseX is actively evolving this response. We deserialize only fields needed
-/// by Nuketrade so additive upstream changes remain backwards compatible
+/// RiseX is actively evolving this response. Only fields required by the
+/// read-only feed are deserialized so additive upstream changes remain
+/// backwards compatible.
 #[derive(Debug, Deserialize)]
 pub(crate) struct RiseXMarketsEnvelope {
     pub data: RiseXMarketsData,
@@ -19,6 +22,7 @@ pub(crate) struct RiseXMarketsData {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct RiseXWireMarket {
+    pub market_id: String,
     pub config: RiseXWireMarketConfig,
     pub mark_price: String,
     pub current_funding_rate: String,
@@ -32,26 +36,66 @@ pub(crate) struct RiseXWireMarketConfig {
     pub unlocked: bool,
 }
 
-/// validated market values consumed by Nuketrade's shared feed pipeline
+/// Validated market metadata consumed by Nuketrade's shared feed pipeline.
 #[derive(Debug, Clone)]
 pub struct RiseXMarketSnapshot {
+    /// RiseX numeric market identifier used by its WebSocket channels.
+    pub market_id: u64,
+
+    /// Nuketrade-normalized base symbol, such as `BTC`.
     pub symbol: String,
+
+    /// Human-readable mark price.
     pub mark_price: f64,
 
-    /// native one hour funding rate
+    /// RiseX native one-hour funding rate.
     ///
-    /// This must not be replaced by RiseX's separate `funding_rate_8h` field.
+    /// This must not be replaced by the separate `funding_rate_8h` field.
     pub hourly_funding_rate: f64,
 
     pub max_leverage: u32,
+}
+
+/// Generic RiseX WebSocket envelope.
+///
+/// Subscription acknowledgements and oracle updates share the same outer
+/// envelope, so all control fields remain optional.
+#[derive(Debug, Deserialize)]
+pub(crate) struct RiseXSocketEnvelope {
+    pub channel: Option<String>,
+
+    #[serde(rename = "type")]
+    pub message_type: Option<String>,
+
+    pub status: Option<String>,
+    pub message: Option<String>,
+
+    #[serde(default)]
+    pub data: RiseXOracleData,
+}
+
+/// Oracle-channel payload.
+///
+/// Prices are keyed by RiseX market ID. Values use 18-decimal fixed-point
+/// encoding rather than human-readable decimal strings.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct RiseXOracleData {
+    #[serde(default)]
+    pub prices: HashMap<String, RiseXOraclePrice>,
+}
+
+/// Price values published by the RiseX oracle WebSocket channel.
+#[derive(Debug, Deserialize)]
+pub(crate) struct RiseXOraclePrice {
+    pub mark_price: String,
 }
 
 impl RiseXWireMarket {
     /// Convert an upstream market into Nuketrade's validated representation.
     ///
     /// Locked, inactive, and non-allowlisted markets are intentionally omitted.
-    /// Invalid numeric values fail this market only; the client logs and skips
-    /// it without dropping otherwise valid markets from the same response.
+    /// Invalid numeric values fail only the affected market; the client logs and
+    /// skips it without suppressing valid markets from the same response.
     pub(crate) fn into_snapshot(self) -> Result<Option<RiseXMarketSnapshot>> {
         if !self.active || !self.config.unlocked {
             return Ok(None);
@@ -69,6 +113,11 @@ impl RiseXWireMarket {
             return Ok(None);
         }
 
+        let market_id = self
+            .market_id
+            .parse::<u64>()
+            .with_context(|| format!("invalid market ID for RiseX {symbol}"))?;
+
         let mark_price = self
             .mark_price
             .parse::<f64>()
@@ -85,6 +134,8 @@ impl RiseXWireMarket {
             .parse::<u32>()
             .with_context(|| format!("invalid max leverage for RiseX {symbol}"))?;
 
+        ensure!(market_id > 0, "zero market ID for RiseX {symbol}");
+
         ensure!(
             mark_price.is_finite() && mark_price > 0.0,
             "non-positive or non-finite mark price for RiseX {symbol}"
@@ -98,6 +149,7 @@ impl RiseXWireMarket {
         ensure!(max_leverage > 0, "zero max leverage for RiseX {symbol}");
 
         Ok(Some(RiseXMarketSnapshot {
+            market_id,
             symbol,
             mark_price,
             hourly_funding_rate,

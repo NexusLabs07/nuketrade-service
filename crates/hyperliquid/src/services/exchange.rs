@@ -114,9 +114,7 @@ pub enum ExchangeAction {
         grouping: String,
     },
     /// Cancel by (asset, order id) pairs.
-    Cancel {
-        cancels: Vec<CancelRequest>,
-    },
+    Cancel { cancels: Vec<CancelRequest> },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,10 +190,7 @@ impl HlClient {
             .context("HL HTTP request failed")?;
 
         let status = response.status();
-        let text = response
-            .text()
-            .await
-            .context("reading HL response body")?;
+        let text = response.text().await.context("reading HL response body")?;
 
         if !status.is_success() {
             return Err(anyhow!("HL HTTP {status}: {text}"));
@@ -233,11 +228,7 @@ fn msgpack_encode<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn compute_action_hash(
-    action_bytes: &[u8],
-    nonce_ms: u64,
-    vault: Option<Address>,
-) -> [u8; 32] {
+fn compute_action_hash(action_bytes: &[u8], nonce_ms: u64, vault: Option<Address>) -> [u8; 32] {
     let mut buf = Vec::with_capacity(action_bytes.len() + 8 + 21);
     buf.extend_from_slice(action_bytes);
     buf.extend_from_slice(&nonce_ms.to_be_bytes());
