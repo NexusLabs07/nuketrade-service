@@ -7,13 +7,20 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
+/// Rounds funding rates to a stable database/API precision while preserving
+/// small hourly rates.
 fn round_rate(value: f64) -> f64 {
     (value * 1e12).round() / 1e12
 }
 
+/// Merges incremental venue updates into one immutable, symbol-indexed feed.
+///
+/// Each exchange owns only its field in a market row. An update from Bulk, for
+/// example, cannot overwrite Hyperliquid, Pacifica, or Phoenix data.
 pub async fn run_feed_manager(
     mut feed_rx: mpsc::Receiver<MarketFeedUpdate>,
     watch_tx: watch::Sender<Arc<FeedSnapshot>>,
+    bulk_leverage: HashMap<String, u32>,
     hl_leverage: HashMap<String, u32>,
     pacifica_leverage: HashMap<String, u32>,
     phoenix_leverage: HashMap<String, u32>,
@@ -39,35 +46,71 @@ pub async fn run_feed_manager(
                                 .entry(symbol.clone())
                                 .or_insert_with(|| LiveMarketFeedResponse {
                                     symbol: symbol.clone(),
-                                    // [backpack/lighter disabled]
-                                    // backpack: None,
+                                    bulk: None,
                                     hyperliquid: None,
                                     pacifica: None,
                                     phoenix: None,
+
+                                    // [backpack/lighter disabled]
+                                    // backpack: None,
                                     // lighter: None,
                                 });
-
 
                             let value = MarketFeedValueStruct {
                                 mark_px: Some(mark_px),
                                 funding: Some(round_rate(funding_rate)),
+
                                 max_leverage: match &update.exchange {
+                                    PerpetualExchange::Bulk => {
+                                        bulk_leverage.get(&symbol).copied()
+                                    }
+
+                                    PerpetualExchange::Hyperliquid => {
+                                        hl_leverage.get(&symbol).copied()
+                                    }
+
+                                    PerpetualExchange::Pacifica => {
+                                        pacifica_leverage.get(&symbol).copied()
+                                    }
+
+                                    PerpetualExchange::Phoenix => {
+                                        phoenix_leverage.get(&symbol).copied()
+                                    }
+
                                     // [backpack/lighter disabled]
-                                    // PerpetualExchange::Backpack => backpack_leverage.get(&symbol).copied(),
-                                    PerpetualExchange::Hyperliquid => hl_leverage.get(&symbol).copied(),
-                                    PerpetualExchange::Pacifica => pacifica_leverage.get(&symbol).copied(),
-                                    PerpetualExchange::Phoenix => phoenix_leverage.get(&symbol).copied(),
-                                    // PerpetualExchange::Lighter => lighter_leverage.get(&symbol).copied(),
+                                    // PerpetualExchange::Backpack => {
+                                    //     backpack_leverage.get(&symbol).copied()
+                                    // }
+                                    // PerpetualExchange::Lighter => {
+                                    //     lighter_leverage.get(&symbol).copied()
+                                    // }
                                 },
                             };
 
                             match &update.exchange {
+                                PerpetualExchange::Bulk => {
+                                    entry.bulk = Some(value);
+                                }
+
+                                PerpetualExchange::Hyperliquid => {
+                                    entry.hyperliquid = Some(value);
+                                }
+
+                                PerpetualExchange::Pacifica => {
+                                    entry.pacifica = Some(value);
+                                }
+
+                                PerpetualExchange::Phoenix => {
+                                    entry.phoenix = Some(value);
+                                }
+
                                 // [backpack/lighter disabled]
-                                // PerpetualExchange::Backpack => entry.backpack = Some(value),
-                                PerpetualExchange::Hyperliquid => entry.hyperliquid = Some(value),
-                                PerpetualExchange::Pacifica => entry.pacifica = Some(value),
-                                PerpetualExchange::Phoenix => entry.phoenix = Some(value),
-                                // PerpetualExchange::Lighter => entry.lighter = Some(value),
+                                // PerpetualExchange::Backpack => {
+                                //     entry.backpack = Some(value);
+                                // }
+                                // PerpetualExchange::Lighter => {
+                                //     entry.lighter = Some(value);
+                                // }
                             }
 
                             changed = true;
@@ -77,8 +120,11 @@ pub async fn run_feed_manager(
                             dirty = true;
                         }
                     }
+
                     None => {
-                        log::info!("All feed senders dropped, FeedManager shutting down");
+                        log::info!(
+                            "All feed senders dropped, FeedManager shutting down"
+                        );
                         break;
                     }
                 }
@@ -88,10 +134,15 @@ pub async fn run_feed_manager(
                 if !dirty {
                     continue;
                 }
+
                 dirty = false;
 
-                let mut formatted: Vec<LiveMarketFeedResponse> = by_symbol.values().cloned().collect();
-                formatted.sort_unstable_by(|a, b| a.symbol.cmp(&b.symbol));
+                let mut formatted: Vec<LiveMarketFeedResponse> =
+                    by_symbol.values().cloned().collect();
+
+                formatted.sort_unstable_by(|left, right| {
+                    left.symbol.cmp(&right.symbol)
+                });
 
                 let snapshot = Arc::new(FeedSnapshot {
                     by_symbol: by_symbol.clone(),
@@ -99,7 +150,9 @@ pub async fn run_feed_manager(
                 });
 
                 if watch_tx.send(snapshot).is_err() {
-                    log::warn!("All feed receivers dropped, FeedManager shutting down");
+                    log::warn!(
+                        "All feed receivers dropped, FeedManager shutting down"
+                    );
                     break;
                 }
             }
