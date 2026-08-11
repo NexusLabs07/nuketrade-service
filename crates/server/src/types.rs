@@ -12,6 +12,7 @@ pub struct MarketFeedValueStruct {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveMarketFeedResponse {
     pub symbol: String,
+    pub bulk: Option<MarketFeedValueStruct>,
     pub hyperliquid: Option<MarketFeedValueStruct>,
     pub pacifica: Option<MarketFeedValueStruct>,
     pub phoenix: Option<MarketFeedValueStruct>,

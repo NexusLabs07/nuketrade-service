@@ -3,9 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Context;
 // [backpack/lighter disabled]
 // use backpack::BackpackExchange;
-use tokio::sync::{mpsc, watch};
-use tokio_cron_scheduler::JobScheduler;
-
+use bulk::BulkExchange;
 use db::connect_db;
 use executor::{
     SevenDayApr,
@@ -15,6 +13,8 @@ use executor::{
     feed_manager::run_feed_manager,
 };
 use hyperliquid::helpers::markets::HL_MARKETS;
+use tokio::sync::{mpsc, watch};
+use tokio_cron_scheduler::JobScheduler;
 // [backpack/lighter disabled]
 // use lighter::LighterExchange;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
@@ -60,6 +60,23 @@ async fn main() -> anyhow::Result<()> {
 
     let scheduler = JobScheduler::new().await?;
     calculate_best_pair(db.clone(), scheduler, seven_day_apr_tx).await?;
+
+    // Bulk market rules are discovered dynamically because symbols, precision,
+    // and leverage may change independently of this backend deployment.
+    let bulk_leverage = match BulkExchange::new().fetch_max_leverage_map().await {
+        Ok(map) => map,
+
+        Err(error) => {
+            // Feed startup performs its own retry. An empty leverage map here
+            // therefore removes only the optional max-leverage display value;
+            // it does not prevent Bulk prices and funding from being consumed.
+            log::warn!(
+                "Bulk: failed to fetch leverage metadata, continuing with empty map: {error}"
+            );
+
+            HashMap::new()
+        }
+    };
 
     let mut hl_leverage: HashMap<String, u32> = HashMap::new();
     for market in HL_MARKETS.iter() {
@@ -136,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(run_feed_manager(
         feed_rx,
         watch_tx,
+        bulk_leverage,
         hl_leverage,
         pacifica_leverage,
         phoenix_leverage,
@@ -173,6 +191,14 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(async move {
         risex::start_risex_funding_feed(risex_client, db_clone_risex, feed_tx_clone_risex).await;
+    });
+
+    log::info!("Starting Bulk live feed....");
+    let db_clone_bulk = db.clone();
+    let feed_tx_clone_bulk = feed_tx.clone();
+
+    tokio::spawn(async move {
+        bulk::start_bulk_funding_feed(db_clone_bulk, feed_tx_clone_bulk).await;
     });
 
     // [backpack/lighter disabled]

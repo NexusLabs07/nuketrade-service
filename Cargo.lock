@@ -1127,6 +1127,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bulk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "perp_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1750,6 +1764,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bulk",
  "chrono",
  "db",
  "dotenv",
