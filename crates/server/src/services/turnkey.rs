@@ -112,8 +112,7 @@ impl TurnkeyClient {
             }
         });
 
-        let resp: SignRawPayloadResponse =
-            self.stamped_post(SIGN_RAW_PAYLOAD_PATH, &body).await?;
+        let resp: SignRawPayloadResponse = self.stamped_post(SIGN_RAW_PAYLOAD_PATH, &body).await?;
 
         if resp.activity.status != "ACTIVITY_STATUS_COMPLETED" {
             return Err(anyhow!(

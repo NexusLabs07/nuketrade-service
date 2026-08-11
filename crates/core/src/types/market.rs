@@ -27,6 +27,7 @@ pub struct RawMarketData {
     pub hyperliquid: HashMap<String, (f64, f64)>,
     // pub lighter: HashMap<String, (f64, f64)>,
     pub pacifica: HashMap<String, (f64, f64)>,
+    pub risex: HashMap<String, (f64, f64)>,
 }
 
 pub type LiveMarketFeed = RawMarketData;

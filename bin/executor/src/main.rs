@@ -20,6 +20,7 @@ use tokio_cron_scheduler::JobScheduler;
 use pacifica::helpers::markets::PACIFICA_MARKETS;
 use perp_core::{MarketFeedUpdate, config::Config};
 use phoenix::PhoenixExchange;
+use risex::RiseXClient;
 use server::{run_server, types::FeedSnapshot};
 
 #[tokio::main]
@@ -125,6 +126,22 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
+    let risex_client = RiseXClient::from_env();
+
+    let risex_leverage = match risex_client.fetch_max_leverage_map().await {
+        Ok(map) => map,
+        Err(err) => {
+            // RiseX is an optional read-only feed. A venue outage must not
+            // prevent the existing executor and API from starting.
+            log::warn!(
+                "RiseX: failed to fetch leverage metadata, \
+             continuing with empty map: {err}"
+            );
+
+            HashMap::new()
+        }
+    };
+
     let (feed_tx, feed_rx) = mpsc::channel::<MarketFeedUpdate>(256);
 
     let initial_snapshot = Arc::new(FeedSnapshot {
@@ -140,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
         hl_leverage,
         pacifica_leverage,
         phoenix_leverage,
+        risex_leverage,
         // [backpack/lighter disabled]
         // backpack_leverage,
         // lighter_leverage,
@@ -164,6 +182,15 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_phoenix = feed_tx.clone();
     tokio::spawn(async move {
         phoenix::start_phoenix_funding_feed(db_clone_phoenix, feed_tx_clone_phoenix).await;
+    });
+
+    log::info!("Starting RiseX read-only market feed....");
+
+    let db_clone_risex = db.clone();
+    let feed_tx_clone_risex = feed_tx.clone();
+
+    tokio::spawn(async move {
+        risex::start_risex_funding_feed(risex_client, db_clone_risex, feed_tx_clone_risex).await;
     });
 
     log::info!("Starting Bulk live feed....");

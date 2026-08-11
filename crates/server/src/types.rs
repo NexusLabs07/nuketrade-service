@@ -16,6 +16,7 @@ pub struct LiveMarketFeedResponse {
     pub hyperliquid: Option<MarketFeedValueStruct>,
     pub pacifica: Option<MarketFeedValueStruct>,
     pub phoenix: Option<MarketFeedValueStruct>,
+    pub risex: Option<MarketFeedValueStruct>,
     // [backpack/lighter disabled]
     // pub backpack: Option<MarketFeedValueStruct>,
     // pub lighter: Option<MarketFeedValueStruct>,

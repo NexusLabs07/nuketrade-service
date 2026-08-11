@@ -1773,6 +1773,7 @@ dependencies = [
  "pacifica",
  "perp_core",
  "phoenix",
+ "risex",
  "serde_json",
  "server",
  "sqlx",
@@ -3667,6 +3668,25 @@ dependencies = [
  "libc",
  "untrusted 0.9.0",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "risex"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "db",
+ "futures-util",
+ "log",
+ "perp_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-tungstenite",
+ "uuid",
 ]
 
 [[package]]

@@ -72,8 +72,8 @@ impl Config {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(10);
-        let automation_worker_id = std::env::var("AUTOMATION_WORKER_ID")
-            .unwrap_or_else(|_| "rust-executor".to_string());
+        let automation_worker_id =
+            std::env::var("AUTOMATION_WORKER_ID").unwrap_or_else(|_| "rust-executor".to_string());
 
         Ok(Self {
             db_url,

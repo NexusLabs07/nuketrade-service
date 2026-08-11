@@ -98,8 +98,8 @@ pub fn get_max_leverage(symbol: &str) -> Option<u32> {
 /// because HL's order action uses positions in the original array; the
 /// `HL_MARKETS` Vec drops delisted assets and would shift downstream indices.
 pub static HL_ASSET_INDEX: Lazy<HashMap<String, u32>> = Lazy::new(|| {
-    let parsed: Vec<Value> = serde_json::from_str(PERP_META)
-        .expect("Failed to parse PERP_META as array");
+    let parsed: Vec<Value> =
+        serde_json::from_str(PERP_META).expect("Failed to parse PERP_META as array");
     let first = parsed
         .into_iter()
         .next()

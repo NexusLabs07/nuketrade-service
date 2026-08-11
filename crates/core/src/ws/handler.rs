@@ -322,14 +322,8 @@ async fn drain_inbound<E: Exchange>(
         match tokio::time::timeout(DRAIN_WAIT, read.next()).await {
             Ok(Some(Ok(msg))) => {
                 let (keep_alive, updates) = handle_message(msg, write, exchange, symbols).await;
-                apply_funding_updates(
-                    updates,
-                    last_snapshot,
-                    last_update,
-                    feed_tx,
-                    perp_exchange,
-                )
-                .await;
+                apply_funding_updates(updates, last_snapshot, last_update, feed_tx, perp_exchange)
+                    .await;
                 if !keep_alive {
                     log::warn!("{exchange_name}: Connection closed while draining inbound");
                     return false;

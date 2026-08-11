@@ -30,9 +30,22 @@ impl Chain {
         usdc_address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     };
 
+    /// RISE mainnet. The collateral address is the USDC quote token currently
+    /// reported by the production RiseX market configuration.
+    pub const RISE: Chain = Chain {
+        id: 4153,
+        name: "RISE",
+        usdc_address: "0xe436820ba0c69702c1d3e601d421c0ef38262739",
+    };
+
     /// All supported chains for iteration
-    pub const ALL: &'static [Chain] =
-        &[Chain::ARBITRUM, Chain::BASE, Chain::ETHEREUM, Chain::SOLANA];
+    pub const ALL: &'static [Chain] = &[
+        Chain::ARBITRUM,
+        Chain::BASE,
+        Chain::ETHEREUM,
+        Chain::SOLANA,
+        Chain::RISE,
+    ];
 
     /// Find a chain by its ID
     pub fn from_id(chain_id: u64) -> Option<&'static Chain> {

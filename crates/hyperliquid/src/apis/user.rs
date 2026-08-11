@@ -314,9 +314,6 @@ mod portfolio_tests {
                 },
             ),
         ];
-        assert_eq!(
-            portfolio_all_time_volume_usd(&periods),
-            Some(19965.109584)
-        );
+        assert_eq!(portfolio_all_time_volume_usd(&periods), Some(19965.109584));
     }
 }
