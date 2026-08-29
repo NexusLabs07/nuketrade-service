@@ -179,13 +179,12 @@ pub async fn get_7d_hourly_rates(db: Arc<PgPool>) -> Result<Vec<HourlyFundingRat
         ORDER BY symbol, ts_hour
     "#;
 
+    // Propagate query failures so the caller can retain the last valid snapshot.
+    // An empty successful result has a distinct meaning: no pair currently has
+    // the complete 168-hour coverage required for a seven-day recommendation.
     let rows = sqlx::query_as::<_, HourlyFundingRate>(query)
         .fetch_all(&*db)
-        .await
-        .unwrap_or_else(|e| {
-            log::error!("Failed to query 7d hourly rates: {e}");
-            vec![]
-        });
+        .await?;
 
     Ok(rows)
 }
