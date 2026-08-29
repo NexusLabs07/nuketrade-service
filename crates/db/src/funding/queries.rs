@@ -156,31 +156,36 @@ pub async fn get_7d_funding_stats(
 
     let rows = sqlx::query_as::<_, AverageFundingStats>(query)
         .fetch_all(&*db)
-        .await
-        .unwrap_or_else(|e| {
-            log::error!("Failed to query 7d funding stats: {e}");
-            vec![]
-        });
+        .await?;
 
     Ok(rows)
 }
 
 pub async fn get_7d_hourly_rates(db: Arc<PgPool>) -> Result<Vec<HourlyFundingRate>, anyhow::Error> {
     let query = r#"
-        SELECT symbol, platform, ts_hour, AVG(rate) AS rate
+        WITH bounds AS (
+            SELECT DATE_TRUNC('hour', NOW() AT TIME ZONE 'UTC') AS end_hour
+        )
+        SELECT
+            symbol,
+            platform,
+            ts_hour,
+            AVG(rate) AS rate,
+            bounds.end_hour AS window_end_hour
         FROM funding_rate
-        WHERE timestamp >= NOW() - INTERVAL '7 days'
-        GROUP BY symbol, platform, ts_hour
+        CROSS JOIN bounds
+        WHERE ts_hour >= bounds.end_hour - INTERVAL '168 hours'
+          AND ts_hour < bounds.end_hour
+        GROUP BY symbol, platform, ts_hour, bounds.end_hour
         ORDER BY symbol, ts_hour
     "#;
 
+    // Propagate query failures so the caller can retain the last valid snapshot.
+    // An empty successful result has a distinct meaning: no pair currently has
+    // enough synchronized coverage for a seven-day recommendation.
     let rows = sqlx::query_as::<_, HourlyFundingRate>(query)
         .fetch_all(&*db)
-        .await
-        .unwrap_or_else(|e| {
-            log::error!("Failed to query 7d hourly rates: {e}");
-            vec![]
-        });
+        .await?;
 
     Ok(rows)
 }

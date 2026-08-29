@@ -25,4 +25,6 @@ pub struct HourlyFundingRate {
     pub platform: String,
     pub ts_hour: chrono::NaiveDateTime,
     pub rate: f64,
+    /// Exclusive upper bound of the canonical trailing UTC-hour window.
+    pub window_end_hour: chrono::NaiveDateTime,
 }
