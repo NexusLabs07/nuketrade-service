@@ -167,9 +167,14 @@ pub async fn get_7d_funding_stats(
 
 pub async fn get_7d_hourly_rates(db: Arc<PgPool>) -> Result<Vec<HourlyFundingRate>, anyhow::Error> {
     let query = r#"
+        WITH bounds AS (
+            SELECT DATE_TRUNC('hour', NOW() AT TIME ZONE 'UTC') AS end_hour
+        )
         SELECT symbol, platform, ts_hour, AVG(rate) AS rate
         FROM funding_rate
-        WHERE timestamp >= NOW() - INTERVAL '7 days'
+        CROSS JOIN bounds
+        WHERE ts_hour >= bounds.end_hour - INTERVAL '168 hours'
+          AND ts_hour < bounds.end_hour
         GROUP BY symbol, platform, ts_hour
         ORDER BY symbol, ts_hour
     "#;
