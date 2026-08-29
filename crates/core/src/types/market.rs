@@ -43,8 +43,9 @@ pub struct MarketFeedUpdate {
 pub struct SevenDayApr {
     /// symbol -> platform -> avg_rate
     pub seven_day_avg_apr: HashMap<String, HashMap<String, f64>>,
-    /// Complete fixed-direction pair windows, ranked by seven-day gross return.
-    /// Symbols or directed pairs without exact 168-hour coverage are omitted.
+    /// Coverage-qualified fixed-direction windows, ranked by seven-day gross return.
+    /// Missing hours are never filled; pairs below the production coverage and
+    /// consecutive-gap limits are omitted.
     pub seven_day_spread_apr: HashMap<String, Vec<PairSpread>>,
 }
 
@@ -52,7 +53,9 @@ pub struct SevenDayApr {
 pub struct PairSpread {
     pub long_platform: String,
     pub short_platform: String,
-    /// Signed cumulative seven-day gross funding return in percentage points.
-    /// This value is not annualized and excludes all execution costs.
+    /// Signed, estimated 168-hour-equivalent gross return in percentage points.
+    /// Qualified partial windows normalize the synchronized observed-hour mean
+    /// without individually imputing missing rates. This value is not annualized
+    /// and excludes all execution costs.
     pub total_spread: f64,
 }
