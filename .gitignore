@@ -1,3 +1,5 @@
 /target
 
 .env
+# Local env backups (contain secrets)
+.env.*
