@@ -33,4 +33,6 @@ pub struct FeedSnapshot {
 pub struct FeedSnapshotResponse {
     pub feed: Vec<LiveMarketFeedResponse>,
     pub seven_day_apr: SevenDayApr,
+    /// Network identity of the Rust Bulk feed, checked by the TypeScript API.
+    pub bulk_network: String,
 }

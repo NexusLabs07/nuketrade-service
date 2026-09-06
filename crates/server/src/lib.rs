@@ -22,8 +22,9 @@ pub async fn run_server(
     db: Arc<PgPool>,
     feed_rx: watch::Receiver<Arc<FeedSnapshot>>,
     seven_day_apr: watch::Receiver<SevenDayApr>,
+    bulk_network: String,
 ) -> anyhow::Result<()> {
-    let app_state = AppState::new(config, db, feed_rx, seven_day_apr);
+    let app_state = AppState::new(config, db, feed_rx, seven_day_apr, bulk_network);
 
     let app = create_app(app_state);
 

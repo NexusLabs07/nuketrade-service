@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Context;
 // [backpack/lighter disabled]
 // use backpack::BackpackExchange;
-use bulk::BulkExchange;
+use bulk::{BulkExchange, BulkNetwork};
 use db::connect_db;
 use executor::{
     SevenDayApr,
@@ -36,6 +36,10 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let bulk_network = BulkNetwork::from_env()
+        .map_err(anyhow::Error::msg)
+        .context("invalid Bulk network configuration")?;
+
     log::info!("Engine starting....");
 
     log::info!("Running DB migrations....");
@@ -63,7 +67,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Bulk market rules are discovered dynamically because symbols, precision,
     // and leverage may change independently of this backend deployment.
-    let bulk_leverage = match BulkExchange::new().fetch_max_leverage_map().await {
+    let bulk_leverage = match BulkExchange::new(bulk_network)
+        .fetch_max_leverage_map()
+        .await
+    {
         Ok(map) => map,
 
         Err(error) => {
@@ -198,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
     let feed_tx_clone_bulk = feed_tx.clone();
 
     tokio::spawn(async move {
-        bulk::start_bulk_funding_feed(db_clone_bulk, feed_tx_clone_bulk).await;
+        bulk::start_bulk_funding_feed(db_clone_bulk, feed_tx_clone_bulk, bulk_network).await;
     });
 
     // [backpack/lighter disabled]
@@ -244,7 +251,14 @@ async fn main() -> anyhow::Result<()> {
     //     );
     // }
 
-    run_server(config, db, watch_rx, seven_day_apr_rx).await?;
+    run_server(
+        config,
+        db,
+        watch_rx,
+        seven_day_apr_rx,
+        bulk_network.as_str().to_string(),
+    )
+    .await?;
 
     Ok(())
 }

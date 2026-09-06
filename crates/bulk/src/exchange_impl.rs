@@ -9,7 +9,7 @@ use reqwest::Client;
 use serde_json::json;
 
 use crate::{
-    BULK_HTTP_URL, BULK_WS_URL,
+    BulkNetwork,
     types::{BulkAccountEntry, BulkFullAccount, BulkMarket, BulkWsMessage},
 };
 
@@ -32,15 +32,19 @@ pub struct BulkExchange {
 
 impl Default for BulkExchange {
     fn default() -> Self {
-        Self::new()
+        // The default is retained for local read-only compatibility. Runtime
+        // startup uses the explicit network-aware constructor.
+        Self::new(BulkNetwork::Testnet)
     }
 }
 
 impl BulkExchange {
-    /// Creates a client configured for Bulk's production HTTP and WebSocket
-    /// endpoints.
-    pub fn new() -> Self {
-        Self::with_urls(BULK_HTTP_URL.to_string(), BULK_WS_URL.to_string())
+    /// Creates a client configured for the selected Bulk network.
+    pub fn new(network: BulkNetwork) -> Self {
+        let config = network.config();
+        debug_assert!(config.validate().is_ok());
+
+        Self::with_urls(config.http_url.to_string(), config.ws_url.to_string())
     }
 
     /// Creates a client with explicit URLs.
@@ -58,10 +62,21 @@ impl BulkExchange {
 
     /// Creates the production client with previously discovered market data.
     pub fn with_markets(markets: Vec<MarketInfo>) -> Self {
+        // Retained as a testnet-compatible helper for existing read-only
+        // callers. Production feed startup uses `with_markets_for_network`.
+        Self::with_markets_for_network(BulkNetwork::Testnet, markets)
+    }
+
+    /// Creates a client for the selected network with previously discovered
+    /// market data.
+    pub fn with_markets_for_network(network: BulkNetwork, markets: Vec<MarketInfo>) -> Self {
+        let config = network.config();
+        debug_assert!(config.validate().is_ok());
+
         Self {
             client: Client::new(),
-            http_url: BULK_HTTP_URL.to_string(),
-            ws_url: BULK_WS_URL.to_string(),
+            http_url: config.http_url.to_string(),
+            ws_url: config.ws_url.to_string(),
             markets,
         }
     }

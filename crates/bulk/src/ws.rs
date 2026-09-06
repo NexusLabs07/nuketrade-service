@@ -8,7 +8,7 @@ use perp_core::{
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 
-use crate::BulkExchange;
+use crate::{BulkExchange, BulkNetwork};
 
 /// Starts Bulk's read-only ticker feed for the reviewed public asset universe.
 ///
@@ -26,8 +26,9 @@ use crate::BulkExchange;
 pub async fn start_bulk_funding_feed(
     db_conn: Arc<PgPool>,
     feed_tx: mpsc::Sender<MarketFeedUpdate>,
+    network: BulkNetwork,
 ) {
-    let base_exchange = BulkExchange::new();
+    let base_exchange = BulkExchange::new(network);
     let allowed: HashSet<&str> = TOKEN_LIST.iter().copied().collect();
 
     let config = WsConfig {
@@ -96,7 +97,10 @@ pub async fn start_bulk_funding_feed(
         exchange_symbols.len()
     );
 
-    let exchange = Arc::new(BulkExchange::with_markets(shared_markets));
+    let exchange = Arc::new(BulkExchange::with_markets_for_network(
+        network,
+        shared_markets,
+    ));
     let symbol_refs: Vec<&str> = exchange_symbols.iter().map(String::as_str).collect();
 
     run_funding_feed(exchange, db_conn, feed_tx, config, &symbol_refs).await;

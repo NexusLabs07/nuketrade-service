@@ -13,5 +13,6 @@ pub async fn get_feed_snapshot(State(state): State<AppState>) -> Json<FeedSnapsh
     Json(FeedSnapshotResponse {
         feed: snapshot.formatted.clone(),
         seven_day_apr,
+        bulk_network: state.bulk_network.clone(),
     })
 }
