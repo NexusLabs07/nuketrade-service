@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS bulk_deposit_intents (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     network VARCHAR(16) NOT NULL CHECK (network IN ('mainnet', 'testnet')),
     signer TEXT NOT NULL,
+    fee_payer TEXT NOT NULL,
     mint TEXT NOT NULL,
     program_id TEXT NOT NULL,
     user_token_account TEXT NOT NULL,
@@ -72,3 +73,16 @@ CREATE INDEX IF NOT EXISTS idx_bulk_deposit_intents_status_updated
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bulk_deposit_intents_solana_signature
     ON bulk_deposit_intents (network, solana_signature)
     WHERE solana_signature IS NOT NULL;
+
+-- Bulk activity history does not expose the originating Solana transaction
+-- signature. Serialize one non-terminal deposit per user and network so two
+-- equal-amount deposits cannot both claim the same activity row as credit.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bulk_deposit_intents_one_active_user
+    ON bulk_deposit_intents (user_id, network)
+    WHERE status IN (
+        'PREPARED',
+        'SUBMITTING',
+        'SOLANA_FINALIZED',
+        'CREDIT_PENDING',
+        'UNKNOWN'
+    );
