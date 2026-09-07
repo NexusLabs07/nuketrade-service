@@ -20,6 +20,7 @@ pub enum PerpetualExchange {
 impl PerpetualExchange {
     /// All exchanges that participate in hedging (bridge + deposit flows).
     pub const HEDGEABLE: &'static [PerpetualExchange] = &[
+        PerpetualExchange::Bulk,
         PerpetualExchange::Hyperliquid,
         PerpetualExchange::Pacifica,
         PerpetualExchange::Phoenix,
@@ -66,6 +67,8 @@ impl PerpetualExchange {
         match self {
             // [backpack/lighter disabled]
             // PerpetualExchange::Backpack => None,
+            // Bulk funding is a native Solana opcode-2 deposit handled by the
+            // user-triggered settlement flow; no cross-chain bridge is needed.
             PerpetualExchange::Bulk => None,
             PerpetualExchange::Hyperliquid => Some("BRIDGE_SOL_TO_ARB"),
             PerpetualExchange::Pacifica => None,
@@ -80,7 +83,7 @@ impl PerpetualExchange {
         match self {
             // [backpack/lighter disabled]
             // PerpetualExchange::Backpack => Some("DEPOSIT_TO_BACKPACK"),
-            PerpetualExchange::Bulk => None,
+            PerpetualExchange::Bulk => Some("DEPOSIT_TO_BULK"),
             PerpetualExchange::Hyperliquid => Some("DEPOSIT_TO_HYPERLIQUID"),
             PerpetualExchange::Pacifica => Some("DEPOSIT_TO_PACIFICA"),
             PerpetualExchange::Phoenix => Some("DEPOSIT_TO_PHOENIX"),
