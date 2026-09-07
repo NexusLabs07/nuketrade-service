@@ -1,0 +1,74 @@
+-- Durable Solana-native Bulk deposit intents.
+--
+-- Deposits do not have a Bulk nonce or deterministic Bulk order id. The
+-- persisted unsigned message and signed transaction are the replay identity;
+-- they let a retry inspect/resubmit the exact same Solana transaction after a
+-- process crash without constructing a second token transfer.
+
+CREATE TABLE IF NOT EXISTS bulk_deposit_intents (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    network VARCHAR(16) NOT NULL CHECK (network IN ('mainnet', 'testnet')),
+    signer TEXT NOT NULL,
+    mint TEXT NOT NULL,
+    program_id TEXT NOT NULL,
+    user_token_account TEXT NOT NULL,
+    vault TEXT NOT NULL,
+    vault_token_account TEXT NOT NULL,
+    amount_base_units TEXT NOT NULL CHECK (amount_base_units ~ '^[1-9][0-9]*$'),
+    idempotency_key TEXT NOT NULL CHECK (length(btrim(idempotency_key)) BETWEEN 1 AND 255),
+    idempotency_fingerprint CHAR(64) NOT NULL CHECK (idempotency_fingerprint ~ '^[0-9a-f]{64}$'),
+    recent_blockhash TEXT NOT NULL,
+    last_valid_block_height BIGINT,
+    message_base64 TEXT NOT NULL,
+    signed_transaction_base64 TEXT,
+    solana_signature TEXT,
+    solana_slot BIGINT,
+    bulk_credit_slot BIGINT,
+    status VARCHAR(32) NOT NULL CHECK (
+        status IN (
+            'PREPARED',
+            'SUBMITTING',
+            'SOLANA_FINALIZED',
+            'CREDIT_PENDING',
+            'CREDITED',
+            'REJECTED',
+            'UNKNOWN'
+        )
+    ),
+    CONSTRAINT bulk_deposit_signature_pair_check CHECK (
+        (signed_transaction_base64 IS NULL) = (solana_signature IS NULL)
+    ),
+    CONSTRAINT bulk_deposit_status_identity_check CHECK (
+        (
+            status = 'PREPARED'
+            AND signed_transaction_base64 IS NULL
+            AND solana_signature IS NULL
+        )
+        OR (
+            status IN (
+                'SUBMITTING',
+                'SOLANA_FINALIZED',
+                'CREDIT_PENDING',
+                'CREDITED',
+                'UNKNOWN'
+            )
+            AND signed_transaction_base64 IS NOT NULL
+            AND solana_signature IS NOT NULL
+        )
+        OR status = 'REJECTED'
+    ),
+    raw_response_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_error TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT uq_bulk_deposit_intents_idempotency
+        UNIQUE (user_id, network, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bulk_deposit_intents_status_updated
+    ON bulk_deposit_intents (network, status, updated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bulk_deposit_intents_solana_signature
+    ON bulk_deposit_intents (network, solana_signature)
+    WHERE solana_signature IS NOT NULL;
